@@ -28,10 +28,13 @@ class AppRouter {
     if (name == '/business-type') return _route(const BusinessTypeScreen());
 
     // ── Guard: featureManager not ready → show loading splash ────────────────
-    // This happens briefly after registration/login while profileProvider loads.
-    // We show a spinner instead of redirecting, so the router re-evaluates
-    // once featureManagerProvider emits a value.
-    if (featureManager == null) return _route(const _LoadingScreen());
+    // _PendingPosScreen watches featureManagerProvider and navigates to /pos
+    // itself once the profile finishes loading. This fixes the race condition
+    // where pushNamedAndRemoveUntil('/pos') fires before profileProvider
+    // completes, leaving the user stuck on a dead loading screen.
+    if (featureManager == null) {
+      return _route(const _PendingPosScreen());
+    }
 
     // ── Guard: feature not enabled → send to /pos ────────────────────────────
     if (name == '/kitchen' && !featureManager!.hasFeature('kitchen')) {
@@ -55,14 +58,32 @@ class AppRouter {
       MaterialPageRoute(builder: (_) => page);
 }
 
-// Shown briefly while profile/featureManager loads after login or registration.
-// MyApp watches appRouterProvider, so once featureManager is ready the user
-// will be on /pos via Navigator.pushNamedAndRemoveUntil in BusinessTypeScreen.
-class _LoadingScreen extends StatelessWidget {
-  const _LoadingScreen();
+// ── Pending POS screen ────────────────────────────────────────────────────────
+// Shown when the user has authenticated but profileProvider hasn't resolved yet.
+// Watches featureManagerProvider and pushes /pos as soon as it becomes ready,
+// guaranteeing POSScreen always receives the correct FeatureManager.
+
+class _PendingPosScreen extends ConsumerWidget {
+  const _PendingPosScreen();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch — not read — so this rebuilds the moment featureManager is ready
+    final featureManager = ref.watch(featureManagerProvider);
+
+    if (featureManager != null) {
+      // Schedule after the current frame so we're not pushing mid-build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/pos',
+            (_) => false,
+          );
+        }
+      });
+    }
+
     return const Scaffold(
       backgroundColor: Color(0xFF0F1117),
       body: Center(

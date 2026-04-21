@@ -2,14 +2,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/feature_manager.dart';
+import '../../features/auth/auth_provider.dart';
+
 import '../inventory/inventory_screen.dart';
 import '../kitchen/kitchen_screen.dart';
 import '../orders/orders_screen.dart';
+import '../tables/table_selector.dart';
+
 import 'widgets/product_grid.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/top_bar.dart';
 import 'widgets/category_bar.dart';
-import '../tables/table_selector.dart';
 
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -21,14 +24,11 @@ class POSScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeIndex = ref.watch(_activeIndexProvider);
-
-    // Build the list of available screens based on features
     final screens = _buildScreens(featureManager);
 
     return Scaffold(
       body: Row(
         children: [
-          // ── Sidebar ─────────────────────────────────────────
           _AdaptiveSidebar(
             featureManager: featureManager,
             activeIndex: activeIndex,
@@ -36,8 +36,6 @@ class POSScreen extends ConsumerWidget {
             onSelect: (i) =>
                 ref.read(_activeIndexProvider.notifier).state = i,
           ),
-
-          // ── Main content ─────────────────────────────────────
           Expanded(
             child: IndexedStack(
               index: activeIndex,
@@ -77,7 +75,8 @@ class POSScreen extends ConsumerWidget {
   }
 }
 
-// ── The actual POS selling surface ───────────────────────────────────────────
+// ── POS MAIN ─────────────────────────────────────────────
+
 class _POSMain extends StatelessWidget {
   final FeatureManager featureManager;
 
@@ -104,8 +103,9 @@ class _POSMain extends StatelessWidget {
   }
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-class _AdaptiveSidebar extends StatelessWidget {
+// ── SIDEBAR ─────────────────────────────────────────────
+
+class _AdaptiveSidebar extends ConsumerWidget {
   final FeatureManager featureManager;
   final int activeIndex;
   final List<_ScreenEntry> screens;
@@ -118,15 +118,45 @@ class _AdaptiveSidebar extends StatelessWidget {
     required this.onSelect,
   });
 
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will be returned to the login screen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(authServiceProvider).logout();
+
+    if (context.mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       width: 80,
       color: const Color(0xFF16213E),
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // Logo mark
+
+          // Logo
           Container(
             width: 44,
             height: 44,
@@ -136,7 +166,10 @@ class _AdaptiveSidebar extends StatelessWidget {
             ),
             child: const Icon(Icons.bolt, color: Colors.white, size: 28),
           ),
+
           const SizedBox(height: 24),
+
+          // Nav items
           ...screens.asMap().entries.map((entry) {
             final i = entry.key;
             final screen = entry.value;
@@ -148,8 +181,8 @@ class _AdaptiveSidebar extends StatelessWidget {
                 onTap: () => onSelect(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.symmetric(
-                      vertical: 4, horizontal: 10),
+                  margin:
+                      const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isActive
@@ -165,35 +198,73 @@ class _AdaptiveSidebar extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(screen.icon,
+                      Icon(
+                        screen.icon,
+                        color: isActive
+                            ? const Color(0xFFE94560)
+                            : Colors.white.withOpacity(0.4),
+                        size: 24,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        screen.label,
+                        style: TextStyle(
+                          fontSize: 9,
                           color: isActive
                               ? const Color(0xFFE94560)
                               : Colors.white.withOpacity(0.4),
-                          size: 24),
-                      const SizedBox(height: 4),
-                      Text(screen.label,
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: isActive
-                                  ? const Color(0xFFE94560)
-                                  : Colors.white.withOpacity(0.4))),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             );
           }),
+
+          const Spacer(),
+
+          // Logout
+          Tooltip(
+            message: 'Log out',
+            child: GestureDetector(
+              onTap: () => _logout(context, ref),
+              child: Container(
+                margin:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    Icon(Icons.logout_rounded,
+                        color: Colors.white.withOpacity(0.4)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white.withOpacity(0.4)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+// ── MODEL ─────────────────────────────────────────────
+
 class _ScreenEntry {
   final IconData icon;
   final String label;
   final Widget widget;
 
-  const _ScreenEntry(
-      {required this.icon, required this.label, required this.widget});
+  const _ScreenEntry({
+    required this.icon,
+    required this.label,
+    required this.widget,
+  });
 }

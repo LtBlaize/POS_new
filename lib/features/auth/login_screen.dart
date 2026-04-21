@@ -46,11 +46,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
+      // Step 1: authenticate
       await ref.read(authServiceProvider).login(
             email: _emailCtrl.text.trim(),
             password: _passCtrl.text,
           );
-      if (mounted) Navigator.pushReplacementNamed(context, '/pos');
+
+      // Step 2: wait for profileProvider to finish loading.
+      // login() only calls signInWithPassword — it triggers authStateProvider
+      // which then kicks off profileProvider as an async side effect. If we
+      // navigate immediately, featureManager is still null and the wrong POS
+      // (or a loading screen) is shown. We must wait here until the profile
+      // — and therefore the business type — is fully resolved.
+      if (mounted) {
+        await ref.read(profileProvider.future);
+      }
+
+      // Step 3: navigate only after profile is confirmed loaded
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/pos');
+      }
     } catch (e) {
       setState(() => _error = _friendlyError(e.toString()));
     } finally {

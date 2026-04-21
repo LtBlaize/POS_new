@@ -1,6 +1,8 @@
 // lib/shared/widgets/sidebar.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/feature_manager.dart';
+import '../../features/auth/auth_provider.dart';
 import 'app_colors.dart';
 
 class SidebarItem {
@@ -25,7 +27,7 @@ const _allItems = [
   SidebarItem(icon: Icons.inventory_2, label: 'Inventory', route: '/inventory', requiredFeature: 'inventory'),
 ];
 
-class Sidebar extends StatelessWidget {
+class Sidebar extends ConsumerWidget {
   final FeatureManager featureManager;
   final String currentRoute;
 
@@ -35,8 +37,37 @@ class Sidebar extends StatelessWidget {
     required this.currentRoute,
   });
 
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will be returned to the login screen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(authServiceProvider).logout();
+
+    if (context.mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final visibleItems = _allItems.where((item) =>
         item.requiredFeature == null ||
         featureManager.hasFeature(item.requiredFeature!)).toList();
@@ -58,6 +89,8 @@ class Sidebar extends StatelessWidget {
             child: const Icon(Icons.bolt, color: Colors.white, size: 28),
           ),
           const SizedBox(height: 24),
+
+          // ── Nav items ───────────────────────────────────────────────────
           ...visibleItems.map((item) {
             final isActive = currentRoute == item.route;
             return Tooltip(
@@ -104,6 +137,41 @@ class Sidebar extends StatelessWidget {
               ),
             );
           }),
+
+          // ── Logout pinned to bottom ──────────────────────────────────────
+          const Spacer(),
+          Tooltip(
+            message: 'Log out',
+            preferBelow: false,
+            child: GestureDetector(
+              onTap: () => _logout(context, ref),
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.logout_rounded,
+                      color: AppColors.textOnDark.withOpacity(0.5),
+                      size: 24,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        color: AppColors.textOnDark.withOpacity(0.5),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

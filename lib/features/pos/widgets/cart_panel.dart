@@ -1,22 +1,18 @@
-// lib/features/pos/widgets/cart_panel.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/cart_provider.dart';
-import '../../../core/providers/order_provider.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../../shared/widgets/app_colors.dart';
-import '/features/pos/widgets/checkout_dialog.dart';
+import 'checkout_dialog.dart';
 
 class CartPanel extends ConsumerWidget {
   final FeatureManager featureManager;
-
   const CartPanel({super.key, required this.featureManager});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
-    final orderNotifier = ref.read(orderProvider.notifier);
     final hasKitchen = featureManager.hasFeature('kitchen');
     final total = items.fold(0.0, (sum, i) => sum + i.total);
 
@@ -30,8 +26,7 @@ class CartPanel extends ConsumerWidget {
             height: 64,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              border: Border(
-                  bottom: BorderSide(color: AppColors.divider)),
+              border: Border(bottom: BorderSide(color: AppColors.divider)),
             ),
             child: Row(
               children: [
@@ -43,8 +38,8 @@ class CartPanel extends ConsumerWidget {
                 if (items.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
@@ -65,8 +60,8 @@ class CartPanel extends ConsumerWidget {
                     icon: const Icon(Icons.delete_outline,
                         size: 14, color: AppColors.danger),
                     label: const Text('Clear',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.danger)),
+                        style:
+                            TextStyle(fontSize: 12, color: AppColors.danger)),
                     style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4)),
@@ -84,21 +79,20 @@ class CartPanel extends ConsumerWidget {
                       children: [
                         Icon(Icons.shopping_cart_outlined,
                             size: 40,
-                            color: AppColors.textSecondary
-                                .withOpacity(0.25)),
+                            color: AppColors.textSecondary.withOpacity(0.25)),
                         const SizedBox(height: 10),
                         Text('Cart is empty',
                             style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.textSecondary
-                                    .withOpacity(0.5))),
+                                color:
+                                    AppColors.textSecondary.withOpacity(0.5))),
                       ],
                     ),
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(height: 1, indent: 16, endIndent: 16),
                     itemBuilder: (context, index) {
                       final item = items[index];
@@ -107,27 +101,19 @@ class CartPanel extends ConsumerWidget {
                             horizontal: 16, vertical: 8),
                         child: Row(
                           children: [
-                            // Quantity stepper
                             _QuantityStepper(
                               quantity: item.quantity,
-                              onDecrement: () {
-                                if (item.quantity == 1) {
-                                  cartNotifier.removeProduct(
-                                      item.product.id);
-                                } else {
-                                  cartNotifier.decrementProduct(
-                                      item.product.id);
-                                }
-                              },
+                              onDecrement: () => item.quantity == 1
+                                  ? cartNotifier.removeProduct(item.product.id)
+                                  : cartNotifier.decrementProduct(
+                                      item.product.id),
                               onIncrement: () =>
                                   cartNotifier.addProduct(item.product),
                             ),
                             const SizedBox(width: 10),
-                            // Name + unit price
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(item.product.name,
                                       style: const TextStyle(
@@ -144,7 +130,6 @@ class CartPanel extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                            // Line total
                             Text('₱${item.total.toStringAsFixed(0)}',
                                 style: const TextStyle(
                                     fontSize: 13,
@@ -161,23 +146,19 @@ class CartPanel extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border:
-                  Border(top: BorderSide(color: AppColors.divider)),
+              border: Border(top: BorderSide(color: AppColors.divider)),
             ),
             child: Column(
               children: [
-                // Subtotal row
                 Row(
                   children: [
                     const Text('Subtotal',
                         style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary)),
+                            fontSize: 13, color: AppColors.textSecondary)),
                     const Spacer(),
                     Text('₱${total.toStringAsFixed(2)}',
                         style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary)),
+                            fontSize: 13, color: AppColors.textSecondary)),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -197,35 +178,19 @@ class CartPanel extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-
-                // Action button
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
                     onPressed: items.isEmpty
                         ? null
-                        : () {
-                            if (hasKitchen) {
-                              // Restaurant: send to kitchen, clear cart
-                              orderNotifier.placeOrder(items);
-                              cartNotifier.clear();
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(const SnackBar(
-                                content: Text('Order sent to kitchen'),
-                                duration: Duration(seconds: 2),
-                              ));
-                            } else {
-                              // Retail: open checkout dialog
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                    builder: (_) => CheckoutDialog(
-                                      featureManager: featureManager,
-                                    ),
-                              );
-                            }
-                          },
+                        : () => showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => CheckoutDialog(
+                                featureManager: featureManager,
+                              ),
+                            ),
                     icon: Icon(
                       hasKitchen
                           ? Icons.kitchen_outlined
@@ -238,9 +203,8 @@ class CartPanel extends ConsumerWidget {
                           fontWeight: FontWeight.w700, fontSize: 15),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: hasKitchen
-                          ? AppColors.warning
-                          : AppColors.primary,
+                      backgroundColor:
+                          hasKitchen ? AppColors.warning : AppColors.primary,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.divider,
                       shape: RoundedRectangleBorder(
@@ -258,6 +222,7 @@ class CartPanel extends ConsumerWidget {
 }
 
 // ── Quantity stepper ──────────────────────────────────────────────────────────
+
 class _QuantityStepper extends StatelessWidget {
   final int quantity;
   final VoidCallback onDecrement;
@@ -312,9 +277,7 @@ class _StepBtn extends StatelessWidget {
         ),
         child: Icon(icon,
             size: 13,
-            color: positive
-                ? AppColors.primary
-                : AppColors.textSecondary),
+            color: positive ? AppColors.primary : AppColors.textSecondary),
       ),
     );
   }

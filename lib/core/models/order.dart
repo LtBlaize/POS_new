@@ -1,16 +1,122 @@
 import 'cart_item.dart';
 
+enum OrderType { walkIn, takeOut, delivery }
+enum OrderStatus { pending, preparing, ready, completed, cancelled }
+enum PaymentMethod { cash, card, gcash, maya }
+
+extension OrderTypeX on OrderType {
+  String get value => switch (this) {
+    OrderType.walkIn  => 'walk_in',
+    OrderType.takeOut => 'take_out',
+    OrderType.delivery => 'delivery',
+  };
+  static OrderType fromString(String v) => switch (v) {
+    'take_out'  => OrderType.takeOut,
+    'delivery'  => OrderType.delivery,
+    _           => OrderType.walkIn,
+  };
+}
+
+extension OrderStatusX on OrderStatus {
+  String get value => switch (this) {
+    OrderStatus.pending    => 'pending',
+    OrderStatus.preparing  => 'preparing',
+    OrderStatus.ready      => 'ready',
+    OrderStatus.completed  => 'completed',
+    OrderStatus.cancelled  => 'cancelled',
+  };
+  static OrderStatus fromString(String v) => switch (v) {
+    'preparing' => OrderStatus.preparing,
+    'ready'     => OrderStatus.ready,
+    'completed' => OrderStatus.completed,
+    'cancelled' => OrderStatus.cancelled,
+    _           => OrderStatus.pending,
+  };
+}
+
+extension PaymentMethodX on PaymentMethod {
+  String get value => switch (this) {
+    PaymentMethod.cash  => 'cash',
+    PaymentMethod.card  => 'card',
+    PaymentMethod.gcash => 'gcash',
+    PaymentMethod.maya  => 'maya',
+  };
+  static PaymentMethod fromString(String v) => switch (v) {
+    'card'  => PaymentMethod.card,
+    'gcash' => PaymentMethod.gcash,
+    'maya'  => PaymentMethod.maya,
+    _       => PaymentMethod.cash,
+  };
+}
+
 class Order {
   final String id;
-  final List<CartItem> items;
-  final String status; // pending, preparing, ready
+  final String businessId;
+  final String? tableId;
+  final String? cashierId;
+  final int orderNumber;
+  final OrderType orderType;
+  final OrderStatus status;
+  final double subtotal;
+  final double taxAmount;
+  final double discountAmount;
+  final double totalAmount;
+  final PaymentMethod? paymentMethod;
+  final double? amountTendered;
+  final double? changeAmount;
+  final String? notes;
+  final DateTime? paidAt;
+  final DateTime createdAt;
 
-  Order({
+  // Local-only: populated from order_items join
+  final List<CartItem> items;
+
+  const Order({
     required this.id,
-    required this.items,
-    this.status = 'pending',
+    required this.businessId,
+    this.tableId,
+    this.cashierId,
+    required this.orderNumber,
+    this.orderType = OrderType.walkIn,
+    this.status = OrderStatus.pending,
+    required this.subtotal,
+    this.taxAmount = 0,
+    this.discountAmount = 0,
+    required this.totalAmount,
+    this.paymentMethod,
+    this.amountTendered,
+    this.changeAmount,
+    this.notes,
+    this.paidAt,
+    required this.createdAt,
+    this.items = const [],
   });
 
-  double get total =>
-      items.fold(0, (sum, item) => sum + item.total);
+  // Legacy getter used in existing UI
+  double get total => totalAmount;
+
+  factory Order.fromMap(Map<String, dynamic> map, {List<CartItem> items = const []}) {
+    return Order(
+      id: map['id'] as String,
+      businessId: map['business_id'] as String,
+      tableId: map['table_id'] as String?,
+      cashierId: map['cashier_id'] as String?,
+      orderNumber: map['order_number'] as int,
+      orderType: OrderTypeX.fromString(map['order_type'] as String? ?? 'walk_in'),
+      status: OrderStatusX.fromString(map['status'] as String? ?? 'pending'),
+      subtotal: (map['subtotal'] as num).toDouble(),
+      taxAmount: (map['tax_amount'] as num).toDouble(),
+      discountAmount: (map['discount_amount'] as num).toDouble(),
+      totalAmount: (map['total_amount'] as num).toDouble(),
+      paymentMethod: map['payment_method'] != null
+          ? PaymentMethodX.fromString(map['payment_method'] as String)
+          : null,
+      amountTendered: (map['amount_tendered'] as num?)?.toDouble(),
+      changeAmount: (map['change_amount'] as num?)?.toDouble(),
+      notes: map['notes'] as String?,
+      paidAt: map['paid_at'] != null ? DateTime.parse(map['paid_at'] as String) : null,
+      createdAt: DateTime.parse(map['created_at'] as String),
+      items: items,
+    );
+  }
 }
