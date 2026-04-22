@@ -9,9 +9,10 @@ class TableSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tables = ref.watch(tableProvider);
-    final notifier = ref.read(tableProvider.notifier);
-    final selected = notifier.selectedTable;
+    // Watch the full TableState — rebuilds when selection OR occupancy changes
+    final tableState = ref.watch(tableProvider);
+    final tables = tableState.tables;
+    final selectedNumber = tableState.selectedTableNumber;
 
     return Container(
       height: 64,
@@ -23,27 +24,28 @@ class TableSelector extends ConsumerWidget {
         children: [
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 14),
-            child: Text('Table',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.4)),
+            child: Text(
+              'Table',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.4,
+              ),
+            ),
           ),
           Expanded(
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 4, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
               itemCount: tables.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final table = tables[index];
-                final isSelected = selected == table.number;
-                final isOccupied =
-                    table.status == TableStatus.occupied;
-                final isReserved =
-                    table.status == TableStatus.reserved;
+                final isSelected = selectedNumber == table.number;
+                final isOccupied = table.status == TableStatus.occupied;
+                final isReserved = table.status == TableStatus.reserved;
 
                 Color bgColor;
                 Color borderColor;
@@ -70,11 +72,9 @@ class TableSelector extends ConsumerWidget {
                 return GestureDetector(
                   onTap: isOccupied
                       ? null
-                      : () {
-                          notifier.selectTable(table.number);
-                          // Rebuild by triggering a state read
-                          ref.invalidate(tableProvider);
-                        },
+                      : () => ref
+                          .read(tableProvider.notifier)
+                          .selectTable(table.number),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
                     width: 56,
@@ -86,29 +86,28 @@ class TableSelector extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('${table.number}',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: textColor)),
-                        if (isOccupied)
-                          Text('busy',
-                              style: TextStyle(
-                                  fontSize: 8,
-                                  color: textColor.withOpacity(0.7),
-                                  fontWeight: FontWeight.w500))
-                        else if (isReserved)
-                          Text('rsv',
-                              style: TextStyle(
-                                  fontSize: 8,
-                                  color: textColor.withOpacity(0.7),
-                                  fontWeight: FontWeight.w500))
-                        else
-                          Text('free',
-                              style: TextStyle(
-                                  fontSize: 8,
-                                  color: textColor.withOpacity(0.6),
-                                  fontWeight: FontWeight.w500)),
+                        Text(
+                          '${table.number}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: textColor,
+                          ),
+                        ),
+                        Text(
+                          isOccupied
+                              ? 'busy'
+                              : isReserved
+                                  ? 'rsv'
+                                  : isSelected
+                                      ? 'sel'
+                                      : 'free',
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -116,6 +115,41 @@ class TableSelector extends ConsumerWidget {
               },
             ),
           ),
+          // Active table badge with tap-to-clear
+          if (selectedNumber != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+                onTap: () =>
+                    ref.read(tableProvider.notifier).clearSelection(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: AppColors.primary.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.table_restaurant_outlined,
+                          size: 12, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'T$selectedNumber  ✕',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

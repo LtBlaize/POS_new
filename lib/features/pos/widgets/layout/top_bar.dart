@@ -1,8 +1,8 @@
 // lib/features/pos/widgets/top_bar.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/providers/cart_provider.dart';
-import '../../../shared/widgets/app_colors.dart';
+import '../../../../core/providers/cart_provider.dart';
+import '../../../../shared/widgets/app_colors.dart';
 
 class TopBar extends ConsumerWidget {
   const TopBar({super.key});

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/cart_provider.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../../shared/widgets/app_colors.dart';
-import 'checkout_dialog.dart';
+import '../dialogs/checkout_dialog.dart';
 
 class CartPanel extends ConsumerWidget {
   final FeatureManager featureManager;

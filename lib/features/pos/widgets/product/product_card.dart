@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/models/product.dart';
-import '../../../core/providers/cart_provider.dart';
-import '../../../shared/widgets/app_colors.dart';
+import '../../../../core/models/product.dart';
+import '../../../../core/providers/cart_provider.dart';
+import '../../../../shared/widgets/app_colors.dart';
 
 // Category → gradient mapping
 const _categoryGradients = <String, List<Color>>{

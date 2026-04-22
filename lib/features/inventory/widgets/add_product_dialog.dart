@@ -4,9 +4,11 @@ import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../inventory_service.dart';
 import '../../../core/providers/product_provider.dart';
+import '../../../core/models/product.dart';
 
 class AddProductDialog extends ConsumerStatefulWidget {
-  const AddProductDialog({super.key});
+final Product? product;
+const AddProductDialog({super.key, this.product});
 
   @override
   ConsumerState<AddProductDialog> createState() => _AddProductDialogState();
@@ -40,24 +42,25 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
       SnackBar(content: Text(msg), backgroundColor: Colors.red),
     );
   }
-  @override
-  void initState() {
-    super.initState();
-    _loadCategories();
+ @override
+void initState() {
+  super.initState();
+  _loadCategories();
+  
+  // Pre-fill if editing
+  final p = widget.product;
+  if (p != null) {
+    _nameController.text       = p.name;
+    _priceController.text      = p.price.toStringAsFixed(2);
+    _descController.text       = p.description ?? '';
+    _barcodeController.text    = p.barcode ?? '';
+    _skuController.text        = p.sku ?? '';
+    _stockController.text      = '${p.stockQuantity}';
+    _imageUrlController.text   = p.imageUrl ?? '';
+    _trackInventory            = p.trackInventory;
+    _selectedCategoryId        = p.categoryId;
   }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
-    _descController.dispose();
-    _barcodeController.dispose();
-    _skuController.dispose();
-    _stockController.dispose();
-    _imageUrlController.dispose();
-    _newCategoryController.dispose();
-    super.dispose();
-  }
+}
 
   // ── Load categories for this business ──────────────────────────────────────
 
@@ -116,61 +119,55 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   // ── Save product ───────────────────────────────────────────────────────────
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    final profile = ref.read(profileProvider).asData?.value;
-    if (profile?.businessId == null) {
-      _showError('No business profile found.');
-      return;
-    }
+  final profile = ref.read(profileProvider).asData?.value;
+  if (profile?.businessId == null) {
+    _showError('No business profile found.');
+    return;
+  }
 
-    setState(() => _saving = true);
+  setState(() => _saving = true);
 
-    try {
-      final client = ref.read(supabaseClientProvider);
+  try {
+    final client = ref.read(supabaseClientProvider);
+    final data = {
+      'category_id':     _selectedCategoryId,
+      'name':            _nameController.text.trim(),
+      'description':     _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+      'price':           double.parse(_priceController.text),
+      'image_url':       _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
+      'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
+      'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+      'track_inventory': _trackInventory,
+      'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
+    };
 
+    if (widget.product == null) {
+      // ── Insert ──────────────────────────────────────────────────────
+      await client.from('products').insert({
+        ...data,
+        'business_id': profile!.businessId,
+        'is_available': true,
+        'is_active':    true,
+      });
+    } else {
+      // ── Update ──────────────────────────────────────────────────────
       await client
           .from('products')
-          .insert({
-            'business_id':     profile!.businessId,
-            'category_id':     _selectedCategoryId,
-            'name':            _nameController.text.trim(),
-            'description':     _descController.text.trim().isEmpty
-                                   ? null
-                                   : _descController.text.trim(),
-            'price':           double.parse(_priceController.text),
-            'image_url':       _imageUrlController.text.trim().isEmpty
-                                   ? null
-                                   : _imageUrlController.text.trim(),
-            'barcode':         _barcodeController.text.trim().isEmpty
-                                   ? null
-                                   : _barcodeController.text.trim(),
-            'sku':             _skuController.text.trim().isEmpty
-                                   ? null
-                                   : _skuController.text.trim(),
-            'track_inventory': _trackInventory,
-            'stock_quantity':  _trackInventory
-                                   ? (int.tryParse(_stockController.text) ?? 0)
-                                   : 0,
-            'is_available':    true,
-            'is_active':       true,
-          });
-
-      // Refresh inventory screen list
-      await ref.read(inventoryProvider.notifier).refresh();
-
-      // Invalidate POS product list so it re-fetches on next view.
-      // productListProvider is a FutureProvider — it caches its result until
-      // explicitly invalidated. Without this, the POS grid never sees the
-      // new product even though it's already in the database.
-      ref.invalidate(productListProvider);
-
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      setState(() => _saving = false);
-      _showError('Failed to save product: $e');
+          .update(data)
+          .eq('id', widget.product!.id);
     }
+
+    await ref.read(inventoryProvider.notifier).refresh();
+    ref.invalidate(productListProvider);
+
+    if (mounted) Navigator.of(context).pop();
+  } catch (e) {
+    setState(() => _saving = false);
+    _showError('Failed to save product: $e');
   }
+}
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -194,14 +191,11 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.add_box_outlined,
-                      color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  const Text('Add Product',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  Icon(widget.product == null ? Icons.add_box_outlined : Icons.edit_outlined,
+    color: Colors.white, size: 20),
+const SizedBox(width: 10),
+Text(widget.product == null ? 'Add Product' : 'Edit Product',
+    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -369,19 +363,11 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white),
-                                )
-                              : const Text('Save Product',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15)),
+                          child: Text(
+                          widget.product == null ? 'Save Product' : 'Update Product',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                         ),
+                      ),
                       ),
                     ],
                   ),
@@ -584,7 +570,6 @@ class _NewCategoryField extends StatelessWidget {
     );
   }
 }
-
 // ── Track inventory toggle ────────────────────────────────────────────────────
 
 class _TrackInventoryToggle extends StatelessWidget {

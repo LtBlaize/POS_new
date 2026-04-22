@@ -14,15 +14,38 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
   if (profile?.businessId == null) { yield []; return; }
 
   final client = ref.watch(supabaseClientProvider);
+  final businessId = profile!.businessId!;
 
   yield* client
       .from('orders')
       .stream(primaryKey: ['id'])
-      .eq('business_id', profile!.businessId!)
+      .eq('business_id', businessId)
       .order('created_at', ascending: false)
-      .map((rows) => rows
-          .map((m) => Order.fromMap(m))
-          .toList());
+      .asyncMap((rows) async {
+        // For each order, fetch its items in parallel
+        final orders = await Future.wait(rows.map((row) async {
+          final orderId = row['id'] as String;
+
+          final itemRows = await client
+              .from('order_items')
+              .select('*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
+              .eq('order_id', orderId);
+
+          final cartItems = (itemRows as List).map((item) {
+            final pMap = item['products'] as Map<String, dynamic>? ?? {};
+            final product = Product.fromMap({
+              ...pMap,
+              'category': '',
+              'business_id': pMap['business_id'] ?? '',
+            });
+            return CartItem(product: product, quantity: item['quantity'] as int);
+          }).toList();
+
+          return Order.fromMap(row, items: cartItems);
+        }));
+
+        return orders;
+      });
 });
 
 // ── Filtered views ────────────────────────────────────────────────────────────
@@ -127,15 +150,13 @@ class OrderService {
 
   /// Update order status (pending → preparing → ready → completed)
   Future<void> updateStatus(String orderId, OrderStatus status) async {
-    final update = <String, dynamic>{
-      'status': status.value,
-      'updated_at': DateTime.now().toIso8601String(),
-    };
-    if (status == OrderStatus.completed) {
-      update['paid_at'] = DateTime.now().toIso8601String();
-    }
-    await _client.from('orders').update(update).eq('id', orderId);
-  }
+  final update = <String, dynamic>{
+    'status': status.value,
+    'updated_at': DateTime.now().toIso8601String(),
+  };
+  // Never set paid_at here — only processPayment should do that
+  await _client.from('orders').update(update).eq('id', orderId);
+}
 
   /// Record payment details on an order
   Future<void> processPayment({
@@ -148,12 +169,12 @@ class OrderService {
       'payment_method': method.value,
       'amount_tendered': amountTendered,
       'change_amount': changeAmount,
-      'status': OrderStatus.completed.value,
+      // status intentionally omitted — kitchen controls it
       'paid_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', orderId);
   }
-
+  
   /// Fetch full order with its items (for receipt/detail view)
   Future<Order> fetchOrderWithItems(String orderId) async {
     final orderRow = await _client

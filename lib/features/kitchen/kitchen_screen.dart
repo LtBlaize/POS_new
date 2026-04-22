@@ -187,9 +187,10 @@ class _KitchenColumn extends StatelessWidget {
                       itemCount: orders.length,
                       separatorBuilder: (_, _) =>
                           const SizedBox(height: 8),
-                      itemBuilder: (_, i) =>
-                          _KitchenOrderCard(order: orders[i]),
-                    ),
+                      itemBuilder: (_, i) => _KitchenOrderCard(
+                        key: ValueKey('${orders[i].id}-${orders[i].status}'),
+                        order: orders[i],
+                      ),),
             ),
           ],
         ),
@@ -202,7 +203,7 @@ class _KitchenColumn extends StatelessWidget {
 
 class _KitchenOrderCard extends ConsumerStatefulWidget {
   final Order order;
-  const _KitchenOrderCard({required this.order});
+  const _KitchenOrderCard({super.key, required this.order});
 
   @override
   ConsumerState<_KitchenOrderCard> createState() =>
@@ -213,37 +214,44 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
   bool _loading = false;
 
   Future<void> _advance() async {
-    final next = switch (widget.order.status) {
-      OrderStatus.pending   => OrderStatus.preparing,
-      OrderStatus.preparing => OrderStatus.ready,
-      OrderStatus.ready     => OrderStatus.completed,
-      _                     => null,
-    };
-    if (next == null) return;
+  debugPrint('🔄 Tapped advance — current status: ${widget.order.status}');
+  
+  // AFTER
+final next = switch (widget.order.status) {
+  OrderStatus.pending   => OrderStatus.preparing,
+  OrderStatus.preparing => OrderStatus.ready,
+  OrderStatus.ready     => OrderStatus.completed, // served = done
+  _                     => null,
+};
+  
+  if (next == null) return;
+  debugPrint('➡️ Updating to: ${next.value}');
 
-    setState(() => _loading = true);
-    try {
-      await ref.read(orderServiceProvider).updateStatus(widget.order.id, next);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  setState(() => _loading = true);
+  try {
+    await ref.read(orderServiceProvider).updateStatus(widget.order.id, next);
+    debugPrint('✅ Done');
+  } catch (e, st) {
+    debugPrint('❌ Error: $e\n$st');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
 
+    // AFTER
     final (buttonLabel, buttonColor) = switch (order.status) {
-      OrderStatus.pending   => ('Start preparing', AppColors.warning),
-      OrderStatus.preparing => ('Mark ready',      AppColors.success),
-      OrderStatus.ready     => ('Complete',        AppColors.textSecondary),
+      OrderStatus.pending   => ('Start Preparing', AppColors.warning),
+      OrderStatus.preparing => ('Mark Ready',      AppColors.info),
+      OrderStatus.ready     => ('Mark Served',     AppColors.success),
       _                     => ('',                Colors.transparent),
     };
 

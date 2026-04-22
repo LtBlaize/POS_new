@@ -9,9 +9,9 @@ import '../kitchen/kitchen_screen.dart';
 import '../orders/orders_screen.dart';
 import '../tables/table_selector.dart';
 
-import 'widgets/product_grid.dart';
+import 'widgets/product/product_grid.dart';
 import 'widgets/cart_panel.dart';
-import 'widgets/top_bar.dart';
+import 'widgets/layout/top_bar.dart';
 import 'widgets/category_bar.dart';
 
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
@@ -57,7 +57,7 @@ class POSScreen extends ConsumerWidget {
       _ScreenEntry(
         icon: Icons.receipt_long_rounded,
         label: 'Orders',
-        widget: const OrdersScreen(),
+        widget: OrdersScreen(featureManager: fm),
       ),
       if (fm.hasFeature('kitchen'))
         _ScreenEntry(

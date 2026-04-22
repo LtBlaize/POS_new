@@ -47,8 +47,7 @@ class AppRouter {
     // ── Protected routes ──────────────────────────────────────────────────────
     return switch (name) {
       '/pos'       => _route(POSScreen(featureManager: featureManager!)),
-      '/orders'    => _route(const OrdersScreen()),
-      '/kitchen'   => _route(const KitchenScreen()),
+'/orders' => _route(OrdersScreen(featureManager: featureManager!)),      '/kitchen'   => _route(const KitchenScreen()),
       '/inventory' => _route(const InventoryScreen()),
       _            => _route(POSScreen(featureManager: featureManager!)),
     };

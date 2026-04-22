@@ -206,7 +206,7 @@ class InventoryScreen extends ConsumerWidget {
               ),
             ),
 
-          // ── Error snackbar-style inline banner ──────────────────────────────
+          // ── Error inline banner ─────────────────────────────────────────────
           if (inventoryState.error != null)
             Container(
               color: AppColors.danger.withOpacity(0.08),
@@ -255,7 +255,7 @@ class InventoryScreen extends ConsumerWidget {
                   )
                 : ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, _) =>
+                    separatorBuilder: (_, __) =>
                         const Divider(height: 1, indent: 24, endIndent: 24),
                     itemBuilder: (context, index) =>
                         _InventoryRow(entry: filtered[index]),
@@ -287,7 +287,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('CATEGORY', style: style)),
           Expanded(flex: 2, child: Text('PRICE', style: style)),
           Expanded(flex: 3, child: Text('STOCK', style: style)),
-          SizedBox(width: 72),
+          SizedBox(width: 144), // wider to accommodate Set + Edit buttons
         ],
       ),
     );
@@ -295,8 +295,6 @@ class _TableHeader extends StatelessWidget {
 }
 
 // ── Inventory row ─────────────────────────────────────────────────────────────
-// ConsumerStatefulWidget so each row manages its own async loading state
-// for the stepper buttons — no spinner blocks the whole list.
 
 class _InventoryRow extends ConsumerStatefulWidget {
   final InventoryEntry entry;
@@ -316,9 +314,8 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
       await ref
           .read(inventoryProvider.notifier)
           .adjustStock(widget.entry.product.id, delta);
-    } catch (_) {
-      // Error already surfaced via InventoryState.error banner
-    } finally {
+    } catch (_) {}
+    finally {
       if (mounted) setState(() => _adjusting = false);
     }
   }
@@ -347,8 +344,8 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
           autofocus: true,
           decoration: InputDecoration(
             labelText: 'Quantity',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             prefixIcon: const Icon(Icons.inventory_2_outlined),
           ),
         ),
@@ -414,8 +411,8 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
                             style: TextStyle(
                                 fontSize: 10,
                                 fontFamily: 'monospace',
-                                color:
-                                    AppColors.textSecondary.withOpacity(0.7))),
+                                color: AppColors.textSecondary
+                                    .withOpacity(0.7))),
                     ],
                   ),
                 ),
@@ -472,8 +469,7 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child:
-                              CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Text(
                           '${entry.stock}',
@@ -514,6 +510,28 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
                       TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ),
           ),
+
+          // ── Edit button ───────────────────────────────────────────────────
+          SizedBox(
+            width: 72,
+            child: TextButton(
+              onPressed: () => showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => AddProductDialog(product: entry.product),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Edit',
+                  style:
+                      TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ),
         ],
       ),
     );
@@ -524,7 +542,7 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
 
 class _StepperButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback? onTap; // nullable → disabled state
+  final VoidCallback? onTap;
   final bool positive;
 
   const _StepperButton(
@@ -588,8 +606,7 @@ class _StatPill extends StatelessWidget {
                   color: color)),
           const SizedBox(width: 4),
           Text(label,
-              style:
-                  TextStyle(fontSize: 11, color: color.withOpacity(0.8))),
+              style: TextStyle(fontSize: 11, color: color.withOpacity(0.8))),
         ],
       ),
     );

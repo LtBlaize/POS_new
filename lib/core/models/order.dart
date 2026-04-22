@@ -95,6 +95,49 @@ class Order {
   // Legacy getter used in existing UI
   double get total => totalAmount;
 
+  // ← PASTE copyWith HERE
+  Order copyWith({
+    String? id,
+    String? businessId,
+    String? tableId,
+    String? cashierId,
+    int? orderNumber,
+    OrderType? orderType,
+    OrderStatus? status,
+    double? subtotal,
+    double? taxAmount,
+    double? discountAmount,
+    double? totalAmount,
+    PaymentMethod? paymentMethod,
+    double? amountTendered,
+    double? changeAmount,
+    String? notes,
+    DateTime? paidAt,
+    DateTime? createdAt,
+    List<CartItem>? items,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      businessId: businessId ?? this.businessId,
+      tableId: tableId ?? this.tableId,
+      cashierId: cashierId ?? this.cashierId,
+      orderNumber: orderNumber ?? this.orderNumber,
+      orderType: orderType ?? this.orderType,
+      status: status ?? this.status,
+      subtotal: subtotal ?? this.subtotal,
+      taxAmount: taxAmount ?? this.taxAmount,
+      discountAmount: discountAmount ?? this.discountAmount,
+      totalAmount: totalAmount ?? this.totalAmount,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      amountTendered: amountTendered ?? this.amountTendered,
+      changeAmount: changeAmount ?? this.changeAmount,
+      notes: notes ?? this.notes,
+      paidAt: paidAt ?? this.paidAt,
+      createdAt: createdAt ?? this.createdAt,
+      items: items ?? this.items,
+    );
+  }
+
   factory Order.fromMap(Map<String, dynamic> map, {List<CartItem> items = const []}) {
     return Order(
       id: map['id'] as String,
