@@ -37,6 +37,10 @@ final businessTypeProvider = Provider<BusinessType?>((ref) {
   return ref.watch(profileProvider).asData?.value?.businessType;
 });
 
+final businessProvider = Provider<Business?>((ref) {
+  return ref.watch(profileProvider).asData?.value?.business;
+});
+
 final featureManagerProvider = Provider<FeatureManager?>((ref) {
   final businessType = ref.watch(businessTypeProvider);
   if (businessType == null) return null;

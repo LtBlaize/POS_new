@@ -25,7 +25,7 @@ class Product {
     this.imageUrl,
     this.barcode,
     this.sku,
-    this.trackInventory = false,
+    this.trackInventory = true,
     this.stockQuantity = 0,
     this.isAvailable = true,
     this.isActive = true,
@@ -33,7 +33,6 @@ class Product {
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
-    // categories is a joined object when using select('*, categories(name)')
     final categoryMap = map['categories'] as Map<String, dynamic>?;
     return Product(
       id: map['id'] as String,
@@ -45,11 +44,12 @@ class Product {
       imageUrl: map['image_url'] as String?,
       barcode: map['barcode'] as String?,
       sku: map['sku'] as String?,
-      trackInventory: map['track_inventory'] as bool? ?? false,
+      trackInventory: map['track_inventory'] as bool? ?? true,
       stockQuantity: map['stock_quantity'] as int? ?? 0,
       isAvailable: map['is_available'] as bool? ?? true,
       isActive: map['is_active'] as bool? ?? true,
-      category: categoryMap?['name'] as String? ?? '',
+      category: map['category_name'] as String? ??
+              categoryMap?['name'] as String? ?? '',
     );
   }
 

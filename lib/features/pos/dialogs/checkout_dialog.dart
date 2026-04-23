@@ -149,18 +149,26 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   Widget build(BuildContext context) {
     if (_completedOrder != null) {
       if (_sentToKitchenOnly) {
+        final tableNumber = ref.read(tableProvider).selectedTableNumber;  
         return KitchenSentView(
           order: _completedOrder!,
           onDone: () => Navigator.of(context).pop(),
+          tableNumber: tableNumber,
         );
       }
+      final tableState = ref.read(tableProvider);
+      final tableNumber = tableState.selectedTableNumber;
+      final roomId = tableState.selectedRoomId;
+
       return _isRestaurant
           ? RestaurantReceiptView(
               order: _completedOrder!,
               tendered: _savedTendered,
               change: _savedChange,
               onDone: () => Navigator.of(context).pop(),
-              showKitchenBanner: widget.existingOrderId == null, // ← add this
+              showKitchenBanner: widget.existingOrderId == null,
+              tableNumber: tableNumber,
+              roomName: roomId,
             )
           : RetailReceiptView(
               order: _completedOrder!,

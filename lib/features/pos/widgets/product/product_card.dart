@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/product.dart';
 import '../../../../core/providers/cart_provider.dart';
+import '../../../../core/providers/product_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 
-// Category → gradient mapping
 const _categoryGradients = <String, List<Color>>{
   'Food': [Color(0xFFFF9966), Color(0xFFFF5E62)],
   'Drinks': [Color(0xFF43C6AC), Color(0xFF191654)],
@@ -55,7 +55,25 @@ class _ProductCardState extends ConsumerState<ProductCard>
     await _controller.forward();
     await _controller.reverse();
 
-    ref.read(cartProvider.notifier).addProduct(widget.product);
+    final liveProducts = ref.read(productListProvider).asData?.value ?? [];
+    final liveProduct = liveProducts
+            .where((p) => p.id == widget.product.id)
+            .firstOrNull ??
+        widget.product;
+
+    if (liveProduct.trackInventory && liveProduct.stockQuantity <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${liveProduct.name} is out of stock.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    ref.read(cartProvider.notifier).addProduct(liveProduct);
 
     setState(() => _added = true);
     await Future.delayed(const Duration(milliseconds: 900));
@@ -94,10 +112,11 @@ class _ProductCardState extends ConsumerState<ProductCard>
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Color band top
-              Expanded(
-                flex: 5,
+              // ── Gradient band ───────────────────────────────────────
+              SizedBox(
+                height: 90,
                 child: Stack(
                   children: [
                     Container(
@@ -116,7 +135,9 @@ class _ProductCardState extends ConsumerState<ProductCard>
                           duration: const Duration(milliseconds: 200),
                           child: _added
                               ? const Icon(Icons.check_rounded,
-                                  color: Colors.white, size: 32, key: ValueKey('check'))
+                                  color: Colors.white,
+                                  size: 32,
+                                  key: ValueKey('check'))
                               : Text(
                                   widget.product.name[0],
                                   key: const ValueKey('letter'),
@@ -129,7 +150,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
                         ),
                       ),
                     ),
-                    // Cart quantity pill
                     if (inCart > 0)
                       Positioned(
                         top: 8,
@@ -160,53 +180,54 @@ class _ProductCardState extends ConsumerState<ProductCard>
                 ),
               ),
 
-              // Info section
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        widget.product.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          height: 1.3,
-                        ),
+              // ── Info section ────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                        height: 1.3,
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
                             '₱${widget.product.price.toStringAsFixed(0)}',
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: gradColors.first,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: gradColors.first.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Icon(
-                              Icons.add_rounded,
-                              size: 14,
-                              color: gradColors.first,
-                            ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: gradColors.first.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                          child: Icon(
+                            Icons.add_rounded,
+                            size: 13,
+                            color: gradColors.first,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],

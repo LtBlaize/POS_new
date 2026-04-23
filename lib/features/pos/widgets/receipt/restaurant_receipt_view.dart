@@ -9,7 +9,9 @@ class RestaurantReceiptView extends StatelessWidget {
   final double tendered;
   final double change;
   final VoidCallback onDone;
-  final bool showKitchenBanner; // ← add this
+  final bool showKitchenBanner; 
+  final int? tableNumber;        // ← add this
+  final String? roomName;  // ← add this
 
   const RestaurantReceiptView({
     super.key,
@@ -17,7 +19,9 @@ class RestaurantReceiptView extends StatelessWidget {
     required this.tendered,
     required this.change,
     required this.onDone,
-    this.showKitchenBanner = true, // ← default true for new orders
+    this.showKitchenBanner = true, 
+    this.tableNumber,             // ← add this
+    this.roomName,   // ← default true for new orders
   });
 
   static const _dark = Color(0xFF1A1A2E);
@@ -67,44 +71,37 @@ class RestaurantReceiptView extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5),
                     ),
-                    if (tableId != null)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: _gold.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: _gold.withOpacity(0.4), width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.table_restaurant_outlined,
-                                size: 13, color: _gold),
-                            const SizedBox(width: 5),
-                            Text(
-                              'Table $tableId',
-                              style: const TextStyle(
-                                  color: _gold,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
+                    if (tableNumber != null || roomName != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _gold.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _gold.withOpacity(0.4), width: 1),
                       ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Order #${order.orderNumber.toString().padLeft(4, '0')}  ·  ${formatDateTime(order.createdAt)}',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.45),
-                          fontSize: 11),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            tableNumber != null
+                                ? Icons.table_restaurant_outlined
+                                : Icons.meeting_room_outlined,
+                            size: 13,
+                            color: _gold,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            tableNumber != null ? 'Table $tableNumber' : roomName!,
+                            style: const TextStyle(
+                                color: _gold, fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-
               // ── Kitchen banner ─────────────────────────────────────
               if (showKitchenBanner)
               Container(
@@ -372,7 +369,7 @@ class RestaurantReceiptView extends StatelessWidget {
                               icon: const Icon(
                                   Icons.table_restaurant_outlined,
                                   size: 16),
-                              label: const Text('Free Table'),
+                              label: Text(tableNumber != null ? 'Free Table' : 'Free Room'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: _dark,
                                 side: const BorderSide(color: _dark),

@@ -89,7 +89,24 @@ class CheckoutService {
               'Could not find Table $selectedTableNumber.');
         }
       }
+      // ── Stock validation before placing order ─────────────────────────────
+for (final item in items) {
+  if (!item.product.trackInventory) continue;
 
+  final row = await client
+      .from('products')
+      .select('stock_quantity, name')
+      .eq('id', item.product.id)
+      .single();
+
+  final available = row['stock_quantity'] as int? ?? 0;
+  if (item.quantity > available) {
+    return CheckoutResult.error(
+      '${row['name']} only has $available in stock (you have ${item.quantity} in cart).',
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────
       order = await service.placeOrder(
         businessId: profile!.businessId!,
         items: items,
@@ -102,8 +119,7 @@ class CheckoutService {
           'order_id': order.id,
           'business_id': profile.businessId,
           'status': 'queued',
-          if (selectedTableNumber != null)
-            'table_number': selectedTableNumber,
+         
         });
         debugPrint('✅ Kitchen ticket created for new order ${order.id}');
       }

@@ -2,18 +2,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
-import '../../features/auth/auth_provider.dart';
 
 class CartNotifier extends StateNotifier<List<CartItem>> {
   CartNotifier() : super([]);
 
   void addProduct(Product product) {
+    if (product.trackInventory && product.stockQuantity <= 0) return;
+
     final index = state.indexWhere((item) => item.product.id == product.id);
     if (index >= 0) {
+      final current = state[index];
+      if (product.trackInventory &&
+          current.quantity >= product.stockQuantity) return;
+
       final updated = List<CartItem>.from(state);
       updated[index] = CartItem(
-        product: updated[index].product,
-        quantity: updated[index].quantity + 1,
+        product: current.product,
+        quantity: current.quantity + 1,
       );
       state = updated;
     } else {
@@ -44,19 +49,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   double get total => state.fold(0, (sum, item) => sum + item.total);
 }
 
-// FIX: scope cart to the authenticated user ID.
-// Each unique userId gets its own CartNotifier instance, so when the user
-// logs out and a different account logs in, they get a completely fresh cart.
-final _cartFamilyProvider =
-    StateNotifierProvider.family<CartNotifier, List<CartItem>, String?>(
-  (ref, userId) => CartNotifier(),
-);
-
-// Use this everywhere in the app — it auto-resolves the current user's cart.
 final cartProvider =
-    StateNotifierProvider<CartNotifier, List<CartItem>>((ref) {
-  // Watching authStateProvider means this re-runs on login/logout,
-  // handing back a different CartNotifier for each userId.
-  final userId = ref.watch(authStateProvider).asData?.value?.id;
-  return ref.read(_cartFamilyProvider(userId).notifier);
-});
+    StateNotifierProvider<CartNotifier, List<CartItem>>(
+  (ref) => CartNotifier(),
+);

@@ -3,61 +3,44 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product.dart';
 import '../../features/auth/auth_provider.dart';
 
-// ── Raw async fetch ───────────────────────────────────────────────────────────
+// ── Realtime product stream ───────────────────────────────────────────────────
 
-final productListProvider = FutureProvider<List<Product>>((ref) async {
+final productListProvider = StreamProvider<List<Product>>((ref) async* {
   final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return [];
+  if (profile?.businessId == null) { yield []; return; }
 
   final client = ref.watch(supabaseClientProvider);
-  final data = await client
-      .from('products')
-      .select('*, categories(name)')
-      .eq('business_id', profile!.businessId!)
-      .eq('is_active', true)
-      .order('name');
 
-  return (data as List)
-      .map((m) => Product.fromMap(m as Map<String, dynamic>))
-      .toList();
+  yield* client
+      .from('products')
+      .stream(primaryKey: ['id'])
+      .eq('business_id', profile!.businessId!)
+      .order('name')
+      .map((rows) => rows
+          .map((m) => Product.fromMap(m))
+          .where((p) => p.isActive)
+          .toList());
 });
 
-// ── Category list derived from loaded products ────────────────────────────────
+// ── Category filter ───────────────────────────────────────────────────────────
 
 final selectedCategoryProvider = StateProvider<String?>((ref) => null);
 
 final categoryListProvider = Provider<List<String>>((ref) {
-  final productsAsync = ref.watch(productListProvider);
-  return productsAsync.asData?.value
-          .map((p) => p.category)
-          .where((c) => c.isNotEmpty)
-          .toSet()
-          .toList() ??
-      [];
+  final products = ref.watch(productListProvider).asData?.value ?? [];
+  return products
+      .map((p) => p.category)
+      .where((c) => c.isNotEmpty)
+      .toSet()
+      .toList();
 });
 
 final filteredProductsProvider = Provider<List<Product>>((ref) {
-  final productsAsync = ref.watch(productListProvider);
-  final products = productsAsync.asData?.value ?? [];
+  final products = ref.watch(productListProvider).asData?.value ?? [];
   final category = ref.watch(selectedCategoryProvider);
   if (category == null) return products;
   return products.where((p) => p.category == category).toList();
 });
-
-// ── Realtime stream (optional — drop-in upgrade) ──────────────────────────────
-// Uncomment to replace FutureProvider with live updates:
-//
-// final productStreamProvider = StreamProvider<List<Product>>((ref) async* {
-//   final profile = await ref.watch(profileProvider.future);
-//   if (profile?.businessId == null) { yield []; return; }
-//   final client = ref.watch(supabaseClientProvider);
-//   yield* client
-//       .from('products')
-//       .stream(primaryKey: ['id'])
-//       .eq('business_id', profile!.businessId!)
-//       .order('name')
-//       .map((rows) => rows.map(Product.fromMap).toList());
-// });
 
 // ── Inventory update helper ───────────────────────────────────────────────────
 
@@ -74,7 +57,7 @@ class InventoryService {
     required String productId,
     required int quantityChange,
     required int quantityBefore,
-    required String action, // 'sale', 'restock', 'adjustment', 'waste'
+    required String action,
     String? notes,
   }) async {
     final quantityAfter = quantityBefore + quantityChange;

@@ -7,11 +7,13 @@ import '../../../../shared/widgets/app_colors.dart';
 class KitchenSentView extends StatelessWidget {
   final Order order;
   final VoidCallback onDone;
+  final int? tableNumber;   
 
   const KitchenSentView({
     super.key,
     required this.order,
     required this.onDone,
+    this.tableNumber,     
   });
 
   static const _dark = Color(0xFF1A1A2E);
@@ -19,7 +21,7 @@ class KitchenSentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tableId = order.tableId;
+    final tableId = tableNumber;
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

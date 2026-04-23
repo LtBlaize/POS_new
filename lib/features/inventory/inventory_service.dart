@@ -63,6 +63,7 @@ class InventoryState {
 class InventoryNotifier extends StateNotifier<InventoryState> {
   final SupabaseClient _client;
   final String _businessId;
+  RealtimeChannel? _channel; // ← add this
 
   InventoryNotifier({
     required SupabaseClient client,
@@ -71,7 +72,41 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         _businessId = businessId,
         super(const InventoryState(loading: true)) {
     _load();
+    _subscribeRealtime(); // ← add this
   }
+
+  // ── Realtime subscription ─────────────────────────────────────────────────
+
+  void _subscribeRealtime() {
+    _channel = _client
+        .channel('inventory_products_$_businessId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'products',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'business_id',
+            value: _businessId,
+          ),
+          callback: (payload) {
+            debugPrint('📦 Realtime inventory change: ${payload.eventType}');
+            _load(); // re-fetch on any INSERT, UPDATE, DELETE
+          },
+        )
+        .subscribe();
+  }
+
+  // ── Dispose: unsubscribe on provider teardown ─────────────────────────────
+
+  @override
+  void dispose() {
+    _client.removeChannel(_channel!);
+    super.dispose();
+  }
+
+  // ... rest of your existing methods unchanged
+
 
   // ── Load ──────────────────────────────────────────────────────────────────
 

@@ -7,19 +7,22 @@ enum TableStatus { available, occupied, reserved }
 
 class TableEntry {
   final int number;
-  final String? uuid; // actual restaurant_tables.id from Supabase
+  final String? uuid;
+  final String? roomId;
   final TableStatus status;
   final String? orderId;
 
   const TableEntry({
     required this.number,
     this.uuid,
+    this.roomId,
     this.status = TableStatus.available,
     this.orderId,
   });
 
   TableEntry copyWith({
     String? uuid,
+    String? roomId,
     TableStatus? status,
     String? orderId,
     bool clearOrder = false,
@@ -27,21 +30,24 @@ class TableEntry {
     return TableEntry(
       number: number,
       uuid: uuid ?? this.uuid,
+      roomId: roomId ?? this.roomId,
       status: status ?? this.status,
       orderId: clearOrder ? null : (orderId ?? this.orderId),
     );
   }
 }
 
-// ── Table state includes selectedTableNumber so UI rebuilds on selection ──────
+// ── Table state ───────────────────────────────────────────────────────────────
 class TableState {
   final List<TableEntry> tables;
   final int? selectedTableNumber;
+  final String? selectedRoomId;
   final bool isLoading;
 
   const TableState({
     required this.tables,
     this.selectedTableNumber,
+    this.selectedRoomId,
     this.isLoading = false,
   });
 
@@ -49,17 +55,21 @@ class TableState {
     List<TableEntry>? tables,
     int? selectedTableNumber,
     bool clearSelection = false,
+    String? selectedRoomId,
+    bool clearRoomSelection = false,
     bool? isLoading,
   }) {
     return TableState(
       tables: tables ?? this.tables,
       selectedTableNumber:
           clearSelection ? null : selectedTableNumber ?? this.selectedTableNumber,
+      selectedRoomId: clearRoomSelection
+          ? null
+          : selectedRoomId ?? this.selectedRoomId,
       isLoading: isLoading ?? this.isLoading,
     );
   }
 
-  /// Returns the UUID for the given table number, or null if not found.
   String? uuidForTable(int number) {
     try {
       return tables.firstWhere((t) => t.number == number).uuid;
@@ -69,6 +79,7 @@ class TableState {
   }
 }
 
+// ── Notifier ──────────────────────────────────────────────────────────────────
 class TableNotifier extends StateNotifier<TableState> {
   final SupabaseClient _client;
   final String? _businessId;
@@ -80,24 +91,23 @@ class TableNotifier extends StateNotifier<TableState> {
     if (businessId != null) _loadTables();
   }
 
-  /// Fetch tables from Supabase and merge with local state.
   Future<void> _loadTables() async {
     if (_businessId == null) return;
     state = state.copyWith(isLoading: true);
     try {
       final rows = await _client
           .from('restaurant_tables')
-          .select('id, table_number, is_occupied')
+          .select('id, table_number, is_occupied, room_id')
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number');
 
       final tables = (rows as List).map((row) {
-        // table_number is stored as text in DB ("1", "2", etc.)
         final num = int.tryParse(row['table_number'].toString()) ?? 0;
         return TableEntry(
           number: num,
           uuid: row['id'] as String,
+          roomId: row['room_id'] as String?,
           status: (row['is_occupied'] as bool? ?? false)
               ? TableStatus.occupied
               : TableStatus.available,
@@ -106,7 +116,6 @@ class TableNotifier extends StateNotifier<TableState> {
 
       state = state.copyWith(tables: tables, isLoading: false);
     } catch (e) {
-      // Fallback: generate 10 local tables (no UUIDs) so UI still renders
       state = state.copyWith(
         tables: List.generate(10, (i) => TableEntry(number: i + 1)),
         isLoading: false,
@@ -114,7 +123,6 @@ class TableNotifier extends StateNotifier<TableState> {
     }
   }
 
-  /// Reload tables from Supabase (call after creating/editing tables in settings)
   Future<void> refresh() => _loadTables();
 
   void selectTable(int number) {
@@ -124,6 +132,20 @@ class TableNotifier extends StateNotifier<TableState> {
       state = state.copyWith(selectedTableNumber: number);
     }
   }
+
+  void selectRoom(String roomId) {
+    if (state.selectedRoomId == roomId) {
+      state = state.copyWith(clearRoomSelection: true);
+    } else {
+      state = state.copyWith(
+        selectedRoomId: roomId,
+        clearSelection: true,
+      );
+    }
+  }
+
+  void clearRoomSelection() =>
+      state = state.copyWith(clearRoomSelection: true);
 
   void occupyTable(int number, String orderId) {
     state = state.copyWith(
@@ -135,7 +157,6 @@ class TableNotifier extends StateNotifier<TableState> {
             t,
       ],
     );
-    // Also update Supabase
     _updateOccupied(number, occupied: true);
   }
 
@@ -144,7 +165,7 @@ class TableNotifier extends StateNotifier<TableState> {
       tables: [
         for (final t in state.tables)
           if (t.number == number)
-            TableEntry(number: number, uuid: t.uuid)
+            TableEntry(number: number, uuid: t.uuid, roomId: t.roomId)
           else
             t,
       ],
@@ -163,21 +184,23 @@ class TableNotifier extends StateNotifier<TableState> {
           .update({'is_occupied': occupied})
           .eq('business_id', _businessId)
           .eq('table_number', number.toString());
-    } catch (_) {
-      // non-fatal
-    }
+    } catch (_) {}
   }
 }
 
+// ── Providers ─────────────────────────────────────────────────────────────────
 final tableProvider =
     StateNotifierProvider<TableNotifier, TableState>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  // Re-create (and reload) when the logged-in business changes
   final businessId = ref.watch(profileProvider).asData?.value?.businessId;
   return TableNotifier(client: client, businessId: businessId);
 });
 
-// Convenience provider
 final selectedTableProvider = Provider<int?>((ref) {
   return ref.watch(tableProvider).selectedTableNumber;
+});
+
+// ← this was inside the class before — now correctly outside
+final selectedRoomProvider = Provider<String?>((ref) {
+  return ref.watch(tableProvider).selectedRoomId;
 });
