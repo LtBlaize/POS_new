@@ -6,6 +6,7 @@ import '../../core/providers/staff_provider.dart';
 import '../../core/services/feature_manager.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/auth/pin_lock_overlay.dart';
+import '../credits/credits_screen.dart';
 
 import '../inventory/inventory_screen.dart';
 import '../kitchen/kitchen_screen.dart';
@@ -86,6 +87,12 @@ class POSScreen extends ConsumerWidget {
           icon: Icons.inventory_2_rounded,
           label: 'Inventory',
           widget: const InventoryScreen(),
+        ),
+        // ← ADD THIS
+        _ScreenEntry(
+          icon: Icons.account_balance_wallet_outlined,
+          label: 'Utang',
+          widget: CreditsScreen(featureManager: fm), 
         ),
       if (role.canAccessReports)
         _ScreenEntry(

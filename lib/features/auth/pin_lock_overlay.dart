@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 final appLockedProvider = StateProvider<bool>((ref) => true);
@@ -27,6 +28,21 @@ class PinLockOverlay extends ConsumerStatefulWidget {
 
 class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   StaffMember? _selectedStaff;
+  Timer? _inactivityTimer; // ← ADD
+
+  @override
+  void dispose() {
+    _inactivityTimer?.cancel(); // ← ADD
+    super.dispose();
+  }
+
+  void _resetTimer() {
+    if (ref.read(appLockedProvider)) return;
+    _inactivityTimer?.cancel(); // ← cancel previous timer
+    _inactivityTimer = Timer(const Duration(minutes: 10), () {
+      if (mounted) ref.read(appLockedProvider.notifier).state = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,12 +69,7 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
     );
   }
 
-  void _resetTimer() {
-    if (ref.read(appLockedProvider)) return;
-    Future.delayed(const Duration(minutes: 10), () {
-      if (mounted) ref.read(appLockedProvider.notifier).state = true;
-    });
-  }
+  
 }
 
 // ── PIN Screen ────────────────────────────────────────────────────────────────

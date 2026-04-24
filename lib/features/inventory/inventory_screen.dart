@@ -22,32 +22,35 @@ class InventoryScreen extends ConsumerWidget {
       );
     }
 
-    // ── Error ────────────────────────────────────────────────────────────────
-    if (inventoryState.error != null) {
-      return Scaffold(
-        backgroundColor: AppColors.surface,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_outlined,
-                  size: 48, color: AppColors.danger),
-              const SizedBox(height: 12),
-              Text(inventoryState.error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.danger)),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () =>
-                    ref.read(inventoryProvider.notifier).refresh(),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
-            ],
+    // ── Error ─────────────────────────────────────────────────────────────────
+if (inventoryState.error != null && inventoryState.entries.isEmpty) {
+  // Only show full error screen if we have NO cached data at all
+  return Scaffold(
+    backgroundColor: AppColors.surface,
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_outlined,
+              size: 48, color: AppColors.danger),
+          const SizedBox(height: 12),
+          const Text('Offline — no cached inventory yet',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () =>
+                ref.read(inventoryProvider.notifier).refresh(),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
           ),
-        ),
-      );
-    }
+        ],
+      ),
+    ),
+  );
+}
+// If we have entries but also an error, fall through and show data
+// (the inline error banner below the header will show the error)
 
     // ── Data ─────────────────────────────────────────────────────────────────
     final entries = inventoryState.entries;

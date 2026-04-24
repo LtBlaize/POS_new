@@ -9,6 +9,7 @@ import '../features/pos/pos_screen.dart';
 import '../features/inventory/inventory_screen.dart';
 import '../features/kitchen/kitchen_screen.dart';
 import '../features/orders/orders_screen.dart';
+import '../features/credits/credits_screen.dart'; // ← ADD
 
 final appRouterProvider = Provider<AppRouter>((ref) {
   final featureManager = ref.watch(featureManagerProvider);
@@ -17,6 +18,7 @@ final appRouterProvider = Provider<AppRouter>((ref) {
 
 class AppRouter {
   final FeatureManager? featureManager;
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   AppRouter(this.featureManager);
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -27,11 +29,6 @@ class AppRouter {
     if (name == '/register')      return _route(const RegisterScreen());
     if (name == '/business-type') return _route(const BusinessTypeScreen());
 
-    // ── Guard: featureManager not ready → show loading splash ────────────────
-    // _PendingPosScreen watches featureManagerProvider and navigates to /pos
-    // itself once the profile finishes loading. This fixes the race condition
-    // where pushNamedAndRemoveUntil('/pos') fires before profileProvider
-    // completes, leaving the user stuck on a dead loading screen.
     if (featureManager == null) {
       return _route(const _PendingPosScreen());
     }
@@ -47,8 +44,10 @@ class AppRouter {
     // ── Protected routes ──────────────────────────────────────────────────────
     return switch (name) {
       '/pos'       => _route(POSScreen(featureManager: featureManager!)),
-'/orders' => _route(OrdersScreen(featureManager: featureManager!)),      '/kitchen'   => _route(const KitchenScreen()),
+      '/orders'    => _route(OrdersScreen(featureManager: featureManager!)),
+      '/kitchen'   => _route(const KitchenScreen()),
       '/inventory' => _route(const InventoryScreen()),
+      '/credits'   => _route(CreditsScreen(featureManager: featureManager!)), // ← ADD
       _            => _route(POSScreen(featureManager: featureManager!)),
     };
   }
@@ -57,21 +56,14 @@ class AppRouter {
       MaterialPageRoute(builder: (_) => page);
 }
 
-// ── Pending POS screen ────────────────────────────────────────────────────────
-// Shown when the user has authenticated but profileProvider hasn't resolved yet.
-// Watches featureManagerProvider and pushes /pos as soon as it becomes ready,
-// guaranteeing POSScreen always receives the correct FeatureManager.
-
 class _PendingPosScreen extends ConsumerWidget {
   const _PendingPosScreen();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch — not read — so this rebuilds the moment featureManager is ready
     final featureManager = ref.watch(featureManagerProvider);
 
     if (featureManager != null) {
-      // Schedule after the current frame so we're not pushing mid-build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           Navigator.pushNamedAndRemoveUntil(

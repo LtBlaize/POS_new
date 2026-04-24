@@ -11,7 +11,7 @@ import '../widgets/receipt/kitchen_sent_view.dart';
 import '../widgets/receipt/retail_receipt_view.dart';
 import '../widgets/receipt/restaurant_receipt_view.dart';
 import '../../../shared/components/receipt_widgets.dart';
-
+import '../../credits/widgets/add_credit_dialog.dart';
 // ── Payment method selector ───────────────────────────────────────────────────
 final _selectedPaymentProvider =
     StateProvider.autoDispose<PaymentMethod>((ref) => PaymentMethod.cash);
@@ -490,6 +490,54 @@ class _CheckoutFormView extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 12),
+                      // ── ADD THIS: Utang button (retail only) ─────────────────────
+                      if (!isRestaurant)
+                        OutlinedButton.icon(
+                          onPressed: isBusy
+                            ? null
+                            : () async {
+                                final result = await showDialog<AddCreditResult>(
+                                  context: context,
+                                  builder: (_) => AddCreditDialog(amount: subtotal),
+                                );
+                                if (result != null && context.mounted) {
+                                  // ── ADD THIS: place the order and deduct stock ──
+                                  await ref.read(checkoutServiceProvider).placeOrder(
+                                    payNow: false,
+                                    isRestaurant: isRestaurant,
+                                    hasKitchen: featureManager.hasFeature('kitchen'),
+                                    existingOrderId: existingOrderId,
+                                    paymentMethod: PaymentMethod.cash, // doesn't matter, not paying
+                                    tendered: 0,
+                                    change: 0,
+                                    subtotal: subtotal,
+                                    items: ref.read(cartProvider),
+                                  );
+                                  ref.read(cartProvider.notifier).clear(); // ── clear cart
+
+                                  Navigator.of(context).pop();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Utang recorded for ${result.customer.name}'),
+                                      backgroundColor: const Color(0xFFE94560),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                }
+                              },
+                          icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                          label: const Text('Record as Utang',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFE94560),
+                            side: const BorderSide(color: Color(0xFFE94560)),
+                            minimumSize: const Size(double.infinity, 44),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),

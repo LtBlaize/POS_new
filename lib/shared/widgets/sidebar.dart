@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/feature_manager.dart';
 import '../../features/auth/auth_provider.dart';
 import 'app_colors.dart';
+import '../../shared/widgets/offline_banner.dart';
 
 class SidebarItem {
   final IconData icon;
@@ -25,6 +26,7 @@ const _allItems = [
   SidebarItem(icon: Icons.kitchen, label: 'Kitchen', route: '/kitchen', requiredFeature: 'kitchen'),
   SidebarItem(icon: Icons.table_restaurant, label: 'Tables', route: '/tables', requiredFeature: 'tables'),
   SidebarItem(icon: Icons.inventory_2, label: 'Inventory', route: '/inventory', requiredFeature: 'inventory'),
+  SidebarItem(icon: Icons.account_balance_wallet_outlined, label: 'Utang', route: '/credits'), // ← ADD
 ];
 
 class Sidebar extends ConsumerWidget {
@@ -78,7 +80,6 @@ class Sidebar extends ConsumerWidget {
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // Logo mark
           Container(
             width: 44,
             height: 44,
@@ -90,7 +91,6 @@ class Sidebar extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // ── Nav items ───────────────────────────────────────────────────
           ...visibleItems.map((item) {
             final isActive = currentRoute == item.route;
             return Tooltip(
@@ -138,8 +138,9 @@ class Sidebar extends ConsumerWidget {
             );
           }),
 
-          // ── Logout pinned to bottom ──────────────────────────────────────
           const Spacer(),
+          const OfflineBanner(),
+
           Tooltip(
             message: 'Log out',
             preferBelow: false,

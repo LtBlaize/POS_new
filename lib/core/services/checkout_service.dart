@@ -1,10 +1,11 @@
-// lib/core/services/checkout_service.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
 import '../providers/cart_provider.dart';
 import '../models/cart_item.dart';
 import '../providers/order_provider.dart';
+import '../services/connectivity_service.dart';
+import '../services/local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
 import 'reciept_service.dart';
@@ -17,14 +18,15 @@ class CheckoutService {
   final Ref _ref;
   CheckoutService(this._ref);
 
-  /// Resolves the actual UUID for the selected table number.
+  bool get _isOnline => _ref.read(isOnlineProvider);
+
   Future<String?> resolveTableUuid({
     required String businessId,
     required int tableNumber,
   }) async {
-    final localUuid =
-        _ref.read(tableProvider).uuidForTable(tableNumber);
+    final localUuid = _ref.read(tableProvider).uuidForTable(tableNumber);
     if (localUuid != null) return localUuid;
+    if (!_isOnline) return null;
 
     final client = _ref.read(supabaseClientProvider);
     final row = await client
@@ -36,16 +38,6 @@ class CheckoutService {
     return row?['id'] as String?;
   }
 
-  /// Places (or pays) an order.
-  ///
-  /// [payNow]         – false → send to kitchen only (pay later).
-  /// [isRestaurant]   – whether the business has kitchen/tables features.
-  /// [hasKitchen]     – whether the kitchen feature is enabled.
-  /// [existingOrderId]– non-null when paying an already-placed order.
-  /// [paymentMethod]  – selected payment method.
-  /// [tendered]       – cash amount handed over (cash only).
-  /// [change]         – change to return (cash only).
-  /// [subtotal]       – cart subtotal (used for non-cash tendered).
   Future<CheckoutResult> placeOrder({
     required bool payNow,
     required bool isRestaurant,
@@ -57,56 +49,81 @@ class CheckoutService {
     required double subtotal,
     required List<CartItem> items,
   }) async {
-    debugPrint(
-        '🏪 isRestaurant: $isRestaurant, hasKitchen: $hasKitchen, existingOrderId: $existingOrderId');
-
     final profile = _ref.read(profileProvider).asData?.value;
     if (profile?.businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
 
     final service = _ref.read(orderServiceProvider);
-    final selectedTableNumber =
-        _ref.read(tableProvider).selectedTableNumber;
-    final client = _ref.read(supabaseClientProvider);
+    final local = _ref.read(localDbServiceProvider);
+    final selectedTableNumber = _ref.read(tableProvider).selectedTableNumber;
 
     Order order;
 
     if (existingOrderId != null) {
-      // ── Paying an existing order ──────────────────────────────────────
-      // Kitchen ticket was already created when order was sent to kitchen
       order = await service.fetchOrderWithItems(existingOrderId);
     } else {
-      // ── New order ─────────────────────────────────────────────────────
+      // ── Stock validation ──────────────────────────────────────────────
+      // Online: validate against Supabase (most accurate)
+      // Offline: validate against local SQLite cache
+      if (_isOnline) {
+        final client = _ref.read(supabaseClientProvider);
+        for (final item in items) {
+          if (!item.product.trackInventory) continue;
+          try {
+            final row = await client
+                .from('products')
+                .select('stock_quantity, name')
+                .eq('id', item.product.id)
+                .single();
+            final available = row['stock_quantity'] as int? ?? 0;
+            if (item.quantity > available) {
+              return CheckoutResult.error(
+                '${row['name']} only has $available in stock '
+                '(you have ${item.quantity} in cart).',
+              );
+            }
+          } catch (e) {
+            debugPrint('[Checkout] Stock check failed, using local cache: $e');
+            // Fall through to local check below
+            final cached = await local.getProducts(profile!.businessId!);
+            final p = cached.where((p) => p.id == item.product.id).firstOrNull;
+            if (p != null && p.trackInventory && item.quantity > p.stockQuantity) {
+              return CheckoutResult.error(
+                '${p.name} only has ${p.stockQuantity} in stock '
+                '(you have ${item.quantity} in cart).',
+              );
+            }
+          }
+        }
+      } else {
+        // Offline: use SQLite cache for validation
+        final cached = await local.getProducts(profile!.businessId!);
+        for (final item in items) {
+          if (!item.product.trackInventory) continue;
+          final p = cached.where((p) => p.id == item.product.id).firstOrNull;
+          if (p != null && item.quantity > p.stockQuantity) {
+            return CheckoutResult.error(
+              '${p.name} only has ${p.stockQuantity} in stock '
+              '(you have ${item.quantity} in cart).',
+            );
+          }
+        }
+      }
+
+      // ── Table resolution ──────────────────────────────────────────────
       String? tableUuid;
       if (isRestaurant && selectedTableNumber != null) {
         tableUuid = await resolveTableUuid(
           businessId: profile!.businessId!,
           tableNumber: selectedTableNumber,
         );
-        if (tableUuid == null) {
+        if (tableUuid == null && _isOnline) {
           return CheckoutResult.error(
               'Could not find Table $selectedTableNumber.');
         }
       }
-      // ── Stock validation before placing order ─────────────────────────────
-for (final item in items) {
-  if (!item.product.trackInventory) continue;
 
-  final row = await client
-      .from('products')
-      .select('stock_quantity, name')
-      .eq('id', item.product.id)
-      .single();
-
-  final available = row['stock_quantity'] as int? ?? 0;
-  if (item.quantity > available) {
-    return CheckoutResult.error(
-      '${row['name']} only has $available in stock (you have ${item.quantity} in cart).',
-    );
-  }
-}
-// ─────────────────────────────────────────────────────────────────────
       order = await service.placeOrder(
         businessId: profile!.businessId!,
         items: items,
@@ -114,20 +131,21 @@ for (final item in items) {
         notes: null,
       );
 
-      if (hasKitchen) {
-        await client.from('kitchen_tickets').insert({
-          'order_id': order.id,
-          'business_id': profile.businessId,
-          'status': 'queued',
-         
-        });
-        debugPrint('✅ Kitchen ticket created for new order ${order.id}');
+      if (hasKitchen && _isOnline) {
+        try {
+          final client = _ref.read(supabaseClientProvider);
+          await client.from('kitchen_tickets').insert({
+            'order_id': order.id,
+            'business_id': profile.businessId,
+            'status': 'queued',
+          });
+        } catch (e) {
+          debugPrint('[Checkout] Kitchen ticket failed (non-fatal): $e');
+        }
       }
 
       if (isRestaurant && selectedTableNumber != null) {
-        _ref
-            .read(tableProvider.notifier)
-            .occupyTable(selectedTableNumber, order.id);
+        _ref.read(tableProvider.notifier).occupyTable(selectedTableNumber, order.id);
       }
 
       if (!payNow) {
@@ -148,16 +166,33 @@ for (final item in items) {
       amountTendered: actualTendered,
       changeAmount: actualChange,
     );
-    // ← add this
+
     if (!hasKitchen) {
       await service.updateStatus(order.id, OrderStatus.completed);
     }
 
-    final businessRow = await client
-        .from('businesses')
-        .select('name, address, phone, email')
-        .eq('id', profile!.businessId!)
-        .maybeSingle();
+    // ── Receipt — skip business lookup if offline ─────────────────────
+    String businessName = 'My Business';
+    String? businessAddress;
+    String? businessPhone;
+    String? businessEmail;
+
+    if (_isOnline) {
+      try {
+        final client = _ref.read(supabaseClientProvider);
+        final businessRow = await client
+            .from('businesses')
+            .select('name, address, phone, email')
+            .eq('id', profile!.businessId!)
+            .maybeSingle();
+        businessName = businessRow?['name'] as String? ?? 'My Business';
+        businessAddress = businessRow?['address'] as String?;
+        businessPhone = businessRow?['phone'] as String?;
+        businessEmail = businessRow?['email'] as String?;
+      } catch (e) {
+        debugPrint('[Checkout] Business info fetch failed, using defaults: $e');
+      }
+    }
 
     await _ref.read(receiptServiceProvider).createReceipt(
           order: order.copyWith(
@@ -165,12 +200,12 @@ for (final item in items) {
             amountTendered: actualTendered,
             changeAmount: actualChange,
           ),
-          businessName: businessRow?['name'] as String? ?? 'My Business',
-          businessAddress: businessRow?['address'] as String?,
-          businessPhone: businessRow?['phone'] as String?,
-          businessEmail: businessRow?['email'] as String?,
+          businessName: businessName,
+          businessAddress: businessAddress,
+          businessPhone: businessPhone,
+          businessEmail: businessEmail,
           taxRate: 0.12,
-          issuedBy: profile.id,
+          issuedBy: profile!.id,
           footerText: isRestaurant
               ? 'Thank you for dining with us!'
               : 'Thank you for shopping with us!',
@@ -190,7 +225,7 @@ for (final item in items) {
   }
 }
 
-// ── Result type ──────────────────────────────────────────────────────────────
+// ── Result type ───────────────────────────────────────────────────────────────
 
 enum CheckoutStatus { paid, sentToKitchen, error }
 

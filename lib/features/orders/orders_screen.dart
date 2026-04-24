@@ -56,23 +56,55 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       ),
       body: ordersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Text('Error: $e', style: const TextStyle(color: Colors.red)),
-        ),
+        error: (e, _) {
+          // On error, try to use last known data instead of showing error screen
+          final cached = ref.read(ordersStreamProvider).asData?.value ?? [];
+          if (cached.isNotEmpty) {
+            final active = cached.where((o) =>
+                o.status == OrderStatus.pending ||
+                o.status == OrderStatus.preparing ||
+                o.status == OrderStatus.ready ||
+                (o.status == OrderStatus.completed && o.paidAt == null)).toList();
+            final completed = cached.where((o) =>
+                (o.status == OrderStatus.completed && o.paidAt != null) ||
+                o.status == OrderStatus.cancelled).toList();
+            return TabBarView(
+              controller: _tabs,
+              children: [
+                _OrderList(orders: cached, featureManager: widget.featureManager),
+                _OrderList(orders: active, featureManager: widget.featureManager),
+                _OrderList(orders: completed, featureManager: widget.featureManager),
+              ],
+            );
+          }
+          // Truly no data — show minimal offline message
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, size: 48, color: Colors.grey),
+                const SizedBox(height: 12),
+                const Text('Offline — no cached orders yet',
+                    style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => ref.invalidate(ordersStreamProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        },
         data: (orders) {
-          final active = orders
-              .where((o) =>
-                  o.status == OrderStatus.pending ||
-                  o.status == OrderStatus.preparing ||
-                  o.status == OrderStatus.ready ||
-                  (o.status == OrderStatus.completed && o.paidAt == null))
-              .toList();
-          final completed = orders
-              .where((o) =>
-                  (o.status == OrderStatus.completed && o.paidAt != null) ||
-                  o.status == OrderStatus.cancelled)
-              .toList();
-
+          final active = orders.where((o) =>
+              o.status == OrderStatus.pending ||
+              o.status == OrderStatus.preparing ||
+              o.status == OrderStatus.ready ||
+              (o.status == OrderStatus.completed && o.paidAt == null)).toList();
+          final completed = orders.where((o) =>
+              (o.status == OrderStatus.completed && o.paidAt != null) ||
+              o.status == OrderStatus.cancelled).toList();
           return TabBarView(
             controller: _tabs,
             children: [
