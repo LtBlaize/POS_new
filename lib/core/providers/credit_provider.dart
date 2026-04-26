@@ -5,45 +5,41 @@ import '../models/credit.dart';
 import '../services/credit_service.dart';
 import '../../features/auth/auth_provider.dart';
 
-// ── Customer list ─────────────────────────────────────────────────────────────
-
 final creditCustomersProvider =
     AsyncNotifierProvider<CreditCustomersNotifier, List<CreditCustomer>>(
         CreditCustomersNotifier.new);
 
-class CreditCustomersNotifier
-    extends AsyncNotifier<List<CreditCustomer>> {
+class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
   @override
   Future<List<CreditCustomer>> build() async {
-  final profile = ref.watch(profileProvider).value;
-  if (profile == null) return [];
-  final businessId = profile.businessId;
-  if (businessId == null) return [];
-  return ref.read(creditServiceProvider).getCustomers(businessId);
-}
+    final profile = ref.watch(profileProvider).value;
+    if (profile == null) return [];
+    final businessId = profile.businessId;
+    if (businessId == null) return [];
+    return ref.read(creditServiceProvider).getCustomers(businessId);
+  }
 
-  Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => future);
+  String get _businessId {
+    final id = ref.read(profileProvider).value?.businessId;
+    if (id == null) throw Exception('No business linked to profile');
+    return id;
   }
 
   Future<CreditCustomer> findOrCreate({
-  required String name,
-  required String phone,
-}) async {
-  final profile = ref.read(profileProvider).value!;
-  final businessId = profile.businessId;
-  if (businessId == null) throw Exception('No business linked to profile');
-  final svc = ref.read(creditServiceProvider);
-  var customer = await svc.findCustomerByPhone(businessId, phone);
-  customer ??= await svc.createCustomer(
-    businessId: businessId,
-    name: name,
-    phone: phone,
-  );
-  ref.invalidateSelf();
-  return customer;
-}
+    required String name,
+    required String phone,
+  }) async {
+    final businessId = _businessId;
+    final svc = ref.read(creditServiceProvider);
+    var customer = await svc.findCustomerByPhone(businessId, phone);
+    customer ??= await svc.createCustomer(
+      businessId: businessId,
+      name: name,
+      phone: phone,
+    );
+    ref.invalidateSelf();
+    return customer;
+  }
 
   Future<void> addCredit({
     required String customerId,
@@ -53,6 +49,7 @@ class CreditCustomersNotifier
   }) async {
     await ref.read(creditServiceProvider).addCredit(
           customerId: customerId,
+          businessId: _businessId, // ← now passed correctly
           amount: amount,
           note: note,
           orderId: orderId,
@@ -67,6 +64,7 @@ class CreditCustomersNotifier
   }) async {
     await ref.read(creditServiceProvider).recordPayment(
           customerId: customerId,
+          businessId: _businessId, // ← now passed correctly
           amount: amount,
           note: note,
         );
@@ -74,9 +72,8 @@ class CreditCustomersNotifier
   }
 }
 
-// ── Transactions for a single customer ───────────────────────────────────────
-
-final creditTransactionsProvider = FutureProvider.family<
-    List<CreditTransaction>, String>((ref, customerId) async {
+final creditTransactionsProvider =
+    FutureProvider.family<List<CreditTransaction>, String>(
+        (ref, customerId) async {
   return ref.read(creditServiceProvider).getTransactions(customerId);
 });

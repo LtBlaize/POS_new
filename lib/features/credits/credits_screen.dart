@@ -165,7 +165,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                               padding: const EdgeInsets.fromLTRB(
                                   12, 0, 12, 12),
                               itemCount: filtered.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (_, _) =>
                                   const SizedBox(height: 4),
                               itemBuilder: (_, i) {
                                 final c = filtered[i];
@@ -462,7 +462,7 @@ class _CustomerDetail extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(
                           28, 0, 28, 24),
                       itemCount: txs.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(height: 6),
                       itemBuilder: (_, i) =>
                           _TxTile(tx: txs[i]),
@@ -484,18 +484,36 @@ class _TxTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = tx.type == CreditTxType.credit;
-    final color =
-        isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
+    final color = isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
     final sign = isCredit ? '+' : '-';
     final icon = isCredit
         ? Icons.arrow_upward_rounded
         : Icons.arrow_downward_rounded;
+
+    // Settlement badge for credit transactions
+    Widget? badge;
+    if (isCredit) {
+      if (tx.isSettled) {
+        badge = _Badge(label: 'Paid', color: const Color(0xFF10B981));
+      } else if (tx.isPartiallyPaid) {
+        final paid = tx.amountPaid;
+        badge = _Badge(
+          label: '₱${paid.toStringAsFixed(2)} paid',
+          color: const Color(0xFFF59E0B),
+        );
+      } else {
+        badge = _Badge(label: 'Unpaid', color: const Color(0xFFE94560));
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1F35),
         borderRadius: BorderRadius.circular(10),
+        border: isCredit && tx.isSettled
+            ? Border.all(color: const Color(0xFF10B981).withOpacity(0.2))
+            : null,
       ),
       child: Row(
         children: [
@@ -513,23 +531,37 @@ class _TxTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isCredit ? 'Utang' : 'Payment',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
+                Row(
+                  children: [
+                    Text(
+                      isCredit ? 'Utang' : 'Payment',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      badge,
+                    ],
+                  ],
                 ),
                 if (tx.note != null)
                   Text(tx.note!,
                       style: TextStyle(
                           color: Colors.white.withOpacity(0.35),
                           fontSize: 11)),
+                // Show remaining balance for partially paid utang
+                if (isCredit && tx.isPartiallyPaid)
+                  Text(
+                    '₱${tx.amountRemaining!.toStringAsFixed(2)} remaining',
+                    style: const TextStyle(
+                        color: Color(0xFFF59E0B), fontSize: 11),
+                  ),
                 Text(
                   DateFormat('MMM d, y · h:mm a').format(tx.createdAt),
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.25),
-                      fontSize: 10),
+                      color: Colors.white.withOpacity(0.25), fontSize: 10),
                 ),
               ],
             ),
@@ -537,12 +569,31 @@ class _TxTile extends StatelessWidget {
           Text(
             '$sign₱${NumberFormat('#,##0.00').format(tx.amount)}',
             style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w700),
+                color: color, fontSize: 14, fontWeight: FontWeight.w700),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Badge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 10, fontWeight: FontWeight.w700)),
     );
   }
 }

@@ -36,8 +36,12 @@ enum CreditTxType { credit, payment }
 class CreditTransaction {
   final String id;
   final String customerId;
+  final String businessId;
   final CreditTxType type;
   final double amount;
+  final double? amountRemaining; // null for payments, tracks unpaid for credits
+  final bool isSettled;
+  final DateTime? settledAt;
   final String? note;
   final String? orderId;
   final DateTime createdAt;
@@ -45,10 +49,36 @@ class CreditTransaction {
   const CreditTransaction({
     required this.id,
     required this.customerId,
+    required this.businessId,
     required this.type,
     required this.amount,
+    this.amountRemaining,
+    this.isSettled = false,
+    this.settledAt,
     this.note,
     this.orderId,
     required this.createdAt,
+  });
+
+  // For credit transactions: how much has been paid off
+  double get amountPaid =>
+      type == CreditTxType.credit ? amount - (amountRemaining ?? amount) : 0;
+
+  bool get isPartiallyPaid =>
+      type == CreditTxType.credit &&
+      amountPaid > 0 &&
+      !isSettled;
+}
+
+/// Represents how a payment was applied across credit transactions
+class CreditSettlement {
+  final String paymentTxId;
+  final String creditTxId;
+  final double amountApplied;
+
+  const CreditSettlement({
+    required this.paymentTxId,
+    required this.creditTxId,
+    required this.amountApplied,
   });
 }

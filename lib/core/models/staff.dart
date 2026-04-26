@@ -1,7 +1,17 @@
+// lib/core/models/staff.dart
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 enum StaffRole { owner, manager, cashier, kitchen }
+
+extension StaffRolePermissions on StaffRole {
+  String get key => switch (this) {
+        StaffRole.owner => 'owner',
+        StaffRole.manager => 'manager',
+        StaffRole.cashier => 'cashier',
+        StaffRole.kitchen => 'kitchen',
+      };
+}
 
 extension StaffRoleX on StaffRole {
   String get label => switch (this) {
@@ -31,10 +41,21 @@ extension StaffRoleX on StaffRole {
   bool get canAccessInventory =>
       this == StaffRole.owner || this == StaffRole.manager;
 
-  bool get canAccessReports =>
-      this == StaffRole.owner;
+  bool get canAccessReports => this == StaffRole.owner;
 
   bool get canAccessSettings => this == StaffRole.owner;
+}
+
+/// Returns the assignable (non-owner) roles available for a given business type.
+/// Retail: cashier only.
+/// Restaurant: manager, cashier, kitchen.
+extension StaffRoleAvailability on StaffRole {
+  static List<StaffRole> forBusinessType(bool isRestaurant) {
+    if (isRestaurant) {
+      return [StaffRole.manager, StaffRole.cashier, StaffRole.kitchen];
+    }
+    return [StaffRole.cashier];
+  }
 }
 
 class StaffMember {
@@ -80,4 +101,4 @@ class StaffMember {
   }
 
   bool checkPin(String pin) => hashPin(pin) == pinHash;
-}
+} 

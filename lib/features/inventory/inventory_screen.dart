@@ -258,7 +258,7 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
                   )
                 : ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(height: 1, indent: 24, endIndent: 24),
                     itemBuilder: (context, index) =>
                         _InventoryRow(entry: filtered[index]),

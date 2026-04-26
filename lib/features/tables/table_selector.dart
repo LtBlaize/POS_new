@@ -97,7 +97,7 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 4, vertical: 10),
                       itemCount: rooms.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(width: 8),
                       itemBuilder: (context, index) {
                         final room = rooms[index];
@@ -236,7 +236,7 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 4, vertical: 10),
                             itemCount: visibleTables.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(width: 8),
                             itemBuilder: (context, index) {
                               final table = visibleTables[index];

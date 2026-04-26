@@ -232,7 +232,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         'table_number': n.toString(),
         'is_active': true,
         'is_occupied': false,
-        if (roomId != null) 'room_id': roomId,
+        'room_id': ?roomId,
       }).toList(),
     );
   } catch (e) {

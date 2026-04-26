@@ -40,6 +40,9 @@ class AppRouter {
     if (name == '/inventory' && !featureManager!.hasFeature('inventory')) {
       return _route(POSScreen(featureManager: featureManager!));
     }
+    if (name == '/tables' && !featureManager!.hasFeature('tables')) {
+      return _route(POSScreen(featureManager: featureManager!));
+    }
 
     // ── Protected routes ──────────────────────────────────────────────────────
     return switch (name) {

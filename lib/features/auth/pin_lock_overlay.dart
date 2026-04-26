@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
+import '../../core/providers/shift_provider.dart';   // ← ADD
+import '../../features/shifts/open_shift_screen.dart'; // ← ADD
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
@@ -28,6 +30,7 @@ class PinLockOverlay extends ConsumerStatefulWidget {
 
 class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   StaffMember? _selectedStaff;
+   bool _showShiftGate = false;  // ← ADD
   Timer? _inactivityTimer; // ← ADD
 
   @override
@@ -54,23 +57,53 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
         fit: StackFit.expand,
         children: [
           widget.child,
-          if (isLocked)
+
+          // ── Shift gate (on top of everything, before POS is visible) ──
+          if (_showShiftGate)
+            Material(
+              color: const Color(0xFF0B0E1A),
+              child: OpenShiftScreen(
+                onShiftOpened: () {
+                  setState(() => _showShiftGate = false);
+                  ref.read(appLockedProvider.notifier).state = false;
+                  _resetTimer();
+                },
+              ),
+            ),
+
+          // ── PIN lock ──────────────────────────────────────────────────
+          if (isLocked && !_showShiftGate)
             _PinScreen(
               selectedStaff: _selectedStaff,
               onStaffSelected: (s) => setState(() => _selectedStaff = s),
-              onUnlocked: () {
-                ref.read(appLockedProvider.notifier).state = false;
-                setState(() => _selectedStaff = null);
-                _resetTimer();
-              },
+              onUnlocked: _handleUnlock,  // ← changed
             ),
         ],
       ),
     );
   }
 
-  
+  Future<void> _handleUnlock() async {  // ← ADD this method
+    setState(() => _selectedStaff = null);
+
+    // Check if this staff member has an open shift
+    final shift = await ref.read(currentShiftProvider.future);
+
+    if (!mounted) return;
+
+    if (shift == null) {
+      // No open shift → show shift gate before unlocking
+      setState(() => _showShiftGate = true);
+    } else {
+      // Already has an open shift → unlock normally
+      ref.read(appLockedProvider.notifier).state = false;
+      _resetTimer();
+    }
+  }
 }
+
+  
+
 
 // ── PIN Screen ────────────────────────────────────────────────────────────────
 class _PinScreen extends ConsumerStatefulWidget {

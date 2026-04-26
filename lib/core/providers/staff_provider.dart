@@ -1,11 +1,4 @@
 // lib/core/providers/staff_provider.dart
-//
-// Cache-first staff list:
-//   Online  → fetch from Supabase, write-through to SQLite
-//   Offline → read from SQLite; mutations queued for later sync
-//
-// PIN verification always works offline (hashes stored locally).
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,8 +28,7 @@ final staffListProvider =
   );
 });
 
-class StaffListNotifier
-    extends StateNotifier<AsyncValue<List<StaffMember>>> {
+class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   final SupabaseClient _client;
   final String? _businessId;
   final LocalDbService _local;
@@ -64,7 +56,7 @@ class StaffListNotifier
       return;
     }
 
-    // Always try local cache first for instant display
+    // Unfiltered cache — PIN lock needs to show owner too
     try {
       final cached = await _local.getStaff(_businessId);
       if (cached.isNotEmpty) {
@@ -72,7 +64,7 @@ class StaffListNotifier
       }
     } catch (_) {}
 
-    if (!_isOnline) return; // Stick with cache offline
+    if (!_isOnline) return;
 
     state = const AsyncValue.loading();
     try {
@@ -86,12 +78,9 @@ class StaffListNotifier
       final members =
           (rows as List).map((r) => StaffMember.fromJson(r)).toList();
 
-      // Write-through to local cache
       await _local.upsertStaff(members);
-
       state = AsyncValue.data(members);
     } catch (e, s) {
-      // Fall back to cache on network error
       try {
         final cached = await _local.getStaff(_businessId);
         state = AsyncValue.data(cached);
@@ -127,7 +116,6 @@ class StaffListNotifier
         recordId: 'new_${DateTime.now().millisecondsSinceEpoch}',
         payload: member.toJson(),
       );
-      // Optimistically add to local cache
       final current = state.asData?.value ?? [];
       state = AsyncValue.data([
         ...current,
@@ -184,7 +172,6 @@ class StaffListNotifier
         recordId: id,
         payload: {'is_active': false},
       );
-      // Optimistically remove from list
       final current = state.asData?.value ?? [];
       state = AsyncValue.data(current.where((m) => m.id != id).toList());
     }
@@ -194,9 +181,8 @@ class StaffListNotifier
 // ── Active staff session ──────────────────────────────────────────────────────
 
 final activeStaffProvider =
-    StateNotifierProvider<ActiveStaffNotifier, StaffMember?>((ref) {
-  return ActiveStaffNotifier();
-});
+    StateNotifierProvider<ActiveStaffNotifier, StaffMember?>(
+        (ref) => ActiveStaffNotifier());
 
 class ActiveStaffNotifier extends StateNotifier<StaffMember?> {
   ActiveStaffNotifier() : super(null);
@@ -207,8 +193,6 @@ class ActiveStaffNotifier extends StateNotifier<StaffMember?> {
 
 // ── Offline PIN verification helper ──────────────────────────────────────────
 
-/// Verify a staff PIN against the local cache — works 100% offline.
-/// Returns the matching StaffMember or null.
 Future<StaffMember?> verifyPinOffline({
   required String businessId,
   required String pin,

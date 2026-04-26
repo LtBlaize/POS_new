@@ -13,7 +13,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     if (index >= 0) {
       final current = state[index];
       if (product.trackInventory &&
-          current.quantity >= product.stockQuantity) return;
+          current.quantity >= product.stockQuantity) {
+        return;
+      }
 
       final updated = List<CartItem>.from(state);
       updated[index] = CartItem(

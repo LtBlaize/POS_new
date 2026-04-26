@@ -266,7 +266,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 6),
                                 itemCount: filtered.length,
-                                separatorBuilder: (_, __) => Divider(
+                                separatorBuilder: (_, _) => Divider(
                                     height: 1,
                                     color: Colors.white.withOpacity(0.06)),
                                 itemBuilder: (_, i) {

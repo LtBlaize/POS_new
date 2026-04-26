@@ -22,7 +22,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
 
 // ── Database schema version ───────────────────────────────────────────────────
 
-const _kDbVersion = 2; // ← bumped from 1
+const _kDbVersion = 3;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -83,7 +83,8 @@ class LocalDbService {
   Future<void> _onCreate(Database db, int version) async {
     final batch = db.batch();
 
-    // products
+    // ── v1 tables ─────────────────────────────────────────────────────────────
+
     batch.execute('''
       CREATE TABLE products (
         id TEXT PRIMARY KEY,
@@ -104,7 +105,6 @@ class LocalDbService {
       )
     ''');
 
-    // orders
     batch.execute('''
       CREATE TABLE orders (
         id TEXT PRIMARY KEY,
@@ -129,7 +129,6 @@ class LocalDbService {
       )
     ''');
 
-    // order_items
     batch.execute('''
       CREATE TABLE order_items (
         id TEXT PRIMARY KEY,
@@ -143,7 +142,6 @@ class LocalDbService {
       )
     ''');
 
-    // staff_members
     batch.execute('''
       CREATE TABLE staff_members (
         id TEXT PRIMARY KEY,
@@ -156,7 +154,6 @@ class LocalDbService {
       )
     ''');
 
-    // sync_queue
     batch.execute('''
       CREATE TABLE sync_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,7 +167,6 @@ class LocalDbService {
       )
     ''');
 
-    // reports cache
     batch.execute('''
       CREATE TABLE reports_cache (
         date TEXT PRIMARY KEY,
@@ -183,7 +179,8 @@ class LocalDbService {
       )
     ''');
 
-    // ── v2: credit tables ─────────────────────────────────────────────────────
+    // ── v2 tables ─────────────────────────────────────────────────────────────
+
     batch.execute('''
       CREATE TABLE credit_customers (
         id TEXT PRIMARY KEY,
@@ -209,10 +206,36 @@ class LocalDbService {
       )
     ''');
 
+    // ── v3 tables ─────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE cashier_shifts (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        staff_id TEXT NOT NULL,
+        staff_name TEXT NOT NULL,
+        opening_cash REAL NOT NULL DEFAULT 0,
+        opened_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        closed_at TEXT,
+        actual_cash_count REAL,
+        notes TEXT,
+        total_sales REAL NOT NULL DEFAULT 0,
+        cash_sales REAL NOT NULL DEFAULT 0,
+        gcash_sales REAL NOT NULL DEFAULT 0,
+        other_sales REAL NOT NULL DEFAULT 0,
+        credit_given REAL NOT NULL DEFAULT 0,
+        expenses REAL NOT NULL DEFAULT 0
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Each block is additive — a fresh install at v1 upgrading to v3
+    // will run all blocks in sequence.
+
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS credit_customers (
@@ -235,6 +258,29 @@ class LocalDbService {
           order_id TEXT,
           created_at TEXT NOT NULL,
           FOREIGN KEY (customer_id) REFERENCES credit_customers(id)
+        )
+      ''');
+    }
+
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS cashier_shifts (
+          id TEXT PRIMARY KEY,
+          business_id TEXT NOT NULL,
+          staff_id TEXT NOT NULL,
+          staff_name TEXT NOT NULL,
+          opening_cash REAL NOT NULL DEFAULT 0,
+          opened_at TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          closed_at TEXT,
+          actual_cash_count REAL,
+          notes TEXT,
+          total_sales REAL NOT NULL DEFAULT 0,
+          cash_sales REAL NOT NULL DEFAULT 0,
+          gcash_sales REAL NOT NULL DEFAULT 0,
+          other_sales REAL NOT NULL DEFAULT 0,
+          credit_given REAL NOT NULL DEFAULT 0,
+          expenses REAL NOT NULL DEFAULT 0
         )
       ''');
     }
