@@ -1,40 +1,67 @@
 name: flutter_application_1
-description: "A new Flutter project."
+description: "Restaurant POS with offline-first LAN communication."
 publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.5
+  sdk: ^3.7.0
 
 dependencies:
   flutter:
     sdk: flutter
 
+  # ── State management ───────────────────────────────────────────────────────
   flutter_riverpod: ^2.5.1
-  supabase_flutter: ^2.5.6
-  cupertino_icons: ^1.0.8
-  crypto: ^3.0.3
 
+  # ── Backend ────────────────────────────────────────────────────────────────
+  supabase_flutter: ^2.5.6
+
+  # ── UI ────────────────────────────────────────────────────────────────────
+  cupertino_icons: ^1.0.8
+
+  # ── Utilities ─────────────────────────────────────────────────────────────
+  crypto: ^3.0.3
+  intl: ^0.19.0
+  uuid: ^4.4.2
+  path: ^1.9.0
+
+  # ── Offline / local DB ─────────────────────────────────────────────────────
+  sqflite: ^2.3.3
+  sqflite_common_ffi: ^2.0.0   # FFI for desktop (Windows/Linux/macOS)
+  connectivity_plus: ^6.0.5
+
+  # ── LAN server (POS device — desktop) ─────────────────────────────────────
   shelf: ^1.4.1
   shelf_router: ^1.1.4
-  network_info_plus: ^6.0.0
-  intl: ^0.19.0
-  
+  shelf_web_socket: ^2.0.0     # WebSocket upgrade endpoint
 
-  # ── Offline support ────────────────────────────────────────────────────────
-  sqflite: ^2.3.3          # Local SQLite database (cache + sync queue)
-  path: ^1.9.0             # getDatabasesPath() helper for sqflite
-  connectivity_plus: ^6.0.5 # Network interface change detection
-  uuid: ^4.4.2             # Generates offline order IDs
-  sqflite_common_ffi: ^2.0.0 # FFI implementation for sqflite (desktop/web)
-  # ──────────────────────────────────────────────────────────────────────────
+  # ── LAN client (Kitchen device — Android/iOS) ─────────────────────────────
+  http: ^1.2.1
+  web_socket_channel: ^3.0.0   # WebSocket client
+
+  # ── IP discovery ───────────────────────────────────────────────────────────
+  # POS: display QR code of its local IP
+  # Kitchen: scan QR to connect (no typing IPs)
+  network_info_plus: ^6.0.0    # getWifiIP() — more reliable on Android/iOS
+  qr_flutter: ^4.1.0           # render QR code widget
+  mobile_scanner: ^5.2.3       # scan QR code (camera)
+
+  # ── Persistence ────────────────────────────────────────────────────────────
+  shared_preferences: ^2.2.3   # persist POS IP across kitchen app restarts
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  
 
 flutter:
   uses-material-design: true
+  # fonts:
+  #   - family: Inter
+  #     fonts:
+  #       - asset: assets/fonts/Inter-Regular.ttf
+  #       - asset: assets/fonts/Inter-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Inter-Bold.ttf
+  #         weight: 700

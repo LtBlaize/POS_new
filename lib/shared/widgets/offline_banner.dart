@@ -1,25 +1,13 @@
 // lib/shared/widgets/offline_banner.dart
 //
-// Persistent banner shown when the device is offline.
-// Also shows a "syncing…" state when back online and flushing the queue.
-// Shows a badge with pending queue count.
+// Slim banner shown at the top of every screen.
+// Reads ConnectivityStatus which combines internet + LAN probes.
 //
-// Usage — wrap your Scaffold body (or insert into your sidebar / top_bar):
-//
-//   Column(children: [
-//     const OfflineBanner(),
-//     Expanded(child: yourContent),
-//   ])
-//
-// Or, for full-screen overlay at the top of every route, add it to your
-// AppBar's bottom slot:
-//
-//   appBar: AppBar(
-//     bottom: const PreferredSize(
-//       preferredSize: Size.fromHeight(0),
-//       child: OfflineBanner(),
-//     ),
-//   )
+// States:
+//   full         → hidden (no banner)
+//   lanOnly      → amber  "No internet — orders still flowing locally"
+//   internetOnly → blue   "POS not found on local network"
+//   none         → red    "No internet and POS unreachable"
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,118 +20,96 @@ class OfflineBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isOnline = ref.watch(isOnlineProvider);
-    final isSyncing = ref.watch(isSyncingProvider);
+    final status = ref.watch(connectivityStatusProvider);
     final pendingCount = ref.watch(pendingQueueCountProvider);
+    final isSyncing = ref.watch(isSyncingProvider);
 
-    // Nothing to show when fully online and nothing pending
-    if (isOnline && !isSyncing && pendingCount == 0) {
+    if (status == ConnectivityStatus.full && pendingCount == 0) {
       return const SizedBox.shrink();
     }
 
-    late final Color bgColor;
-    late final Color fgColor;
-    late final IconData icon;
-    late final String message;
-
-    if (!isOnline) {
-      bgColor = const Color(0xFFB71C1C); // deep red
-      fgColor = Colors.white;
-      icon = Icons.wifi_off_rounded;
-      message = pendingCount > 0
-          ? 'Offline — $pendingCount change${pendingCount == 1 ? '' : 's'} queued'
-          : 'Offline — changes will sync when reconnected';
-    } else if (isSyncing) {
-      bgColor = const Color(0xFFE65100); // deep orange
-      fgColor = Colors.white;
-      icon = Icons.sync_rounded;
-      message = pendingCount > 0
-          ? 'Syncing $pendingCount item${pendingCount == 1 ? '' : 's'}…'
-          : 'Syncing…';
-    } else {
-      // Online, not syncing, but there are still items in queue
-      // (shouldn't normally happen but handles edge cases)
-      bgColor = const Color(0xFFF9A825); // amber
-      fgColor = Colors.black87;
-      icon = Icons.cloud_upload_outlined;
-      message = '$pendingCount item${pendingCount == 1 ? '' : 's'} pending sync';
+    // When back online and syncing
+    if (status == ConnectivityStatus.full && pendingCount > 0) {
+      return _BannerContainer(
+        color: Colors.blue.shade700,
+        icon: Icons.sync,
+        spin: isSyncing,
+        message: isSyncing
+            ? 'Syncing $pendingCount item${pendingCount == 1 ? '' : 's'} to cloud...'
+            : '$pendingCount item${pendingCount == 1 ? '' : 's'} pending sync',
+      );
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      color: bgColor,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            isSyncing
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(fgColor),
-                    ),
-                  )
-                : Icon(icon, size: 16, color: fgColor),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: fgColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            // Manual sync button — visible when online and queue not empty
-            if (isOnline && pendingCount > 0 && !isSyncing)
-              GestureDetector(
-                onTap: () => ref.read(syncQueueServiceProvider).flushQueue(),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: fgColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Sync now',
-                    style: TextStyle(
-                      color: fgColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+    final (color, icon, message) = switch (status) {
+      ConnectivityStatus.lanOnly => (
+          Colors.orange.shade700,
+          Icons.cloud_off_outlined,
+          pendingCount > 0
+              ? 'No internet — $pendingCount item${pendingCount == 1 ? '' : 's'} will sync when reconnected'
+              : 'No internet — orders flowing locally only',
         ),
-      ),
+      ConnectivityStatus.internetOnly => (
+          Colors.blue.shade600,
+          Icons.wifi_off_outlined,
+          'POS not found on local network — check both devices are on the same WiFi',
+        ),
+      ConnectivityStatus.none => (
+          Colors.red.shade700,
+          Icons.signal_wifi_statusbar_connected_no_internet_4_outlined,
+          'No internet and POS unreachable — orders cannot be sent to kitchen',
+        ),
+      ConnectivityStatus.full => (Colors.transparent, Icons.check, ''),
+    };
+
+    return _BannerContainer(
+      color: color,
+      icon: icon,
+      message: message,
     );
   }
 }
 
-// ── Convenience wrapper ───────────────────────────────────────────────────────
-// Wraps any widget so the banner auto-appears at top when offline.
-//
-// Usage:
-//   WithOfflineBanner(child: MyScreen())
+class _BannerContainer extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  final String message;
+  final bool spin;
 
-class WithOfflineBanner extends StatelessWidget {
-  final Widget child;
-  const WithOfflineBanner({super.key, required this.child});
+  const _BannerContainer({
+    required this.color,
+    required this.icon,
+    required this.message,
+    this.spin = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const OfflineBanner(),
-        Expanded(child: child),
-      ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: double.infinity,
+      color: color,
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 16),
+      child: Row(
+        children: [
+          spin
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2))
+              : Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

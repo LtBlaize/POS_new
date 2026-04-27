@@ -226,13 +226,16 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       candidate++;
     }
 
-    await _client.from('restaurant_tables').insert(
-      toInsert.map((n) => {
-        'business_id': _businessId,
-        'table_number': n.toString(),
-        'is_active': true,
-        'is_occupied': false,
-        'room_id': ?roomId,
+   await _client.from('restaurant_tables').insert(
+      toInsert.map((n) {
+        final row = <String, dynamic>{
+          'business_id': _businessId,
+          'table_number': n.toString(),
+          'is_active': true,
+          'is_occupied': false,
+        };
+        if (roomId != null) row['room_id'] = roomId;
+        return row;
       }).toList(),
     );
   } catch (e) {

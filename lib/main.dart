@@ -1,20 +1,48 @@
-import 'dart:io'; // ← ADD
+// lib/main.dart
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'config/app_router.dart';
 import 'core/services/connectivity_service.dart';
+import 'core/services/lan_client_service.dart';
+import 'core/services/lan_server_service.dart';
 import 'core/services/local_db_service.dart';
 import 'core/services/sync_queue_service.dart';
-import 'core/services/lan_server_service.dart';
+
+// ── Device role ────────────────────────────────────────────────────────────────
+//
+// POS     = Windows / Linux / macOS desktop  → runs LAN HTTP + WebSocket server
+// Kitchen = Android / iOS tablet             → connects to POS over LAN
+//
+// Role is inferred from the platform — no manual configuration needed.
+
+bool get _isPosDevice =>
+    !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+bool get _isKitchenDevice =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+final deviceRoleProvider = Provider<DeviceRole>((ref) {
+  if (_isPosDevice) return DeviceRole.pos;
+  if (_isKitchenDevice) return DeviceRole.kitchen;
+  return DeviceRole.pos; // web fallback
+});
+
+enum DeviceRole { pos, kitchen }
+
+// ── Entry point ────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Desktop only — Android/iOS use native sqflite, no FFI needed
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  if (_isPosDevice) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
@@ -26,13 +54,42 @@ Future<void> main() async {
 
   final container = ProviderContainer();
 
+  // 1. Local DB — wait for it to be ready
   await container.read(localDbServiceProvider).db;
+
+  // 2. Connectivity (internet probe + LAN probe)
   await container.read(connectivityServiceProvider).init();
+
+  // 3. Sync queue — starts listening for internet reconnects → flush to Supabase
   container.read(syncQueueServiceProvider).init();
 
-  // LAN server only makes sense on desktop (cashier device)
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  // 4a. POS (desktop): start the LAN HTTP + WebSocket server
+  if (_isPosDevice) {
     await container.read(lanServerServiceProvider).start();
+
+    // Cache the local IP so the QR screen can read it without async work
+    final ip = await _getLocalIp();
+    if (ip != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pos_local_ip', ip);
+      debugPrint('[Boot] POS server started — local IP: $ip');
+    }
+  }
+
+  // 4b. Kitchen (mobile/tablet): restore the saved POS IP
+  if (_isKitchenDevice) {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedIp = prefs.getString('cashier_ip');
+    if (cachedIp != null && cachedIp.isNotEmpty) {
+      container.read(cashierIpProvider.notifier).state = cachedIp;
+      debugPrint('[Boot] Kitchen — POS IP restored: $cachedIp');
+      // Probe in background — sets isLanConnectedProvider before first frame
+      _unawaited(
+        container.read(connectivityServiceProvider).probeLan(cachedIp),
+      );
+    } else {
+      debugPrint('[Boot] Kitchen — no POS IP saved. Open Settings → Connect to POS.');
+    }
   }
 
   runApp(
@@ -43,6 +100,8 @@ Future<void> main() async {
   );
 }
 
+// ── Root app ───────────────────────────────────────────────────────────────────
+
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
@@ -50,7 +109,7 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
-    // ← ADD: listen for sync complete and show toast
+    // Show a toast whenever SyncQueueService finishes a flush
     ref.listen<DateTime?>(syncCompleteProvider, (prev, next) {
       if (next == null) return;
       final ctx = router.navigatorKey.currentContext;
@@ -68,7 +127,8 @@ class MyApp extends ConsumerWidget {
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     });
@@ -85,4 +145,50 @@ class MyApp extends ConsumerWidget {
       onGenerateRoute: router.onGenerateRoute,
     );
   }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/// Returns the device's current WiFi/LAN IPv4 address.
+/// Uses dart:io NetworkInterface directly — no extra package required.
+Future<String?> _getLocalIp() async {
+  try {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLinkLocal: false,
+    );
+    for (final iface in interfaces) {
+      for (final addr in iface.addresses) {
+        if (!addr.isLoopback) {
+          return addr.address;
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('[Boot] Could not determine local IP: $e');
+  }
+  return null;
+}
+
+/// Explicitly discards a Future — avoids unawaited_futures lint
+/// without pulling in async_helper package.
+void _unawaited(Future<void> future) {
+  future.catchError((Object e) => debugPrint('[unawaited] $e'));
+}
+
+// ── Helpers exposed to other files ────────────────────────────────────────────
+
+/// Persist the POS IP on the kitchen device.
+/// Called after QR scan or manual entry in ip_setup_screen.dart.
+Future<void> savePosIp(String ip, WidgetRef ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('cashier_ip', ip);
+  ref.read(cashierIpProvider.notifier).state = ip;
+  debugPrint('[Settings] POS IP saved: $ip');
+}
+
+/// Read the local IP cached at boot — used by the QR display on the POS.
+Future<String?> readPosLocalIp() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('pos_local_ip');
 }
