@@ -34,11 +34,9 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
   final businessId = profile!.businessId!;
   final local = ref.read(localDbServiceProvider);
 
-  // Always seed from local cache first
   final cached = await local.getOrders(businessId);
   if (cached.isNotEmpty) yield cached;
 
-  // If offline, wait until connectivity is restored before hitting Supabase
   if (!ref.read(isOnlineProvider)) {
     final completer = Completer<void>();
     final sub = ref.listen<bool>(isOnlineProvider, (_, next) {
@@ -47,12 +45,10 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
     await completer.future;
     sub.close();
 
-    // Yield a fresh cache snapshot right before going online
     final refreshed = await local.getOrders(businessId);
     yield refreshed;
   }
 
-  // Online: stream from Supabase and keep cache warm
   final client = ref.watch(supabaseClientProvider);
 
   yield* client
@@ -77,14 +73,13 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
               'category': '',
               'business_id': pMap['business_id'] ?? '',
             });
-            return CartItem(product: product, quantity: item['quantity'] as int);
+            return CartItem(
+                product: product, quantity: item['quantity'] as int);
           }).toList();
 
           return Order.fromMap(row, items: cartItems);
         }));
-        
 
-        // Write-through to local cache
         await local.upsertOrders(orders);
         return orders;
       });
@@ -212,10 +207,7 @@ class OrderService {
 
     final order = Order.fromMap(orderRow, items: items);
 
-    // Deduct inventory
     await _deductInventory(businessId, items);
-
-    // Cache locally
     await _local.upsertOrders([order]);
 
     return order;
@@ -233,11 +225,8 @@ class OrderService {
     final taxAmount = subtotal * taxRate;
     final totalAmount = subtotal + taxAmount - discountAmount;
 
-    // Generate a local UUID — Supabase will accept it on sync
     final offlineId = const Uuid().v4();
     final now = DateTime.now();
-
-    // Local order number: timestamp-based to avoid collisions
     final localOrderNumber = now.millisecondsSinceEpoch % 100000;
 
     final order = Order(
@@ -246,7 +235,7 @@ class OrderService {
       tableId: tableId,
       cashierId: _client.auth.currentUser?.id,
       orderNumber: localOrderNumber,
-      orderType: tableId != null ? OrderType.walkIn : OrderType.walkIn,
+      orderType: OrderType.walkIn,
       status: OrderStatus.pending,
       subtotal: subtotal,
       taxAmount: taxAmount,
@@ -257,10 +246,8 @@ class OrderService {
       items: items,
     );
 
-    // Persist locally
     await _local.insertOfflineOrder(order);
 
-    // Queue for Supabase
     final itemPayloads = items
         .map((i) => {
               'order_id': offlineId,
@@ -293,7 +280,6 @@ class OrderService {
       },
     );
 
-    // Deduct inventory locally
     await _deductInventory(businessId, items);
 
     return order;
@@ -322,17 +308,20 @@ class OrderService {
   }
 
   // ── Process payment ─────────────────────────────────────────────────────────
+  // referenceNumber is required for card/GCash/Maya, null for cash.
 
   Future<void> processPayment({
     required String orderId,
     required PaymentMethod method,
     required double amountTendered,
     required double changeAmount,
+    String? referenceNumber, // ← NEW
   }) async {
     final payload = {
       'payment_method': method.value,
       'amount_tendered': amountTendered,
       'change_amount': changeAmount,
+      'reference_number': referenceNumber, // ← NEW
       'paid_at': DateTime.now().toIso8601String(),
     };
 
@@ -342,11 +331,31 @@ class OrderService {
           ...payload,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', orderId);
+
+        // Also persist reference number locally
+        await _local.updateOrderPayment(
+          orderId: orderId,
+          method: method,
+          amountTendered: amountTendered,
+          changeAmount: changeAmount,
+          referenceNumber: referenceNumber,
+        );
         return;
       } catch (e) {
-        debugPrint('[OrderService] processPayment online failed, queuing: $e');
+        debugPrint(
+            '[OrderService] processPayment online failed, queuing: $e');
       }
     }
+
+    // Offline: persist locally + queue
+    await _local.updateOrderPayment(
+      orderId: orderId,
+      method: method,
+      amountTendered: amountTendered,
+      changeAmount: changeAmount,
+      referenceNumber: referenceNumber,
+    );
+
     await _syncQueue.enqueue(
       operation: 'process_payment',
       tableName: 'orders',
@@ -379,23 +388,25 @@ class OrderService {
             'category': '',
             'business_id': pMap['business_id'] ?? '',
           });
-          return CartItem(product: product, quantity: row['quantity'] as int);
+          return CartItem(
+              product: product, quantity: row['quantity'] as int);
         }).toList();
 
         return Order.fromMap(orderRow, items: cartItems);
       } catch (e) {
-        debugPrint('[OrderService] fetchOrderWithItems online failed, using cache: $e');
+        debugPrint(
+            '[OrderService] fetchOrderWithItems online failed, using cache: $e');
       }
     }
 
-    // Offline fallback
     final profile = await _ref.read(profileProvider.future);
     final businessId = profile?.businessId ?? '';
-    final orders = await _local.getOrders(businessId);  // ← was getOrders('')
+    final orders = await _local.getOrders(businessId);
     final cached = orders.where((o) => o.id == orderId).firstOrNull;
     if (cached != null) return cached;
     throw Exception('Order $orderId not found in local cache');
-      }
+  }
+
   // ── Inventory deduction helper ──────────────────────────────────────────────
 
   Future<void> _deductInventory(
@@ -415,7 +426,8 @@ class OrderService {
       }
       _ref.invalidate(productListProvider);
     } catch (e) {
-      debugPrint('[OrderService] Inventory deduction error (non-fatal): $e');
+      debugPrint(
+          '[OrderService] Inventory deduction error (non-fatal): $e');
     }
   }
 }

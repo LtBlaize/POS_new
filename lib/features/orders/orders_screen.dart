@@ -35,6 +35,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersStreamProvider);
+    final isNarrow = MediaQuery.sizeOf(context).width < 600;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -42,11 +43,21 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         title: const Text('Orders'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
+        // On very narrow screens, shrink the title slightly
+        titleTextStyle: TextStyle(
+          fontSize: isNarrow ? 16 : 20,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white54,
+          labelStyle: TextStyle(
+            fontSize: isNarrow ? 12 : 14,
+            fontWeight: FontWeight.w600,
+          ),
           tabs: const [
             Tab(text: 'All'),
             Tab(text: 'Active'),
@@ -57,17 +68,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       body: ordersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
-          // On error, try to use last known data instead of showing error screen
           final cached = ref.read(ordersStreamProvider).asData?.value ?? [];
           if (cached.isNotEmpty) {
-            final active = cached.where((o) =>
-                o.status == OrderStatus.pending ||
-                o.status == OrderStatus.preparing ||
-                o.status == OrderStatus.ready ||
-                (o.status == OrderStatus.completed && o.paidAt == null)).toList();
-            final completed = cached.where((o) =>
-                (o.status == OrderStatus.completed && o.paidAt != null) ||
-                o.status == OrderStatus.cancelled).toList();
+            final active = _filterActive(cached);
+            final completed = _filterCompleted(cached);
             return TabBarView(
               controller: _tabs,
               children: [
@@ -77,7 +81,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
               ],
             );
           }
-          // Truly no data — show minimal offline message
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -97,14 +100,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
           );
         },
         data: (orders) {
-          final active = orders.where((o) =>
-              o.status == OrderStatus.pending ||
-              o.status == OrderStatus.preparing ||
-              o.status == OrderStatus.ready ||
-              (o.status == OrderStatus.completed && o.paidAt == null)).toList();
-          final completed = orders.where((o) =>
-              (o.status == OrderStatus.completed && o.paidAt != null) ||
-              o.status == OrderStatus.cancelled).toList();
+          final active = _filterActive(orders);
+          final completed = _filterCompleted(orders);
           return TabBarView(
             controller: _tabs,
             children: [
@@ -117,6 +114,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       ),
     );
   }
+
+  List<Order> _filterActive(List<Order> orders) => orders
+      .where((o) =>
+          o.status == OrderStatus.pending ||
+          o.status == OrderStatus.preparing ||
+          o.status == OrderStatus.ready ||
+          (o.status == OrderStatus.completed && o.paidAt == null))
+      .toList();
+
+  List<Order> _filterCompleted(List<Order> orders) => orders
+      .where((o) =>
+          (o.status == OrderStatus.completed && o.paidAt != null) ||
+          o.status == OrderStatus.cancelled)
+      .toList();
 }
 
 // ── Order list ────────────────────────────────────────────────────────────────
@@ -134,8 +145,31 @@ class _OrderList extends StatelessWidget {
             style: TextStyle(color: AppColors.textSecondary)),
       );
     }
+
+    final width = MediaQuery.sizeOf(context).width;
+
+    // Wide screens (≥ 900): 2-column grid
+    if (width >= 900) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.6,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (_, i) => _OrderCard(
+          key: ValueKey('${orders[i].id}-${orders[i].status}'),
+          order: orders[i],
+          featureManager: featureManager,
+        ),
+      );
+    }
+
+    // Narrow: single column list
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(width < 600 ? 12 : 16),
       itemCount: orders.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _OrderCard(
@@ -152,31 +186,32 @@ class _OrderList extends StatelessWidget {
 class _OrderCard extends ConsumerWidget {
   final Order order;
   final FeatureManager featureManager;
-  const _OrderCard({super.key, required this.order, required this.featureManager});
+  const _OrderCard(
+      {super.key, required this.order, required this.featureManager});
 
-  // Left border accent color per status
   Color _accentColor(OrderStatus s, {bool isPaid = false}) => switch (s) {
-    OrderStatus.pending   => const Color(0xFFF59E0B),
-    OrderStatus.preparing => const Color(0xFF3B82F6),
-    OrderStatus.ready     => const Color(0xFF10B981),
-    OrderStatus.completed => isPaid
-        ? const Color(0xFF6B7280)   // grey = fully done
-        : const Color(0xFFEF4444),  // red = served but still unpaid
-    OrderStatus.cancelled => const Color(0xFF9CA3AF),
-  };
+        OrderStatus.pending => const Color(0xFFF59E0B),
+        OrderStatus.preparing => const Color(0xFF3B82F6),
+        OrderStatus.ready => const Color(0xFF10B981),
+        OrderStatus.completed =>
+          isPaid ? const Color(0xFF6B7280) : const Color(0xFFEF4444),
+        OrderStatus.cancelled => const Color(0xFF9CA3AF),
+      };
 
   String _statusLabel(OrderStatus s, {bool isPaid = false}) => switch (s) {
-    OrderStatus.pending   => isPaid ? 'Paid · In Queue' : 'Unpaid · Pending',
-    OrderStatus.preparing => 'Preparing',
-    OrderStatus.ready     => 'Ready to serve',
-    OrderStatus.completed => isPaid ? 'Paid · Completed' : 'Served · Unpaid',
-    OrderStatus.cancelled => 'Cancelled',
-  };
+        OrderStatus.pending => isPaid ? 'Paid · In Queue' : 'Unpaid · Pending',
+        OrderStatus.preparing => 'Preparing',
+        OrderStatus.ready => 'Ready to serve',
+        OrderStatus.completed =>
+          isPaid ? 'Paid · Completed' : 'Served · Unpaid',
+        OrderStatus.cancelled => 'Cancelled',
+      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accent = _accentColor(order.status, isPaid: order.paidAt != null);
     final isPaid = order.paidAt != null;
+    final isNarrow = MediaQuery.sizeOf(context).width < 600;
 
     return Container(
       decoration: BoxDecoration(
@@ -195,48 +230,50 @@ class _OrderCard extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Colored left accent bar ──────────────────────────────────
+            // Colored accent bar
             Container(
               width: 5,
               decoration: BoxDecoration(
                 color: accent,
-                borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(12)),
+                borderRadius:
+                    const BorderRadius.horizontal(left: Radius.circular(12)),
               ),
             ),
 
-            // ── Card content ─────────────────────────────────────────────
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.all(isNarrow ? 10 : 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header row
-                    Row(
+                    // Header row — wraps on narrow screens
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Text(
                           'Order #${order.orderNumber}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 15,
+                              fontSize: isNarrow ? 13 : 15,
                               color: AppColors.textPrimary),
                         ),
-                        const Spacer(),
-                        // Status pill
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 9, vertical: 3),
                           decoration: BoxDecoration(
                             color: accent.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: accent.withOpacity(0.3)),
+                            border:
+                                Border.all(color: accent.withOpacity(0.3)),
                           ),
                           child: Text(
-                              _statusLabel(order.status, isPaid: order.paidAt != null),
+                            _statusLabel(order.status,
+                                isPaid: order.paidAt != null),
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: isNarrow ? 10 : 11,
                                 fontWeight: FontWeight.w700,
                                 color: accent),
                           ),
@@ -248,8 +285,7 @@ class _OrderCard extends ConsumerWidget {
                     Text(
                       _formatTime(order.createdAt),
                       style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary),
+                          fontSize: 11, color: AppColors.textSecondary),
                     ),
 
                     const SizedBox(height: 10),
@@ -257,8 +293,7 @@ class _OrderCard extends ConsumerWidget {
                     // Items
                     if (order.items.isNotEmpty) ...[
                       ...order.items.map((item) => Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 2),
+                            padding: const EdgeInsets.symmetric(vertical: 2),
                             child: Row(
                               children: [
                                 Container(
@@ -266,8 +301,7 @@ class _OrderCard extends ConsumerWidget {
                                   height: 20,
                                   decoration: BoxDecoration(
                                     color: accent.withOpacity(0.1),
-                                    borderRadius:
-                                        BorderRadius.circular(5),
+                                    borderRadius: BorderRadius.circular(5),
                                   ),
                                   child: Center(
                                     child: Text(
@@ -283,9 +317,10 @@ class _OrderCard extends ConsumerWidget {
                                 Expanded(
                                   child: Text(
                                     item.product.name,
-                                    style: const TextStyle(
-                                        fontSize: 13,
+                                    style: TextStyle(
+                                        fontSize: isNarrow ? 12 : 13,
                                         color: AppColors.textPrimary),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 Text(
@@ -303,15 +338,19 @@ class _OrderCard extends ConsumerWidget {
                     // Footer
                     Row(
                       children: [
-                        Text(
-                          'Total: ₱${order.totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14),
+                        Flexible(
+                          child: Text(
+                            'Total: ₱${order.totalAmount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: isNarrow ? 13 : 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         const Spacer(),
                         if (isPaid && order.paymentMethod != null)
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.check_circle,
                                   size: 13, color: Color(0xFF6B7280)),
@@ -325,12 +364,14 @@ class _OrderCard extends ConsumerWidget {
                               ),
                             ],
                           )
-                        else if (order.paidAt == null && order.status != OrderStatus.cancelled)
-                          _PayNowButton(order: order, featureManager: featureManager),
+                        else if (order.paidAt == null &&
+                            order.status != OrderStatus.cancelled)
+                          _PayNowButton(
+                              order: order,
+                              featureManager: featureManager),
                       ],
                     ),
 
-                    // Tendered/change for completed cash orders
                     if (isPaid &&
                         order.paymentMethod == PaymentMethod.cash &&
                         order.amountTendered != null &&
@@ -345,11 +386,14 @@ class _OrderCard extends ConsumerWidget {
                         ),
                         child: Row(
                           children: [
-                            Text(
-                              'Tendered: ₱${order.amountTendered!.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary),
+                            Flexible(
+                              child: Text(
+                                'Tendered: ₱${order.amountTendered!.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             const Spacer(),
                             Text(
@@ -374,7 +418,11 @@ class _OrderCard extends ConsumerWidget {
   }
 
   String _formatTime(DateTime dt) {
-    final h = dt.hour > 12 ? dt.hour - 12 : dt.hour == 0 ? 12 : dt.hour;
+    final h = dt.hour > 12
+        ? dt.hour - 12
+        : dt.hour == 0
+            ? 12
+            : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $period';
@@ -417,15 +465,17 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
 
       if (order.tableId != null) {
         final tables = ref.read(tableProvider).tables;
-        final match = tables.where((t) => t.uuid == order.tableId).toList();
+        final match =
+            tables.where((t) => t.uuid == order.tableId).toList();
         if (match.isNotEmpty) {
-          ref.read(tableProvider.notifier).selectTable(match.first.number);
+          ref
+              .read(tableProvider.notifier)
+              .selectTable(match.first.number);
         }
       }
 
       if (!mounted) return;
 
-      debugPrint('🎯 Pay Now tapped — passing existingOrderId: ${order.id}');
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -437,7 +487,8 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -447,8 +498,6 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🔘 PayNowButton building, loading: $_loading, order: ${widget.order.id}');
-
     if (_loading) {
       return const SizedBox(
           width: 20,
@@ -457,10 +506,7 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
     }
 
     return GestureDetector(
-      onTap: () {
-        debugPrint('👆 GestureDetector tapped!');
-        _openCheckout();
-      },
+      onTap: _openCheckout,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(

@@ -43,6 +43,10 @@ class AppRouter {
     if (name == '/tables' && !featureManager!.hasFeature('tables')) {
       return _route(POSScreen(featureManager: featureManager!));
     }
+    // Add this guard alongside the other feature guards
+    if (name == '/credits' && !featureManager!.hasFeature('credits')) {
+      return _route(POSScreen(featureManager: featureManager!));
+    }
 
     // ── Protected routes ──────────────────────────────────────────────────────
     return switch (name) {

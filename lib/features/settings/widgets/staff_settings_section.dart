@@ -592,3 +592,303 @@ class _StaffDialogState extends State<_StaffDialog> {
     );
   }
 }
+// ── Owner PIN Change Section ──────────────────────────────────────────────────
+
+class OwnerPinSection extends ConsumerWidget {
+  const OwnerPinSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Your PIN',
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Change your owner PIN used to unlock the app.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showChangePinDialog(context, ref),
+            icon: const Icon(Icons.lock_outline, size: 16),
+            label: const Text('Change PIN'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showChangePinDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ChangePinDialog(
+        onSave: (currentPin, newPin) async {
+          // Verify current PIN first
+          final staffAsync = ref.read(staffListProvider);
+          final staffList = staffAsync.asData?.value ?? [];
+          final owner = staffList.firstWhere(
+            (s) => s.role == StaffRole.owner,
+            orElse: () => throw Exception('Owner not found'),
+          );
+
+          if (!owner.checkPin(currentPin)) {
+            throw Exception('Current PIN is incorrect');
+          }
+
+          await ref.read(staffListProvider.notifier).updateStaff(
+                id: owner.id,
+                name: owner.name,
+                role: owner.role,
+                newPin: newPin,
+              );
+        },
+      ),
+    );
+  }
+}
+
+class _ChangePinDialog extends StatefulWidget {
+  final Future<void> Function(String currentPin, String newPin) onSave;
+
+  const _ChangePinDialog({required this.onSave});
+
+  @override
+  State<_ChangePinDialog> createState() => _ChangePinDialogState();
+}
+
+class _ChangePinDialogState extends State<_ChangePinDialog> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+
+  bool _showCurrent = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final current = _currentController.text.trim();
+    final newPin = _newController.text.trim();
+    final confirm = _confirmController.text.trim();
+
+    if (current.length != 4) {
+      setState(() => _error = 'Enter your current 4-digit PIN');
+      return;
+    }
+    if (newPin.length != 4) {
+      setState(() => _error = 'New PIN must be 4 digits');
+      return;
+    }
+    if (newPin != confirm) {
+      setState(() => _error = 'PINs do not match');
+      return;
+    }
+    if (newPin == current) {
+      setState(() => _error = 'New PIN must be different from current PIN');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await widget.onSave(current, newPin);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PIN changed successfully'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _saving = false;
+      });
+    }
+  }
+
+  Widget _pinField({
+    required TextEditingController controller,
+    required String label,
+    required bool show,
+    required VoidCallback onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          obscureText: !show,
+          keyboardType: TextInputType.number,
+          maxLength: 4,
+          onChanged: (_) => setState(() => _error = null),
+          decoration: InputDecoration(
+            hintText: '••••',
+            counterText: '',
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10)),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 12),
+            suffixIcon: IconButton(
+              icon: Icon(
+                  show
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 18),
+              onPressed: onToggle,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SizedBox(
+        width: 380,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Change PIN',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 20),
+
+              _pinField(
+                controller: _currentController,
+                label: 'Current PIN',
+                show: _showCurrent,
+                onToggle: () =>
+                    setState(() => _showCurrent = !_showCurrent),
+              ),
+              const SizedBox(height: 14),
+
+              _pinField(
+                controller: _newController,
+                label: 'New PIN',
+                show: _showNew,
+                onToggle: () => setState(() => _showNew = !_showNew),
+              ),
+              const SizedBox(height: 14),
+
+              _pinField(
+                controller: _confirmController,
+                label: 'Confirm New PIN',
+                show: _showConfirm,
+                onToggle: () =>
+                    setState(() => _showConfirm = !_showConfirm),
+              ),
+
+              // Error message
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                child: _error == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: Colors.red, size: 14),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(
+                                    color: Colors.red, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed:
+                          _saving ? null : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white))
+                          : const Text('Change PIN'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

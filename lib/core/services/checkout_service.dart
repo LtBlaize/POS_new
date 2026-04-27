@@ -1,3 +1,4 @@
+// lib/core/services/checkout_service.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
@@ -48,10 +49,20 @@ class CheckoutService {
     required double change,
     required double subtotal,
     required List<CartItem> items,
+    String? referenceNumber, // ← NEW: null for cash, required for card/GCash/Maya
   }) async {
     final profile = _ref.read(profileProvider).asData?.value;
     if (profile?.businessId == null) {
       return CheckoutResult.error('No business profile found.');
+    }
+
+    // Validate reference number for non-cash payments
+    if (payNow &&
+        paymentMethod != PaymentMethod.cash &&
+        (referenceNumber == null || referenceNumber.trim().isEmpty)) {
+      return CheckoutResult.error(
+        'Please enter the ${_methodLabel(paymentMethod)} reference number.',
+      );
     }
 
     final service = _ref.read(orderServiceProvider);
@@ -64,8 +75,6 @@ class CheckoutService {
       order = await service.fetchOrderWithItems(existingOrderId);
     } else {
       // ── Stock validation ──────────────────────────────────────────────
-      // Online: validate against Supabase (most accurate)
-      // Offline: validate against local SQLite cache
       if (_isOnline) {
         final client = _ref.read(supabaseClientProvider);
         for (final item in items) {
@@ -85,10 +94,13 @@ class CheckoutService {
             }
           } catch (e) {
             debugPrint('[Checkout] Stock check failed, using local cache: $e');
-            // Fall through to local check below
-            final cached = await local.getProducts(profile!.businessId!);
-            final p = cached.where((p) => p.id == item.product.id).firstOrNull;
-            if (p != null && p.trackInventory && item.quantity > p.stockQuantity) {
+            final cached =
+                await local.getProducts(profile!.businessId!);
+            final p =
+                cached.where((p) => p.id == item.product.id).firstOrNull;
+            if (p != null &&
+                p.trackInventory &&
+                item.quantity > p.stockQuantity) {
               return CheckoutResult.error(
                 '${p.name} only has ${p.stockQuantity} in stock '
                 '(you have ${item.quantity} in cart).',
@@ -97,11 +109,11 @@ class CheckoutService {
           }
         }
       } else {
-        // Offline: use SQLite cache for validation
         final cached = await local.getProducts(profile!.businessId!);
         for (final item in items) {
           if (!item.product.trackInventory) continue;
-          final p = cached.where((p) => p.id == item.product.id).firstOrNull;
+          final p =
+              cached.where((p) => p.id == item.product.id).firstOrNull;
           if (p != null && item.quantity > p.stockQuantity) {
             return CheckoutResult.error(
               '${p.name} only has ${p.stockQuantity} in stock '
@@ -145,7 +157,9 @@ class CheckoutService {
       }
 
       if (isRestaurant && selectedTableNumber != null) {
-        _ref.read(tableProvider.notifier).occupyTable(selectedTableNumber, order.id);
+        _ref
+            .read(tableProvider.notifier)
+            .occupyTable(selectedTableNumber, order.id);
       }
 
       if (!payNow) {
@@ -159,19 +173,22 @@ class CheckoutService {
         paymentMethod == PaymentMethod.cash ? tendered : subtotal;
     final actualChange =
         paymentMethod == PaymentMethod.cash ? change : 0.0;
+    final cleanRef =
+        referenceNumber?.trim().isEmpty == true ? null : referenceNumber?.trim();
 
     await service.processPayment(
       orderId: order.id,
       method: paymentMethod,
       amountTendered: actualTendered,
       changeAmount: actualChange,
+      referenceNumber: cleanRef, // ← NEW
     );
 
     if (!hasKitchen) {
       await service.updateStatus(order.id, OrderStatus.completed);
     }
 
-    // ── Receipt — skip business lookup if offline ─────────────────────
+    // ── Receipt ───────────────────────────────────────────────────────
     String businessName = 'My Business';
     String? businessAddress;
     String? businessPhone;
@@ -185,21 +202,26 @@ class CheckoutService {
             .select('name, address, phone, email')
             .eq('id', profile!.businessId!)
             .maybeSingle();
-        businessName = businessRow?['name'] as String? ?? 'My Business';
+        businessName =
+            businessRow?['name'] as String? ?? 'My Business';
         businessAddress = businessRow?['address'] as String?;
         businessPhone = businessRow?['phone'] as String?;
         businessEmail = businessRow?['email'] as String?;
       } catch (e) {
-        debugPrint('[Checkout] Business info fetch failed, using defaults: $e');
+        debugPrint(
+            '[Checkout] Business info fetch failed, using defaults: $e');
       }
     }
 
+    final paidOrder = order.copyWith(
+      paymentMethod: paymentMethod,
+      amountTendered: actualTendered,
+      changeAmount: actualChange,
+      referenceNumber: cleanRef, // ← NEW
+    );
+
     await _ref.read(receiptServiceProvider).createReceipt(
-          order: order.copyWith(
-            paymentMethod: paymentMethod,
-            amountTendered: actualTendered,
-            changeAmount: actualChange,
-          ),
+          order: paidOrder,
           businessName: businessName,
           businessAddress: businessAddress,
           businessPhone: businessPhone,
@@ -214,15 +236,18 @@ class CheckoutService {
     _ref.read(cartProvider.notifier).clear();
 
     return CheckoutResult.paid(
-      order: order.copyWith(
-        paymentMethod: paymentMethod,
-        amountTendered: actualTendered,
-        changeAmount: actualChange,
-      ),
+      order: paidOrder,
       tendered: actualTendered,
       change: actualChange,
     );
   }
+
+  String _methodLabel(PaymentMethod method) => switch (method) {
+        PaymentMethod.gcash => 'GCash',
+        PaymentMethod.maya => 'Maya',
+        PaymentMethod.card => 'card',
+        PaymentMethod.cash => 'cash',
+      };
 }
 
 // ── Result type ───────────────────────────────────────────────────────────────

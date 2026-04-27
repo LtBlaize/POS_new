@@ -11,6 +11,9 @@ import '../../core/providers/lan_orders_notifier.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../shared/widgets/app_colors.dart';
 
+import '../../core/services/lan_config_service.dart';
+import '../../core/services/lan_client_service.dart';
+
 class KitchenScreen extends ConsumerStatefulWidget {
   const KitchenScreen({super.key});
 
@@ -20,13 +23,26 @@ class KitchenScreen extends ConsumerStatefulWidget {
 
 class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final businessId = ref.read(businessProvider)?.id ?? '';
-      ref.read(kitchenStateProvider.notifier).connect(businessId);
-    });
-  }
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final ip = ref.read(savedPosIpProvider);
+    if (ip.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'No POS IP configured. Go to Settings → LAN Connection.'),
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+    ref.read(cashierIpProvider.notifier).state = ip;
+    final businessId = ref.read(businessProvider)?.id ?? '';
+    ref.read(kitchenStateProvider.notifier).connect(businessId);
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {

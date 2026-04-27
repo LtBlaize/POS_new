@@ -19,6 +19,9 @@ import 'widgets/cart_panel.dart';
 import 'widgets/category_bar.dart';
 import 'widgets/layout/top_bar.dart';
 import 'widgets/product/product_grid.dart';
+import '../../core/providers/shift_provider.dart';
+import '../../features/shifts/close_shift_screen.dart';
+
 
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -115,12 +118,12 @@ class POSScreen extends ConsumerWidget {
           label: 'Inventory',
           widget: const InventoryScreen(),
         ),
-      if (allowed('utang'))
-        _ScreenEntry(
-          icon: Icons.account_balance_wallet_outlined,
-          label: 'Utang',
-          widget: CreditsScreen(featureManager: fm),
-        ),
+      if (allowed('utang') && fm.hasFeature('credits'))
+      _ScreenEntry(
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Utang',
+        widget: CreditsScreen(featureManager: fm),
+      ),
       if (allowed('reports') && role.canAccessReports)
         _ScreenEntry(
           icon: Icons.bar_chart_rounded,
@@ -508,6 +511,21 @@ class _AdaptiveSidebar extends ConsumerWidget {
     final activeStaff = ref.watch(activeStaffProvider);
     const accent = Color(0xFFE94560);
 
+    void _showCloseShift(BuildContext context, WidgetRef ref) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => CloseShiftScreen(
+        onShiftClosed: () {
+          Navigator.pop(context);
+          ref.read(activeStaffProvider.notifier).logout();
+          ref.read(appLockedProvider.notifier).state = true;
+        },
+        onCancel: () => Navigator.pop(context),
+      ),
+    ),
+  );
+}
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
@@ -620,6 +638,38 @@ class _AdaptiveSidebar extends ConsumerWidget {
               ),
             ),
           ),
+          // Close shift button — only shown when a shift is open
+Consumer(
+  builder: (context, ref, _) {
+    final shift = ref.watch(currentShiftProvider).value;
+    if (shift == null) return const SizedBox.shrink();
+    return Tooltip(
+      message: 'Close Shift',
+      child: GestureDetector(
+        onTap: () => _showCloseShift(context, ref),
+        child: Container(
+          margin: EdgeInsets.symmetric(
+              horizontal: compact ? 6 : 10),
+          padding: EdgeInsets.symmetric(
+              vertical: compact ? 8 : 10),
+          child: Column(children: [
+            Icon(Icons.lock_clock_outlined,
+                color: const Color(0xFFE94560).withOpacity(0.8),
+                size: compact ? 18 : 22),
+            if (!compact) ...[
+              const SizedBox(height: 4),
+              Text('Close',
+                  style: TextStyle(
+                      fontSize: 9,
+                      color: const Color(0xFFE94560)
+                          .withOpacity(0.8))),
+            ],
+          ]),
+        ),
+      ),
+    );
+  },
+),
 
           const Divider(color: Colors.white12, height: 1),
 

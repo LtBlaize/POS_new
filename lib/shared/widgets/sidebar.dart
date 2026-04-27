@@ -26,7 +26,7 @@ const _allItems = [
   SidebarItem(icon: Icons.kitchen, label: 'Kitchen', route: '/kitchen', requiredFeature: 'kitchen'),
   SidebarItem(icon: Icons.table_restaurant, label: 'Tables', route: '/tables', requiredFeature: 'tables'),
   SidebarItem(icon: Icons.inventory_2, label: 'Inventory', route: '/inventory', requiredFeature: 'inventory'),
-  SidebarItem(icon: Icons.account_balance_wallet_outlined, label: 'Utang', route: '/credits'), // ← ADD
+  SidebarItem(icon: Icons.account_balance_wallet_outlined, label: 'Utang', route: '/credits', requiredFeature: 'credits'),
 ];
 
 class Sidebar extends ConsumerWidget {

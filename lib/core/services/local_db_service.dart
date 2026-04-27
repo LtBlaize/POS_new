@@ -22,7 +22,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
 
 // ── Database schema version ───────────────────────────────────────────────────
 
-const _kDbVersion = 3;
+const _kDbVersion = 4; // ← bumped from 3 to 4
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -121,6 +121,7 @@ class LocalDbService {
         payment_method TEXT,
         amount_tendered REAL,
         change_amount REAL,
+        reference_number TEXT,
         notes TEXT,
         paid_at TEXT,
         created_at TEXT NOT NULL,
@@ -229,13 +230,12 @@ class LocalDbService {
       )
     ''');
 
+    // ── v4: reference_number already included in orders DDL above ─────────────
+
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Each block is additive — a fresh install at v1 upgrading to v3
-    // will run all blocks in sequence.
-
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS credit_customers (
@@ -283,6 +283,14 @@ class LocalDbService {
           expenses REAL NOT NULL DEFAULT 0
         )
       ''');
+    }
+
+    if (oldVersion < 4) {
+      // Add reference_number column to existing orders table
+      // SQLite ALTER TABLE only supports ADD COLUMN
+      await db.execute(
+        'ALTER TABLE orders ADD COLUMN reference_number TEXT',
+      );
     }
   }
 
@@ -382,6 +390,7 @@ class LocalDbService {
           'payment_method': order.paymentMethod?.value,
           'amount_tendered': order.amountTendered,
           'change_amount': order.changeAmount,
+          'reference_number': order.referenceNumber, // ← NEW
           'notes': order.notes,
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
@@ -431,6 +440,7 @@ class LocalDbService {
             'payment_method': order.paymentMethod?.value,
             'amount_tendered': order.amountTendered,
             'change_amount': order.changeAmount,
+            'reference_number': order.referenceNumber, // ← NEW
             'notes': order.notes,
             'paid_at': order.paidAt?.toIso8601String(),
             'created_at': order.createdAt.toIso8601String(),
@@ -463,6 +473,31 @@ class LocalDbService {
       }
     });
   }
+
+  /// Update payment fields on an existing local order row.
+  /// Called by OrderService.processPayment so the local cache
+  /// stays consistent even when Supabase is unreachable.
+  Future<void> updateOrderPayment({
+    required String orderId,
+    required PaymentMethod method,
+    required double amountTendered,
+    required double changeAmount,
+    String? referenceNumber, // ← NEW
+  }) =>
+      _write((d) async {
+        await d.update(
+          'orders',
+          {
+            'payment_method': method.value,
+            'amount_tendered': amountTendered,
+            'change_amount': changeAmount,
+            'reference_number': referenceNumber, // ← NEW
+            'paid_at': DateTime.now().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [orderId],
+        );
+      });
 
   Future<List<Order>> getOrders(String businessId) async {
     final d = await db;
@@ -519,7 +554,8 @@ class LocalDbService {
     }).toList();
   }
 
-  Order _orderFromRow(Map<String, dynamic> row, List<CartItem> items) => Order(
+  Order _orderFromRow(Map<String, dynamic> row, List<CartItem> items) =>
+      Order(
         id: row['id'] as String,
         businessId: row['business_id'] as String,
         tableId: row['table_id'] as String?,
@@ -536,6 +572,7 @@ class LocalDbService {
             : null,
         amountTendered: (row['amount_tendered'] as num?)?.toDouble(),
         changeAmount: (row['change_amount'] as num?)?.toDouble(),
+        referenceNumber: row['reference_number'] as String?, // ← NEW
         notes: row['notes'] as String?,
         paidAt: row['paid_at'] != null
             ? DateTime.parse(row['paid_at'] as String)
@@ -681,10 +718,12 @@ class LocalDbService {
       whereArgs: args,
       orderBy: 'date DESC',
     );
-    return rows.map((r) => {
-          ...r,
-          'top_products': jsonDecode(r['top_products'] as String),
-        }).toList();
+    return rows
+        .map((r) => {
+              ...r,
+              'top_products': jsonDecode(r['top_products'] as String),
+            })
+        .toList();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -693,7 +732,8 @@ class LocalDbService {
 
   Future<int> pendingQueueCount() async {
     final d = await db;
-    final result = await d.rawQuery('SELECT COUNT(*) as c FROM sync_queue');
+    final result =
+        await d.rawQuery('SELECT COUNT(*) as c FROM sync_queue');
     return (result.first['c'] as int?) ?? 0;
   }
 
@@ -704,7 +744,8 @@ class LocalDbService {
         .toIso8601String();
     await d.delete(
       'orders',
-      where: 'business_id = ? AND created_at < ? AND is_offline = 0',
+      where:
+          'business_id = ? AND created_at < ? AND is_offline = 0',
       whereArgs: [businessId, cutoff],
     );
   }

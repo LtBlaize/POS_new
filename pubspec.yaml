@@ -28,28 +28,24 @@ dependencies:
 
   # ── Offline / local DB ─────────────────────────────────────────────────────
   sqflite: ^2.3.3
-  sqflite_common_ffi: ^2.0.0   # FFI for desktop (Windows/Linux/macOS)
+  sqflite_common_ffi: ^2.0.0
   connectivity_plus: ^6.0.5
+  shared_preferences: ^2.2.3   # kept higher version, removed duplicate
 
-  # ── LAN server (POS device — desktop) ─────────────────────────────────────
+  # ── LAN server ─────────────────────────────────────────────────────────────
   shelf: ^1.4.1
   shelf_router: ^1.1.4
-  shelf_web_socket: ^2.0.0     # WebSocket upgrade endpoint
+  shelf_web_socket: ^2.0.0
 
-  # ── LAN client (Kitchen device — Android/iOS) ─────────────────────────────
+  # ── LAN client ─────────────────────────────────────────────────────────────
   http: ^1.2.1
-  web_socket_channel: ^3.0.0   # WebSocket client
+  web_socket_channel: ^3.0.0
 
   # ── IP discovery ───────────────────────────────────────────────────────────
-  # POS: display QR code of its local IP
-  # Kitchen: scan QR to connect (no typing IPs)
-  network_info_plus: ^6.0.0    # getWifiIP() — more reliable on Android/iOS
-  qr_flutter: ^4.1.0           # render QR code widget
-  mobile_scanner: ^5.2.3       # scan QR code (camera)
-
-  # ── Persistence ────────────────────────────────────────────────────────────
-  shared_preferences: ^2.2.3   # persist POS IP across kitchen app restarts
-
+  network_info_plus: ^6.0.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

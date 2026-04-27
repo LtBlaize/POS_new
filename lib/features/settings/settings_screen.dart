@@ -8,6 +8,7 @@ import 'widgets/general_settings_section.dart';
 import 'widgets/table_settings_section.dart';
 import 'widgets/room_settings_section.dart';
 import 'widgets/staff_settings_section.dart';
+import 'widgets/lan_settings_section.dart';
 
 
 class SettingsScreen extends ConsumerWidget {
@@ -55,6 +56,8 @@ class SettingsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 children: [
                   GeneralSettingsSection(business: business),
+                  const SizedBox(height: 16),
+                  _SectionCard(child: const LanSettingsSection()), // ← add this
                   if (isRestaurant) ...[
                     const SizedBox(height: 16),
                     _SectionCard(child: const RoomSettingsSection()),
@@ -62,6 +65,8 @@ class SettingsScreen extends ConsumerWidget {
                     _SectionCard(child: const TableSettingsSection()),
                   ],
                   if (isOwner) ...[
+                    const SizedBox(height: 16),
+                    _SectionCard(child: const OwnerPinSection()), 
                     const SizedBox(height: 16),
                     _SectionCard(child: const StaffSettingsSection()),
                   ],

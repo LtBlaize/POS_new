@@ -176,6 +176,9 @@ void _unawaited(Future<void> future) {
   future.catchError((Object e) => debugPrint('[unawaited] $e'));
 }
 
+
+
+
 // ── Helpers exposed to other files ────────────────────────────────────────────
 
 /// Persist the POS IP on the kitchen device.

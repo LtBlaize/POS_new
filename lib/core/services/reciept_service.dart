@@ -1,3 +1,4 @@
+// lib/core/services/reciept_service.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
@@ -54,6 +55,7 @@ class ReceiptService {
       'amount_tendered': order.amountTendered,
       'change_amount': order.changeAmount,
       'payment_method': order.paymentMethod?.value,
+      'reference_number': order.referenceNumber, // ← NEW
       'business_name': businessName,
       'business_address': businessAddress,
       'business_phone': businessPhone,
@@ -66,7 +68,6 @@ class ReceiptService {
     };
 
     if (!_isOnline) {
-      // Save to sync queue — will auto-insert to Supabase when back online
       await _syncQueue.enqueue(
         operation: 'insert_receipt',
         tableName: 'receipts',
@@ -85,7 +86,6 @@ class ReceiptService {
           .single();
       return row['id'] as String;
     } catch (e) {
-      // Flaky connection — queue it for sync instead of failing
       debugPrint('[Receipt] Insert failed, queuing: $e');
       await _syncQueue.enqueue(
         operation: 'insert_receipt',
