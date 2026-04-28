@@ -1,3 +1,4 @@
+// lib/features/inventory/inventory_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'inventory_service.dart';
@@ -14,7 +15,6 @@ class InventoryScreen extends ConsumerWidget {
     final inventoryState = ref.watch(inventoryProvider);
     final query = ref.watch(_searchQueryProvider).toLowerCase();
 
-    // ── Loading ──────────────────────────────────────────────────────────────
     if (inventoryState.loading) {
       return const Scaffold(
         backgroundColor: AppColors.surface,
@@ -22,37 +22,32 @@ class InventoryScreen extends ConsumerWidget {
       );
     }
 
-    // ── Error ─────────────────────────────────────────────────────────────────
-if (inventoryState.error != null && inventoryState.entries.isEmpty) {
-  // Only show full error screen if we have NO cached data at all
-  return Scaffold(
-    backgroundColor: AppColors.surface,
-    body: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.cloud_off_outlined,
-              size: 48, color: AppColors.danger),
-          const SizedBox(height: 12),
-          const Text('Offline — no cached inventory yet',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () =>
-                ref.read(inventoryProvider.notifier).refresh(),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
+    if (inventoryState.error != null && inventoryState.entries.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined,
+                  size: 48, color: AppColors.danger),
+              const SizedBox(height: 12),
+              const Text('Offline — no cached inventory yet',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    ref.read(inventoryProvider.notifier).refresh(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
-}
-// If we have entries but also an error, fall through and show data
-// (the inline error banner below the header will show the error)
+        ),
+      );
+    }
 
-    // ── Data ─────────────────────────────────────────────────────────────────
     final entries = inventoryState.entries;
     final lowCount = inventoryState.lowStockItems.length;
 
@@ -69,7 +64,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          // ── Header ─────────────────────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
@@ -101,7 +95,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
                         color: AppColors.danger,
                       ),
                     const SizedBox(width: 8),
-                    // ── Add product button ──────────────────────────
                     ElevatedButton.icon(
                       onPressed: () => showDialog(
                         context: context,
@@ -137,8 +130,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // ── Search bar ──────────────────────────────────────────────
                 Container(
                   height: 40,
                   decoration: BoxDecoration(
@@ -159,11 +150,9 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
                               .state = v,
                           style: const TextStyle(fontSize: 13),
                           decoration: InputDecoration(
-                            hintText:
-                                'Search by name, category or barcode…',
+                            hintText: 'Search by name, category or barcode…',
                             hintStyle: TextStyle(
-                                color:
-                                    AppColors.textSecondary.withOpacity(0.6),
+                                color: AppColors.textSecondary.withOpacity(0.6),
                                 fontSize: 13),
                             border: InputBorder.none,
                             isDense: true,
@@ -180,7 +169,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
             ),
           ),
 
-          // ── Low-stock banner ────────────────────────────────────────────────
           if (lowCount > 0)
             Container(
               color: AppColors.danger.withOpacity(0.06),
@@ -209,7 +197,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
               ),
             ),
 
-          // ── Error inline banner ─────────────────────────────────────────────
           if (inventoryState.error != null)
             Container(
               color: AppColors.danger.withOpacity(0.08),
@@ -235,7 +222,6 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
               ),
             ),
 
-          // ── Table body ──────────────────────────────────────────────────────
           Expanded(
             child: filtered.isEmpty
                 ? Center(
@@ -258,7 +244,7 @@ if (inventoryState.error != null && inventoryState.entries.isEmpty) {
                   )
                 : ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, _) =>
+                    separatorBuilder: (_, __) =>
                         const Divider(height: 1, indent: 24, endIndent: 24),
                     itemBuilder: (context, index) =>
                         _InventoryRow(entry: filtered[index]),
@@ -290,7 +276,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('CATEGORY', style: style)),
           Expanded(flex: 2, child: Text('PRICE', style: style)),
           Expanded(flex: 3, child: Text('STOCK', style: style)),
-          SizedBox(width: 144), // wider to accommodate Set + Edit buttons
+          SizedBox(width: 144),
         ],
       ),
     );
@@ -317,8 +303,7 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
       await ref
           .read(inventoryProvider.notifier)
           .adjustStock(widget.entry.product.id, delta);
-    } catch (_) {}
-    finally {
+    } catch (_) {} finally {
       if (mounted) setState(() => _adjusting = false);
     }
   }
@@ -332,8 +317,7 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
   }
 
   void _showSetDialog() {
-    final controller =
-        TextEditingController(text: '${widget.entry.stock}');
+    final controller = TextEditingController(text: '${widget.entry.stock}');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -385,7 +369,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
-          // ── Name + barcode ────────────────────────────────────────────────
           Expanded(
             flex: 4,
             child: Row(
@@ -414,8 +397,8 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
                             style: TextStyle(
                                 fontSize: 10,
                                 fontFamily: 'monospace',
-                                color: AppColors.textSecondary
-                                    .withOpacity(0.7))),
+                                color:
+                                    AppColors.textSecondary.withOpacity(0.7))),
                     ],
                   ),
                 ),
@@ -423,7 +406,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
             ),
           ),
 
-          // ── Category ──────────────────────────────────────────────────────
           Expanded(
             flex: 2,
             child: FittedBox(
@@ -444,7 +426,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
             ),
           ),
 
-          // ── Price ─────────────────────────────────────────────────────────
           Expanded(
             flex: 2,
             child: Text(
@@ -456,7 +437,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
             ),
           ),
 
-          // ── Stepper ───────────────────────────────────────────────────────
           Expanded(
             flex: 3,
             child: Row(
@@ -496,7 +476,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
             ),
           ),
 
-          // ── Set button ────────────────────────────────────────────────────
           SizedBox(
             width: 72,
             child: TextButton(
@@ -514,7 +493,6 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
             ),
           ),
 
-          // ── Edit button ───────────────────────────────────────────────────
           SizedBox(
             width: 72,
             child: TextButton(
@@ -604,12 +582,11 @@ class _StatPill extends StatelessWidget {
         children: [
           Text(value,
               style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: color)),
+                  fontWeight: FontWeight.w800, fontSize: 13, color: color)),
           const SizedBox(width: 4),
           Text(label,
-              style: TextStyle(fontSize: 11, color: color.withOpacity(0.8))),
+              style:
+                  TextStyle(fontSize: 11, color: color.withOpacity(0.8))),
         ],
       ),
     );

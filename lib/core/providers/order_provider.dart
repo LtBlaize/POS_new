@@ -139,6 +139,7 @@ class OrderService {
     String? notes,
     double taxRate = 0.0,
     double discountAmount = 0.0,
+    String? cashierId,  
   }) async {
     if (_isOnline) {
       return _placeOnline(
@@ -148,6 +149,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
+        cashierId: cashierId, 
       );
     } else {
       return _placeOffline(
@@ -157,6 +159,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
+        cashierId: cashierId, 
       );
     }
   }
@@ -168,6 +171,7 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
+    String? cashierId,  
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -178,7 +182,7 @@ class OrderService {
         .insert({
           'business_id': businessId,
           'table_id': tableId,
-          'cashier_id': _client.auth.currentUser?.id,
+          'cashier_id': cashierId,
           'order_type': tableId != null ? 'dine_in' : 'walk_in',
           'status': 'pending',
           'subtotal': subtotal,
@@ -220,6 +224,7 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
+    String? cashierId,  
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -233,7 +238,7 @@ class OrderService {
       id: offlineId,
       businessId: businessId,
       tableId: tableId,
-      cashierId: _client.auth.currentUser?.id,
+       cashierId: cashierId,
       orderNumber: localOrderNumber,
       orderType: OrderType.walkIn,
       status: OrderStatus.pending,
@@ -267,7 +272,7 @@ class OrderService {
         'id': offlineId,
         'business_id': businessId,
         'table_id': tableId,
-        'cashier_id': _client.auth.currentUser?.id,
+        'cashier_id': cashierId,
         'order_type': tableId != null ? 'dine_in' : 'walk_in',
         'status': 'pending',
         'subtotal': subtotal,

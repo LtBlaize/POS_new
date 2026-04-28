@@ -35,6 +35,15 @@ class _ProductCardState extends ConsumerState<ProductCard>
   late final Animation<double> _scaleAnim;
   bool _added = false;
 
+  // ✅ Declared as a class field — NOT inside initState
+  late final _liveProductProvider = Provider<Product>((ref) {
+    final products = ref.watch(productListProvider).asData?.value ?? [];
+    return products.firstWhere(
+      (p) => p.id == widget.product.id,
+      orElse: () => widget.product,
+    );
+  });
+
   @override
   void initState() {
     super.initState();
@@ -55,11 +64,8 @@ class _ProductCardState extends ConsumerState<ProductCard>
     await _controller.forward();
     await _controller.reverse();
 
-    final liveProducts = ref.read(productListProvider).asData?.value ?? [];
-    final liveProduct = liveProducts
-            .where((p) => p.id == widget.product.id)
-            .firstOrNull ??
-        widget.product;
+    // ✅ Always reads the freshest product from the live stream
+    final liveProduct = ref.read(_liveProductProvider);
 
     if (liveProduct.trackInventory && liveProduct.stockQuantity <= 0) {
       if (mounted) {
@@ -82,11 +88,13 @@ class _ProductCardState extends ConsumerState<ProductCard>
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Watch live product so card reacts to stock/availability changes
+    final liveProduct = ref.watch(_liveProductProvider);
     final cartItems = ref.watch(cartProvider);
     final inCart = cartItems
         .where((i) => i.product.id == widget.product.id)
         .fold(0, (sum, i) => sum + i.quantity);
-    final gradColors = _gradientFor(widget.product.category);
+    final gradColors = _gradientFor(liveProduct.category);
 
     return ScaleTransition(
       scale: _scaleAnim,
@@ -139,7 +147,8 @@ class _ProductCardState extends ConsumerState<ProductCard>
                                   size: 32,
                                   key: ValueKey('check'))
                               : Text(
-                                  widget.product.name[0],
+                                  // ✅ Use liveProduct, not widget.product
+                                  liveProduct.name[0],
                                   key: const ValueKey('letter'),
                                   style: TextStyle(
                                     fontSize: 32,
@@ -180,6 +189,60 @@ class _ProductCardState extends ConsumerState<ProductCard>
                 ),
               ),
 
+               // Bottom (flexible — THIS FIXES OVERFLOW)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        liveProduct.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                          height: 1.3,
+                        ),
+                      ),
+
+                      const Spacer(), // 👈 pushes price to bottom cleanly
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '₱${liveProduct.price.toStringAsFixed(0)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: gradColors.first,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: gradColors.first.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 13,
+                              color: gradColors.first,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               // ── Info section ────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
@@ -188,7 +251,8 @@ class _ProductCardState extends ConsumerState<ProductCard>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      widget.product.name,
+                      // ✅ Use liveProduct, not widget.product
+                      liveProduct.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -204,7 +268,8 @@ class _ProductCardState extends ConsumerState<ProductCard>
                       children: [
                         Flexible(
                           child: Text(
-                            '₱${widget.product.price.toStringAsFixed(0)}',
+                            // ✅ Use liveProduct, not widget.product
+                            '₱${liveProduct.price.toStringAsFixed(0)}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 13,

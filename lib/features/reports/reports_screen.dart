@@ -1,13 +1,7 @@
 // lib/features/reports/reports_screen.dart
 //
-// Offline-first reports:
-//   Online  → fetch from Supabase, write-through to reports_cache in SQLite
-//   Offline → read from reports_cache, show stale-data notice with last-synced time
-//
-// Everything below the provider is identical to your original UI — only the
-// data-fetching provider and the error/offline state in the body changed.
-
-
+// Offline-first reports — adaptive layout (phone / tablet / desktop)
+// Bug fix: revenue now counted for 'completed' orders regardless of paid_at
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +12,7 @@ import '../../core/services/local_db_service.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../features/auth/auth_provider.dart';
 
-// ── Data models (unchanged) ───────────────────────────────────────────────────
+// ── Data models ───────────────────────────────────────────────────────────────
 
 class _TopProduct {
   final String name;
@@ -42,7 +36,6 @@ class _DailyReport {
   final List<_HourlySale> hourlySales;
   final int completedOrders;
   final int cancelledOrders;
-  // NEW: metadata for offline display
   final bool isFromCache;
   final DateTime? cachedAt;
 
@@ -60,7 +53,7 @@ class _DailyReport {
   });
 }
 
-// ── Provider ──────────────────────────────────────────────────────────────────
+// ── Providers ─────────────────────────────────────────────────────────────────
 
 final _selectedDateProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
@@ -81,18 +74,18 @@ final _dailyReportProvider =
   final businessId = profile!.businessId!;
   final isOnline = ref.read(isOnlineProvider);
   final local = ref.read(localDbServiceProvider);
-  final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  final dateKey =
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  if (!isOnline) {
-    return _loadFromCache(local, businessId, dateKey);
-  }
+  if (!isOnline) return _loadFromCache(local, businessId, dateKey);
 
-  // ── Online path ─────────────────────────────────────────────────────────────
   try {
     final client = ref.watch(supabaseClientProvider);
-
-    final dayStart = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd   = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc().toIso8601String();
+    final dayStart =
+        DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
+    final dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59)
+        .toUtc()
+        .toIso8601String();
 
     final rows = await client
         .from('orders')
@@ -104,7 +97,6 @@ final _dailyReportProvider =
 
     final report = _buildReport(rows as List, fromCache: false);
 
-    // Write-through to local cache
     await local.upsertReportDay(
       date: dateKey,
       businessId: businessId,
@@ -118,7 +110,6 @@ final _dailyReportProvider =
 
     return report;
   } catch (e) {
-    // Network hiccup — fall back to cache silently
     return _loadFromCache(local, businessId, dateKey);
   }
 });
@@ -130,15 +121,14 @@ Future<_DailyReport> _loadFromCache(
   String businessId,
   String dateKey,
 ) async {
-  final cached = await local.getReports(businessId,
-      fromDate: dateKey, toDate: dateKey);
+  final cached =
+      await local.getReports(businessId, fromDate: dateKey, toDate: dateKey);
 
   if (cached.isEmpty) {
     return const _DailyReport(
       totalRevenue: 0, totalOrders: 0, avgOrderValue: 0,
       revenueByPayment: {}, topProducts: [], hourlySales: [],
-      completedOrders: 0, cancelledOrders: 0,
-      isFromCache: true,
+      completedOrders: 0, cancelledOrders: 0, isFromCache: true,
     );
   }
 
@@ -146,7 +136,6 @@ Future<_DailyReport> _loadFromCache(
   final syncedAt = row['synced_at'] != null
       ? DateTime.tryParse(row['synced_at'] as String)
       : null;
-
   final rawTopProducts =
       (row['top_products'] as List? ?? []).cast<Map<String, dynamic>>();
 
@@ -154,7 +143,7 @@ Future<_DailyReport> _loadFromCache(
     totalRevenue: (row['total_sales'] as num?)?.toDouble() ?? 0,
     totalOrders: (row['order_count'] as int?) ?? 0,
     avgOrderValue: (row['avg_order_value'] as num?)?.toDouble() ?? 0,
-    revenueByPayment: const {},   // not cached at row level — acceptable tradeoff
+    revenueByPayment: const {},
     topProducts: rawTopProducts
         .map((p) => _TopProduct(
               p['name'] as String,
@@ -170,6 +159,7 @@ Future<_DailyReport> _loadFromCache(
   );
 }
 
+// ── FIX: count revenue for 'completed' orders, not just paid_at != null ───────
 _DailyReport _buildReport(List orders, {required bool fromCache}) {
   double totalRevenue = 0;
   int completed = 0;
@@ -181,28 +171,36 @@ _DailyReport _buildReport(List orders, {required bool fromCache}) {
   for (final o in orders) {
     final row = o as Map<String, dynamic>;
     final status = row['status'] as String? ?? '';
-    if (status == 'cancelled') { cancelled++; continue; }
-    if (status == 'completed') completed++;
+
+    if (status == 'cancelled') {
+      cancelled++;
+      continue;
+    }
 
     final amount = (row['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final method = row['payment_method'] as String? ?? 'unknown';
+    final method = row['payment_method'] as String? ?? 'cash';
     final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
 
-    if (row['paid_at'] != null) {
+    // ── FIX: was `if (row['paid_at'] != null)` which excluded many paid orders
+    // Now we count revenue for completed orders OR any order with paid_at set.
+    final isPaid = status == 'completed' || row['paid_at'] != null;
+
+    if (isPaid) {
+      completed++;
       totalRevenue += amount;
       byPayment[method] = (byPayment[method] ?? 0) + amount;
     }
 
     if (createdAt != null) {
       final h = createdAt.toLocal().hour;
-      hourMap[h] = (hourMap[h] ?? 0) + amount;
+      if (isPaid) hourMap[h] = (hourMap[h] ?? 0) + amount;
     }
 
     final items = row['order_items'] as List? ?? [];
     for (final item in items) {
       final name = item['product_name'] as String? ?? 'Unknown';
-      final qty  = item['quantity'] as int? ?? 0;
-      final sub  = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
+      final qty = item['quantity'] as int? ?? 0;
+      final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
       final existing = productMap[name];
       productMap[name] = existing != null
           ? _TopProduct(name, existing.qty + qty, existing.revenue + sub)
@@ -226,6 +224,17 @@ _DailyReport _buildReport(List orders, {required bool fromCache}) {
   );
 }
 
+// ── Layout breakpoints ────────────────────────────────────────────────────────
+
+enum _ReportLayout { phone, tablet, desktop }
+
+_ReportLayout _layoutOf(BuildContext context) {
+  final w = MediaQuery.sizeOf(context).width;
+  if (w < 600) return _ReportLayout.phone;
+  if (w < 1024) return _ReportLayout.tablet;
+  return _ReportLayout.desktop;
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class ReportsScreen extends ConsumerWidget {
@@ -239,17 +248,18 @@ class ReportsScreen extends ConsumerWidget {
     final isOnline = ref.watch(isOnlineProvider);
     final isRestaurant = featureManager.hasFeature('kitchen') ||
         featureManager.hasFeature('tables');
+    final layout = _layoutOf(context);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          // ── Offline notice ───────────────────────────────────────────────
           if (!isOnline)
             Container(
               width: double.infinity,
               color: const Color(0xFFB71C1C),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
               child: const Row(
                 children: [
                   Icon(Icons.wifi_off_rounded, size: 14, color: Colors.white),
@@ -266,128 +276,35 @@ class ReportsScreen extends ConsumerWidget {
             ),
 
           // ── Header ──────────────────────────────────────────────────────
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Daily Report',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (isRestaurant
-                                    ? const Color(0xFF1A1A2E)
-                                    : AppColors.primary)
-                                .withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            isRestaurant ? 'Restaurant' : 'Retail',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isRestaurant
-                                  ? const Color(0xFF1A1A2E)
-                                  : AppColors.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatDate(selectedDate),
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                _DateNavButton(
-                  icon: Icons.chevron_left,
-                  onTap: () => ref.read(_selectedDateProvider.notifier).state =
-                      selectedDate.subtract(const Duration(days: 1)),
-                ),
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      ref.read(_selectedDateProvider.notifier).state = picked;
-                    }
+          _ReportHeader(
+            selectedDate: selectedDate,
+            isRestaurant: isRestaurant,
+            layout: layout,
+            onPrev: () =>
+                ref.read(_selectedDateProvider.notifier).state =
+                    selectedDate.subtract(const Duration(days: 1)),
+            onNext: _isToday(selectedDate)
+                ? null
+                : () => ref.read(_selectedDateProvider.notifier).state =
+                    selectedDate.add(const Duration(days: 1)),
+            onPick: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) {
+                ref.read(_selectedDateProvider.notifier).state = picked;
+              }
+            },
+            onToday: _isToday(selectedDate)
+                ? null
+                : () {
+                    final now = DateTime.now();
+                    ref.read(_selectedDateProvider.notifier).state =
+                        DateTime(now.year, now.month, now.day);
                   },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.divider),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined,
-                            size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 6),
-                        Text(
-                          _formatDateShort(selectedDate),
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _DateNavButton(
-                  icon: Icons.chevron_right,
-                  onTap: selectedDate.isBefore(
-                          DateTime.now().subtract(const Duration(days: 1)))
-                      ? () => ref.read(_selectedDateProvider.notifier).state =
-                          selectedDate.add(const Duration(days: 1))
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                if (!_isToday(selectedDate))
-                  TextButton(
-                    onPressed: () {
-                      final now = DateTime.now();
-                      ref.read(_selectedDateProvider.notifier).state =
-                          DateTime(now.year, now.month, now.day);
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                    ),
-                    child: const Text('Today',
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-              ],
-            ),
           ),
 
           // ── Body ────────────────────────────────────────────────────────
@@ -396,13 +313,16 @@ class ReportsScreen extends ConsumerWidget {
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
-                child: Text('Error: $e',
-                    style: const TextStyle(color: AppColors.danger)),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('Error loading report: $e',
+                      style: const TextStyle(color: AppColors.danger)),
+                ),
               ),
               data: (report) => _ReportBody(
                 report: report,
                 isRestaurant: isRestaurant,
-                date: selectedDate,
+                layout: layout,
               ),
             ),
           ),
@@ -416,6 +336,215 @@ class ReportsScreen extends ConsumerWidget {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
+  }
+}
+
+// ── Header (adaptive) ─────────────────────────────────────────────────────────
+
+class _ReportHeader extends StatelessWidget {
+  final DateTime selectedDate;
+  final bool isRestaurant;
+  final _ReportLayout layout;
+  final VoidCallback onPrev;
+  final VoidCallback? onNext;
+  final VoidCallback onPick;
+  final VoidCallback? onToday;
+
+  const _ReportHeader({
+    required this.selectedDate,
+    required this.isRestaurant,
+    required this.layout,
+    required this.onPrev,
+    required this.onNext,
+    required this.onPick,
+    required this.onToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isPhone = layout == _ReportLayout.phone;
+
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(
+        isPhone ? 16 : 24,
+        isPhone ? 14 : 20,
+        isPhone ? 16 : 24,
+        isPhone ? 12 : 16,
+      ),
+      child: isPhone ? _phoneHeader(context) : _wideHeader(context),
+    );
+  }
+
+  Widget _phoneHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Daily Report',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _TypeBadge(isRestaurant: isRestaurant),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatDate(selectedDate),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
+            const SizedBox(width: 6),
+            Expanded(
+              child: GestureDetector(
+                onTap: onPick,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.divider),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 13, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        _formatDateShort(selectedDate),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            _DateNavButton(icon: Icons.chevron_right, onTap: onNext),
+            if (onToday != null) ...[
+              const SizedBox(width: 6),
+              TextButton(
+                onPressed: onToday,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Today',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _wideHeader(BuildContext context) {
+    return Row(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Daily Report',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TypeBadge(isRestaurant: isRestaurant),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _formatDate(selectedDate),
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const Spacer(),
+        _DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: onPick,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 14, color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                Text(
+                  _formatDateShort(selectedDate),
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        _DateNavButton(icon: Icons.chevron_right, onTap: onNext),
+        if (onToday != null) ...[
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onToday,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text('Today',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ],
+    );
   }
 
   static String _formatDate(DateTime d) {
@@ -434,23 +563,48 @@ class ReportsScreen extends ConsumerWidget {
       '${d.month}/${d.day}/${d.year}';
 }
 
-// ── Report body ───────────────────────────────────────────────────────────────
+class _TypeBadge extends StatelessWidget {
+  final bool isRestaurant;
+  const _TypeBadge({required this.isRestaurant});
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        isRestaurant ? 'Restaurant' : 'Retail',
+        style: TextStyle(
+            fontSize: 11, fontWeight: FontWeight.w600, color: color),
+      ),
+    );
+  }
+}
+
+// ── Report body (adaptive) ────────────────────────────────────────────────────
 
 class _ReportBody extends StatelessWidget {
   final _DailyReport report;
   final bool isRestaurant;
-  final DateTime date;
+  final _ReportLayout layout;
 
   const _ReportBody({
     required this.report,
     required this.isRestaurant,
-    required this.date,
+    required this.layout,
   });
 
   @override
   Widget build(BuildContext context) {
     final accent =
         isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
+    final isPhone = layout == _ReportLayout.phone;
+    final pad = isPhone ? 16.0 : 24.0;
 
     if (report.totalOrders == 0) {
       return Center(
@@ -482,11 +636,11 @@ class _ReportBody extends StatelessWidget {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(pad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Stale-data notice (cache only) ─────────────────────────────
+          // ── Stale-data notice ──────────────────────────────────────────
           if (report.isFromCache)
             Container(
               margin: const EdgeInsets.only(bottom: 16),
@@ -518,87 +672,66 @@ class _ReportBody extends StatelessWidget {
               ),
             ),
 
-          // ── KPI cards ──────────────────────────────────────────────────
-          Row(
-            children: [
-              _KpiCard(
-                label: 'Total Revenue',
-                value: '₱${_fmt(report.totalRevenue)}',
-                icon: Icons.payments_outlined,
-                color: AppColors.success,
-              ),
-              const SizedBox(width: 12),
-              _KpiCard(
-                label: 'Total Orders',
-                value: '${report.totalOrders}',
-                icon: Icons.receipt_long_outlined,
-                color: accent,
-              ),
-              const SizedBox(width: 12),
-              _KpiCard(
-                label: 'Avg Order Value',
-                value: '₱${_fmt(report.avgOrderValue)}',
-                icon: Icons.trending_up_rounded,
-                color: AppColors.info,
-              ),
-              const SizedBox(width: 12),
-              _KpiCard(
-                label: 'Completed',
-                value: '${report.completedOrders}',
-                icon: Icons.check_circle_outline,
-                color: AppColors.success,
-                sub: report.cancelledOrders > 0
-                    ? '${report.cancelledOrders} cancelled'
-                    : null,
-                subColor: AppColors.danger,
-              ),
-            ],
-          ),
+          // ── KPI cards (2-col on phone, 4-col on wide) ──────────────────
+          isPhone
+              ? _PhoneKpiGrid(report: report, accent: accent)
+              : _WideKpiRow(report: report, accent: accent),
 
-          const SizedBox(height: 20),
+          SizedBox(height: isPhone ? 16 : 20),
 
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: _Card(
-                  title: 'Sales by Hour',
-                  icon: Icons.access_time_rounded,
-                  child: _HourlyChart(
-                      sales: report.hourlySales, accent: accent),
+          // ── Charts (stacked on phone, side-by-side on wide) ────────────
+          isPhone
+              ? Column(
+                  children: [
+                    _Card(
+                      title: 'Sales by Hour',
+                      icon: Icons.access_time_rounded,
+                      child: _HourlyChart(
+                          sales: report.hourlySales, accent: accent),
+                    ),
+                    const SizedBox(height: 12),
+                    _Card(
+                      title: 'Payment Methods',
+                      icon: Icons.credit_card_outlined,
+                      child: report.isFromCache
+                          ? _offlinePaymentNote()
+                          : _PaymentBreakdown(
+                              data: report.revenueByPayment,
+                              accent: accent),
+                    ),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: _Card(
+                        title: 'Sales by Hour',
+                        icon: Icons.access_time_rounded,
+                        child: _HourlyChart(
+                            sales: report.hourlySales, accent: accent),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _Card(
+                        title: 'Payment Methods',
+                        icon: Icons.credit_card_outlined,
+                        child: report.isFromCache
+                            ? _offlinePaymentNote()
+                            : _PaymentBreakdown(
+                                data: report.revenueByPayment,
+                                accent: accent),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: _Card(
-                  title: 'Payment Methods',
-                  icon: Icons.credit_card_outlined,
-                  child: report.isFromCache
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(
-                            child: Text(
-                              'Payment breakdown\nnot available offline',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary),
-                            ),
-                          ),
-                        )
-                      : _PaymentBreakdown(
-                          data: report.revenueByPayment,
-                          accent: accent,
-                        ),
-                ),
-              ),
-            ],
-          ),
 
-          const SizedBox(height: 20),
+          SizedBox(height: isPhone ? 12 : 20),
 
+          // ── Top products ───────────────────────────────────────────────
           _Card(
             title: isRestaurant ? 'Top Dishes' : 'Top Products',
             icon: isRestaurant
@@ -607,6 +740,7 @@ class _ReportBody extends StatelessWidget {
             child: _TopProductsTable(
               products: report.topProducts,
               accent: accent,
+              isPhone: isPhone,
             ),
           ),
         ],
@@ -614,9 +748,18 @@ class _ReportBody extends StatelessWidget {
     );
   }
 
-  static String _fmt(double v) {
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(2);
+  Widget _offlinePaymentNote() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Text(
+          'Payment breakdown\nnot available offline',
+          textAlign: TextAlign.center,
+          style:
+              TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      ),
+    );
   }
 
   static String _timeAgo(DateTime dt) {
@@ -628,7 +771,116 @@ class _ReportBody extends StatelessWidget {
   }
 }
 
-// ── The widgets below are IDENTICAL to your originals ─────────────────────────
+// ── KPI — phone: 2×2 grid ─────────────────────────────────────────────────────
+
+class _PhoneKpiGrid extends StatelessWidget {
+  final _DailyReport report;
+  final Color accent;
+
+  const _PhoneKpiGrid({required this.report, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            _KpiCard(
+              label: 'Total Revenue',
+              value: '₱${_fmt(report.totalRevenue)}',
+              icon: Icons.payments_outlined,
+              color: AppColors.success,
+            ),
+            const SizedBox(width: 10),
+            _KpiCard(
+              label: 'Total Orders',
+              value: '${report.totalOrders}',
+              icon: Icons.receipt_long_outlined,
+              color: accent,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _KpiCard(
+              label: 'Avg Order Value',
+              value: '₱${_fmt(report.avgOrderValue)}',
+              icon: Icons.trending_up_rounded,
+              color: AppColors.info,
+            ),
+            const SizedBox(width: 10),
+            _KpiCard(
+              label: 'Completed',
+              value: '${report.completedOrders}',
+              icon: Icons.check_circle_outline,
+              color: AppColors.success,
+              sub: report.cancelledOrders > 0
+                  ? '${report.cancelledOrders} cancelled'
+                  : null,
+              subColor: AppColors.danger,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── KPI — wide: single row ────────────────────────────────────────────────────
+
+class _WideKpiRow extends StatelessWidget {
+  final _DailyReport report;
+  final Color accent;
+
+  const _WideKpiRow({required this.report, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _KpiCard(
+          label: 'Total Revenue',
+          value: '₱${_fmt(report.totalRevenue)}',
+          icon: Icons.payments_outlined,
+          color: AppColors.success,
+        ),
+        const SizedBox(width: 12),
+        _KpiCard(
+          label: 'Total Orders',
+          value: '${report.totalOrders}',
+          icon: Icons.receipt_long_outlined,
+          color: accent,
+        ),
+        const SizedBox(width: 12),
+        _KpiCard(
+          label: 'Avg Order Value',
+          value: '₱${_fmt(report.avgOrderValue)}',
+          icon: Icons.trending_up_rounded,
+          color: AppColors.info,
+        ),
+        const SizedBox(width: 12),
+        _KpiCard(
+          label: 'Completed',
+          value: '${report.completedOrders}',
+          icon: Icons.check_circle_outline,
+          color: AppColors.success,
+          sub: report.cancelledOrders > 0
+              ? '${report.cancelledOrders} cancelled'
+              : null,
+          subColor: AppColors.danger,
+        ),
+      ],
+    );
+  }
+}
+
+String _fmt(double v) {
+  if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
+  return v.toStringAsFixed(2);
+}
+
+// ── Shared widgets ────────────────────────────────────────────────────────────
 
 class _KpiCard extends StatelessWidget {
   final String label;
@@ -651,7 +903,7 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -660,24 +912,19 @@ class _KpiCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 16, color: color),
-                ),
-                const Spacer(),
-              ],
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 15, color: color),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.w800,
                 color: color,
                 letterSpacing: -0.5,
@@ -686,12 +933,12 @@ class _KpiCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
+                    fontSize: 11, color: AppColors.textSecondary)),
             if (sub != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(sub!,
                   style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: subColor ?? AppColors.textSecondary,
                       fontWeight: FontWeight.w500)),
             ],
@@ -791,7 +1038,8 @@ class _HourlyChart extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(_hourLabel(s.hour),
                       style: const TextStyle(
-                          fontSize: 8, color: AppColors.textSecondary)),
+                          fontSize: 8,
+                          color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -822,8 +1070,8 @@ class _PaymentBreakdown extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text('No payment data',
-              style:
-                  TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary)),
         ),
       );
     }
@@ -846,7 +1094,8 @@ class _PaymentBreakdown extends StatelessWidget {
                 final ratio = e.value.value / total;
                 return Expanded(
                   flex: (ratio * 100).round(),
-                  child: Container(color: colors[e.key % colors.length]),
+                  child:
+                      Container(color: colors[e.key % colors.length]),
                 );
               }).toList(),
             ),
@@ -854,13 +1103,15 @@ class _PaymentBreakdown extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         ...entries.asMap().entries.map((e) {
-          final pct = (e.value.value / total * 100).toStringAsFixed(1);
+          final pct =
+              (e.value.value / total * 100).toStringAsFixed(1);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               children: [
                 Container(
-                  width: 10, height: 10,
+                  width: 10,
+                  height: 10,
                   decoration: BoxDecoration(
                     color: colors[e.key % colors.length],
                     borderRadius: BorderRadius.circular(3),
@@ -879,7 +1130,8 @@ class _PaymentBreakdown extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text('$pct%',
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary)),
+                        fontSize: 11,
+                        color: AppColors.textSecondary)),
               ],
             ),
           );
@@ -900,9 +1152,13 @@ class _PaymentBreakdown extends StatelessWidget {
 class _TopProductsTable extends StatelessWidget {
   final List<_TopProduct> products;
   final Color accent;
+  final bool isPhone;
 
-  const _TopProductsTable(
-      {required this.products, required this.accent});
+  const _TopProductsTable({
+    required this.products,
+    required this.accent,
+    required this.isPhone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -911,8 +1167,8 @@ class _TopProductsTable extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text('No product data',
-              style:
-                  TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary)),
         ),
       );
     }
@@ -922,28 +1178,32 @@ class _TopProductsTable extends StatelessWidget {
 
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 10),
+        // Header row — hide REVENUE on phone to avoid overflow
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
           child: Row(
             children: [
-              SizedBox(width: 24),
-              Expanded(
-                  child: Text('PRODUCT',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 0.5))),
-              SizedBox(
-                  width: 80,
-                  child: Text('QTY',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 0.5))),
-              SizedBox(
+              const SizedBox(width: 24),
+              const Expanded(
+                child: Text('PRODUCT',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5)),
+              ),
+              const SizedBox(
+                width: 64,
+                child: Text('QTY',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5)),
+              ),
+              if (!isPhone)
+                const SizedBox(
                   width: 100,
                   child: Text('REVENUE',
                       textAlign: TextAlign.right,
@@ -951,7 +1211,8 @@ class _TopProductsTable extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary,
-                          letterSpacing: 0.5))),
+                          letterSpacing: 0.5)),
+                ),
             ],
           ),
         ),
@@ -964,7 +1225,8 @@ class _TopProductsTable extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               border: Border(
-                  top: BorderSide(color: AppColors.divider, width: 0.5)),
+                  top:
+                      BorderSide(color: AppColors.divider, width: 0.5)),
             ),
             child: Row(
               children: [
@@ -974,7 +1236,9 @@ class _TopProductsTable extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: i == 0 ? accent : AppColors.textSecondary)),
+                          color: i == 0
+                              ? accent
+                              : AppColors.textSecondary)),
                 ),
                 Expanded(
                   child: Column(
@@ -1012,7 +1276,7 @@ class _TopProductsTable extends StatelessWidget {
                   ),
                 ),
                 SizedBox(
-                  width: 80,
+                  width: 64,
                   child: Text('${p.qty}',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -1020,15 +1284,16 @@ class _TopProductsTable extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary)),
                 ),
-                SizedBox(
-                  width: 100,
-                  child: Text('₱${p.revenue.toStringAsFixed(0)}',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: accent)),
-                ),
+                if (!isPhone)
+                  SizedBox(
+                    width: 100,
+                    child: Text('₱${p.revenue.toStringAsFixed(0)}',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: accent)),
+                  ),
               ],
             ),
           );

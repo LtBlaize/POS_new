@@ -23,10 +23,12 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     final staff = ref.watch(activeStaffProvider);
     if (staff == null) return null;
 
-    return ref.read(shiftServiceProvider).getOpenShift(
+    final shift = await ref.read(shiftServiceProvider).getOpenShift(
           businessId: businessId,
           staffId: staff.id,
         );
+    if (shift == null) return null;
+    return ref.read(shiftServiceProvider).withLiveTotals(shift);
   }
 
   Future<void> openShift({required double openingCash}) async {

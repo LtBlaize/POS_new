@@ -28,12 +28,13 @@ class ShiftService {
     required String staffName,
     required double openingCash,
   }) async {
-    // Guard: only one open shift per staff at a time
-    final existing = await getOpenShift(businessId: businessId, staffId: staffId);
+    final existing =
+        await getOpenShift(businessId: businessId, staffId: staffId);
     if (existing != null) return existing;
 
     final id = const Uuid().v4();
-    final now = DateTime.now();
+    // FIX: always use UTC so timestamps match Supabase-stored order created_at
+    final now = DateTime.now().toUtc();
 
     final payload = {
       'id': id,
@@ -51,14 +52,10 @@ class ShiftService {
       'expenses': 0.0,
     };
 
-    // 1. Supabase
     try {
       await _supabase.from('cashier_shifts').insert(payload);
-    } catch (_) {
-      // offline — will sync later
-    }
+    } catch (_) {}
 
-    // 2. SQLite
     final d = await _db.db;
     await d.insert('cashier_shifts', payload,
         conflictAlgorithm: ConflictAlgorithm.replace);
@@ -80,7 +77,6 @@ class ShiftService {
     required String businessId,
     required String staffId,
   }) async {
-    // Try Supabase first
     try {
       final rows = await _supabase
           .from('cashier_shifts')
@@ -92,17 +88,13 @@ class ShiftService {
           .limit(1);
       if (rows.isNotEmpty) {
         final shift = _shiftFromMap(rows.first);
-        // Keep local in sync
         final d = await _db.db;
         await d.insert('cashier_shifts', _shiftToRow(shift),
             conflictAlgorithm: ConflictAlgorithm.replace);
         return shift;
       }
-    } catch (_) {
-      // Offline fallback
-    }
+    } catch (_) {}
 
-    // SQLite fallback
     final d = await _db.db;
     final rows = await d.query(
       'cashier_shifts',
@@ -122,7 +114,6 @@ class ShiftService {
     required double actualCashCount,
     String? notes,
   }) async {
-    // 1. Compute sales totals from orders during this shift
     final shift = await _getShiftById(shiftId);
     if (shift == null) throw Exception('Shift not found');
 
@@ -130,10 +121,10 @@ class ShiftService {
       businessId: shift.businessId,
       staffId: shift.staffId,
       from: shift.openedAt,
-      to: DateTime.now(),
+      to: DateTime.now().toUtc(),   // ← FIX: UTC
     );
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();   // ← FIX: UTC
     final updates = {
       'status': 'closed',
       'closed_at': now.toIso8601String(),
@@ -146,17 +137,13 @@ class ShiftService {
       'credit_given': summary['credit_given'],
     };
 
-    // 2. Supabase update
     try {
       await _supabase
           .from('cashier_shifts')
           .update(updates)
           .eq('id', shiftId);
-    } catch (_) {
-      // offline
-    }
+    } catch (_) {}
 
-    // 3. SQLite update
     final d = await _db.db;
     await d.update('cashier_shifts', updates,
         where: 'id = ?', whereArgs: [shiftId]);
@@ -174,6 +161,24 @@ class ShiftService {
     );
   }
 
+  // ── Live totals preview (used by currentShiftProvider) ────────────────────
+
+  Future<CashierShift> withLiveTotals(CashierShift shift) async {
+    final summary = await _computeShiftSummary(
+      businessId: shift.businessId,
+      staffId: shift.staffId,
+      from: shift.openedAt,
+      to: DateTime.now().toUtc(),   // ← FIX: UTC
+    );
+    return shift.copyWith(
+      totalSales: summary['total_sales'],
+      cashSales: summary['cash_sales'],
+      gcashSales: summary['gcash_sales'],
+      otherSales: summary['other_sales'],
+      creditGiven: summary['credit_given'],
+    );
+  }
+
   // ── Compute shift totals from orders ───────────────────────────────────────
 
   Future<Map<String, double>> _computeShiftSummary({
@@ -188,61 +193,72 @@ class ShiftService {
     double otherSales = 0;
     double creditGiven = 0;
 
+    void tally(Map<String, dynamic> o) {
+      final status = o['status'] as String? ?? '';
+      final paidAt = o['paid_at'];
+      final isPaid = status == 'completed' || paidAt != null;
+      if (!isPaid) return;
+
+      final amount = (o['total_amount'] as num).toDouble();
+      final method = o['payment_method'] as String? ?? '';
+
+      totalSales += amount;
+
+      switch (method) {
+        case 'cash':
+          cashSales += amount;
+        case 'gcash':
+        case 'maya':
+        case 'e_wallet':
+          gcashSales += amount;
+        default:
+          otherSales += amount;
+      }
+    }
+
     try {
-      // Orders paid during this shift window by this cashier
+      // FIX: use toUtc() on from/to so the ISO string has 'Z' suffix,
+      // matching how Supabase stores order created_at timestamps.
       final orders = await _supabase
           .from('orders')
-          .select('total_amount, payment_method')
+          .select('total_amount, payment_method, status, paid_at')
           .eq('business_id', businessId)
           .eq('cashier_id', staffId)
-          .eq('status', 'paid')
-          .gte('paid_at', from.toIso8601String())
-          .lte('paid_at', to.toIso8601String());
+          .gte('created_at', from.toUtc().toIso8601String())
+          .lte('created_at', to.toUtc().toIso8601String());
 
       for (final o in orders) {
-        final amount = (o['total_amount'] as num).toDouble();
-        final method = o['payment_method'] as String? ?? '';
-        totalSales += amount;
-        if (method == 'cash') {
-          cashSales += amount;
-        } else if (method == 'gcash' || method == 'e_wallet') {
-          gcashSales += amount;
-        } else if (method == 'credit') {
-          creditGiven += amount;
-        } else {
-          otherSales += amount;
-        }
+        tally(o);
       }
 
-      // Also count utang (credit payment method orders)
-      // credit_given is already captured above via payment_method == 'credit'
+      try {
+        final credits = await _supabase
+            .from('credit_transactions')
+            .select('amount')
+            .eq('business_id', businessId)
+            .eq('type', 'credit')
+            .gte('created_at', from.toUtc().toIso8601String())
+            .lte('created_at', to.toUtc().toIso8601String());
+
+        for (final c in credits) {
+          creditGiven += (c['amount'] as num).toDouble();
+        }
+      } catch (_) {}
     } catch (_) {
-      // Offline: compute from local SQLite orders
       final d = await _db.db;
       final rows = await d.rawQuery('''
-        SELECT total_amount, payment_method FROM orders
-        WHERE business_id = ? AND cashier_id = ? AND status = 'paid'
-          AND paid_at >= ? AND paid_at <= ?
+        SELECT total_amount, payment_method, status, paid_at FROM orders
+        WHERE business_id = ? AND cashier_id = ?
+          AND created_at >= ? AND created_at <= ?
       ''', [
         businessId,
         staffId,
-        from.toIso8601String(),
-        to.toIso8601String(),
+        from.toUtc().toIso8601String(),
+        to.toUtc().toIso8601String(),
       ]);
 
       for (final o in rows) {
-        final amount = (o['total_amount'] as num).toDouble();
-        final method = o['payment_method'] as String? ?? '';
-        totalSales += amount;
-        if (method == 'cash') {
-          cashSales += amount;
-        } else if (method == 'gcash' || method == 'e_wallet') {
-          gcashSales += amount;
-        } else if (method == 'credit') {
-          creditGiven += amount;
-        } else {
-          otherSales += amount;
-        }
+        tally(o);
       }
     }
 
@@ -308,10 +324,12 @@ class ShiftService {
         staffId: r['staff_id'] as String,
         staffName: r['staff_name'] as String,
         openingCash: (r['opening_cash'] as num).toDouble(),
-        openedAt: DateTime.parse(r['opened_at'] as String),
-        status: r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
+        // FIX: parse as UTC so duration calculation is correct
+        openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
+        status:
+            r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
         closedAt: r['closed_at'] != null
-            ? DateTime.parse(r['closed_at'] as String)
+            ? DateTime.parse(r['closed_at'] as String).toLocal()
             : null,
         actualCashCount: r['actual_cash_count'] != null
             ? (r['actual_cash_count'] as num).toDouble()
@@ -331,9 +349,9 @@ class ShiftService {
         'staff_id': s.staffId,
         'staff_name': s.staffName,
         'opening_cash': s.openingCash,
-        'opened_at': s.openedAt.toIso8601String(),
+        'opened_at': s.openedAt.toUtc().toIso8601String(),  // ← FIX: UTC
         'status': s.status == ShiftStatus.open ? 'open' : 'closed',
-        'closed_at': s.closedAt?.toIso8601String(),
+        'closed_at': s.closedAt?.toUtc().toIso8601String(), // ← FIX: UTC
         'actual_cash_count': s.actualCashCount,
         'notes': s.notes,
         'total_sales': s.totalSales,

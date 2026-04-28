@@ -6,6 +6,7 @@ import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../core/providers/product_provider.dart'; // ✅ REQUIRED IMPORT
 
 // ── InventoryEntry ────────────────────────────────────────────────────────────
 
@@ -86,11 +87,26 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         _syncQueue = syncQueue,
         _ref = ref,
         super(const InventoryState(loading: true)) {
+    if (_businessId.isEmpty) {
+      state = const InventoryState(loading: false);
+      return;
+    }
     _load();
     _subscribeRealtime();
   }
 
   bool get _isOnline => _ref.read(isOnlineProvider);
+
+  // ✅ Forces productListProvider to re-fetch from Supabase
+  void _refreshProductList() {
+    try {
+      debugPrint('🔄 [Inventory] Invalidating productListProvider...');
+      _ref.invalidate(productListProvider);
+      debugPrint('✅ [Inventory] productListProvider invalidated');
+    } catch (e) {
+      debugPrint('❌ [Inventory] Failed to invalidate productListProvider: $e');
+    }
+  }
 
   // ── Realtime ──────────────────────────────────────────────────────────────
 
@@ -129,18 +145,18 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     super.dispose();
   }
 
-  // ── Load — cache first, Supabase second ───────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
+    if (_businessId.isEmpty) return;
     state = state.copyWith(loading: true, error: null);
 
-    // 1. Always serve SQLite cache immediately so UI is never blank
     try {
       final cached = await _local.getProducts(_businessId);
       if (cached.isNotEmpty) {
         state = state.copyWith(
           entries: cached.map((p) => InventoryEntry(product: p)).toList(),
-          loading: true, // still loading — Supabase fetch pending
+          loading: true,
           isOffline: !_isOnline,
         );
       }
@@ -148,13 +164,11 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       debugPrint('[Inventory] Cache read failed: $e');
     }
 
-    // 2. If offline, stop here — use the cache
     if (!_isOnline) {
       state = state.copyWith(loading: false, isOffline: true);
       return;
     }
 
-    // 3. Online: fetch from Supabase
     try {
       final rows = await _client
           .from('products')
@@ -175,7 +189,6 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           .map((row) => Product.fromMap(row as Map<String, dynamic>))
           .toList();
 
-      // Write-through to SQLite cache
       await _local.upsertProducts(products);
 
       final entries = products
@@ -189,7 +202,6 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       );
     } catch (e, stack) {
       debugPrint('[Inventory] Supabase load failed: $e\n$stack');
-      // Don't wipe existing entries — keep showing cache
       state = state.copyWith(
         loading: false,
         error: _isOnline ? e.toString() : null,
@@ -215,13 +227,16 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final before = entry.stock;
     final after = (before + delta).clamp(0, 9999);
 
-    // Optimistic update
+    // Optimistic UI update
     _updateEntry(index, entry.copyWith(
       product: entry.product.copyWith(stockQuantity: after),
     ));
 
-    // Always update SQLite immediately
+    // Update SQLite immediately
     await _local.updateProductStock(productId, after);
+
+    // ✅ Immediately refresh POS from updated SQLite
+    _refreshProductList();
 
     if (_isOnline) {
       try {
@@ -233,6 +248,8 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           action: action,
           notes: notes,
         );
+        // ✅ Refresh again after Supabase write confirms
+        _refreshProductList();
       } catch (e) {
         debugPrint('[Inventory] Online write failed, queuing: $e');
         await _queueStockUpdate(
@@ -243,7 +260,6 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         );
       }
     } else {
-      // Offline — queue for sync
       await _queueStockUpdate(
         productId: productId,
         delta: delta,
@@ -270,6 +286,9 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     await _local.updateProductStock(productId, after);
 
+    // ✅ Immediately refresh POS from updated SQLite
+    _refreshProductList();
+
     if (_isOnline) {
       try {
         await _writeStockUpdate(
@@ -280,6 +299,8 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           action: 'adjustment',
           notes: notes ?? 'Manual stock set',
         );
+        // ✅ Refresh again after Supabase write confirms
+        _refreshProductList();
       } catch (e) {
         debugPrint('[Inventory] Online set failed, queuing: $e');
         await _queueStockUpdate(
@@ -312,18 +333,24 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       product: entry.product.copyWith(isAvailable: newVal),
     ));
 
+    await _local.updateProductAvailability(productId, newVal);
+    _refreshProductList(); // ✅ reflect in POS immediately
+
     if (_isOnline) {
       try {
         await _client.from('products').update({
           'is_available': newVal,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', productId);
+        _refreshProductList(); // ✅ refresh after Supabase confirms
       } catch (e) {
-        _updateEntry(index, entry); // rollback
+        _updateEntry(index, entry);
+        await _local.updateProductAvailability(
+            productId, entry.product.isAvailable);
+        _refreshProductList();
         state = state.copyWith(error: 'Failed to update availability: $e');
       }
     }
-    // Offline: optimistic only — no queue needed (non-critical)
   }
 
   Future<void> restock(String productId, int quantity, {String? notes}) =>
@@ -349,6 +376,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     await Future.wait([
       _client.from('products').update({
         'stock_quantity': newQty,
+        'is_available': newQty > 0, // ✅ auto-flip availability
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', productId),
       _client.from('inventory_logs').insert({

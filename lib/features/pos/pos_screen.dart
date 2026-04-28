@@ -58,7 +58,7 @@ class POSScreen extends ConsumerWidget {
     final role = activeStaff?.role ?? StaffRole.cashier;
     final perms = ref.watch(rolePermissionsProvider).value ?? {};
     final screens = _buildScreens(featureManager, role, perms, layout);
-    final safeIndex = activeIndex.clamp(0, screens.length - 1);
+    final safeIndex = screens.isEmpty ? 0 : activeIndex.clamp(0, screens.length - 1);
 
     return Scaffold(
       body: PinLockOverlay(

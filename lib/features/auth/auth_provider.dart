@@ -81,7 +81,6 @@ class AuthService {
     final userId = response.user?.id;
     if (userId == null) throw Exception('Registration failed.');
 
-    // If signUp didn't return a session, sign in explicitly
     if (_client.auth.currentSession == null) {
       debugPrint('No session after signUp — signing in manually...');
       await _client.auth.signInWithPassword(
@@ -90,7 +89,6 @@ class AuthService {
       );
     }
 
-    // Poll until session is confirmed attached to the client
     int attempts = 0;
     while (_client.auth.currentSession == null && attempts < 10) {
       await Future.delayed(const Duration(milliseconds: 200));
@@ -114,7 +112,6 @@ class AuthService {
     try {
       debugPrint('=== completeRegistration START ===');
 
-      // Final session guard
       if (_client.auth.currentSession == null) {
         debugPrint('No session at completeRegistration — waiting...');
         int attempts = 0;
@@ -132,6 +129,7 @@ class AuthService {
         '${_client.auth.currentSession!.accessToken.substring(0, 20)}',
       );
 
+      // 1. Business
       debugPrint('Inserting business...');
       final business = await _client
           .from('businesses')
@@ -145,6 +143,7 @@ class AuthService {
       final businessId = business['id'] as String;
       debugPrint('Business inserted: $businessId');
 
+      // 2. Profile
       debugPrint('Inserting profile...');
       await _client.from('profiles').insert({
         'id': userId,
@@ -154,7 +153,32 @@ class AuthService {
       });
       debugPrint('Profile inserted.');
 
+      // 3. Owner as staff member
+      debugPrint('Inserting owner as staff member...');
+      await _client.from('staff_members').insert({
+        'business_id': businessId,
+        'name': fullName,
+        'role': 'owner',
+        'pin_hash': '',
+        'is_active': true,
+      });
+      debugPrint('Owner staff member inserted.');
+
+      // 4. Business config with correct role_permissions per business type
       debugPrint('Inserting business_config...');
+
+      // Restaurant: manager + cashier + kitchen roles, no credits
+      // Retail: cashier only, with utang/credits
+      final rolePermissions = businessType == 'restaurant'
+          ? {
+              'manager': ['pos', 'orders', 'kitchen', 'inventory', 'reports'],
+              'cashier': ['pos', 'orders'],
+              'kitchen': ['kitchen'],
+            }
+          : {
+              'cashier': ['pos', 'orders', 'utang'],
+            };
+
       await _client.from('business_configs').insert({
         'business_id': businessId,
         'tax_rate': 0.00,
@@ -162,6 +186,8 @@ class AuthService {
         'enable_table_management': businessType == 'restaurant',
         'enable_barcode_scanner': businessType == 'retail',
         'enable_inventory_alerts': businessType == 'retail',
+        // ✅ Correct permissions per business type from day one
+        'role_permissions': rolePermissions,
       });
       debugPrint('=== completeRegistration DONE ===');
     } catch (e, stack) {

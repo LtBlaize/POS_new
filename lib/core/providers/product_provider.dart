@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product.dart';
@@ -37,12 +38,12 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     sub.close();
   }
 
-  // ── FIX: use Realtime channel instead of .stream() so we can do joins ──
-  // Yield once immediately with a full fetch (includes category join)
+  final controller = StreamController<List<Product>>();
+
   Future<List<Product>> fetchAll() async {
     final rows = await client
         .from('products')
-        .select('*, categories(name)')       // ← join categories
+        .select('*, categories(name)')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .order('name');
@@ -53,12 +54,6 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     return products;
   }
 
-  // Initial fetch
-  yield await fetchAll();
-
-  // Subscribe to realtime changes on products AND categories
-  final controller = StreamController<List<Product>>();
-
   void reload() async {
     try {
       controller.add(await fetchAll());
@@ -67,6 +62,14 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     }
   }
 
+  // ── Initial fetch from Supabase ──────────────────────────────────────────
+  yield await fetchAll();
+
+  // ── App lifecycle: re-fetch when app comes back to foreground ────────────
+  final lifecycleObserver = _AppLifecycleObserver(onResume: reload);
+  WidgetsBinding.instance.addObserver(lifecycleObserver);
+
+  // ── Realtime subscription ────────────────────────────────────────────────
   final productChannel = client
       .channel('pos_products_$businessId')
       .onPostgresChanges(
@@ -83,7 +86,7 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
       .onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
-        table: 'categories',          // ← also watch categories
+        table: 'categories',
         filter: PostgresChangeFilter(
           type: PostgresChangeFilterType.eq,
           column: 'business_id',
@@ -91,9 +94,17 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
         ),
         callback: (_) => reload(),
       )
-      .subscribe();
+      .subscribe((status, [error]) {
+        debugPrint('[productListProvider] Realtime status: $status error: $error');
+        // ✅ If realtime fails to connect, fall back to polling every 30s
+        if (status == RealtimeSubscribeStatus.channelError ||
+            status == RealtimeSubscribeStatus.timedOut) {
+          debugPrint('[productListProvider] Realtime failed, will rely on lifecycle refresh');
+        }
+      });
 
   ref.onDispose(() {
+    WidgetsBinding.instance.removeObserver(lifecycleObserver);
     client.removeChannel(productChannel);
     controller.close();
   });
@@ -101,7 +112,22 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
   yield* controller.stream;
 });
 
-// ── Category list — now reads from its own Supabase query ────────────────────
+// ── Lifecycle observer ────────────────────────────────────────────────────────
+
+class _AppLifecycleObserver extends WidgetsBindingObserver {
+  final VoidCallback onResume;
+  _AppLifecycleObserver({required this.onResume});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[productListProvider] App resumed — refreshing products');
+      onResume();
+    }
+  }
+}
+
+// ── Category list ─────────────────────────────────────────────────────────────
 
 final categoryListProvider = FutureProvider<List<String>>((ref) async {
   final profile = await ref.watch(profileProvider.future);
@@ -119,7 +145,6 @@ final categoryListProvider = FutureProvider<List<String>>((ref) async {
         .order('sort_order');
     return (rows as List).map((r) => r['name'] as String).toList();
   } catch (e) {
-    // Fallback: derive from loaded products
     final products = ref.read(productListProvider).asData?.value ?? [];
     return products
         .map((p) => p.category)
@@ -136,13 +161,20 @@ final selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final filteredProductsProvider = Provider<List<Product>>((ref) {
   final products = ref.watch(productListProvider).asData?.value ?? [];
   final category = ref.watch(selectedCategoryProvider);
-  if (category == null) return products.where((p) => p.isAvailable).toList();
+
+  bool isVisible(Product p) {
+    if (!p.isAvailable) return false;
+    if (p.trackInventory && p.stockQuantity <= 0) return false;
+    return true;
+  }
+
+  if (category == null) return products.where(isVisible).toList();
   return products
-      .where((p) => p.category == category && p.isAvailable)
+      .where((p) => p.category == category && isVisible(p))
       .toList();
 });
 
-// ── Inventory service (unchanged) ─────────────────────────────────────────────
+// ── Inventory service ─────────────────────────────────────────────────────────
 
 final inventoryServiceProvider = Provider<InventoryService>((ref) {
   return InventoryService(
@@ -186,6 +218,7 @@ class InventoryService {
       try {
         await _client.from('products').update({
           'stock_quantity': quantityAfter,
+          'is_available': quantityAfter > 0,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', productId);
 

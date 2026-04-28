@@ -343,11 +343,24 @@ class LocalDbService {
     final d = await db;
     await d.update(
       'products',
-      {'stock_quantity': newStock},
+      {
+        'stock_quantity': newStock,
+        // ✅ Keep local cache in sync with availability
+        'is_available': newStock > 0 ? 1 : 0,
+      },
       where: 'id = ?',
       whereArgs: [productId],
     );
   }
+  Future<void> updateProductAvailability(String productId, bool isAvailable) async {
+  final d = await db;
+  await d.update(
+    'products',
+    {'is_available': isAvailable ? 1 : 0},
+    where: 'id = ?',
+    whereArgs: [productId],
+  );
+}
 
   Product _productFromRow(Map<String, dynamic> row) => Product(
         id: row['id'] as String,

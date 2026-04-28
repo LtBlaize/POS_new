@@ -5,6 +5,7 @@ import '../models/order.dart';
 import '../providers/cart_provider.dart';
 import '../models/cart_item.dart';
 import '../providers/order_provider.dart';
+import '../providers/staff_provider.dart';          // ← required for activeStaffProvider
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
@@ -49,7 +50,7 @@ class CheckoutService {
     required double change,
     required double subtotal,
     required List<CartItem> items,
-    String? referenceNumber, // ← NEW: null for cash, required for card/GCash/Maya
+    String? referenceNumber,
   }) async {
     final profile = _ref.read(profileProvider).asData?.value;
     if (profile?.businessId == null) {
@@ -69,6 +70,13 @@ class CheckoutService {
     final local = _ref.read(localDbServiceProvider);
     final selectedTableNumber = _ref.read(tableProvider).selectedTableNumber;
 
+    // ── Resolve cashier ID from active staff session ───────────────────────
+    // IMPORTANT: always use staff_members.id (not Supabase auth UID) so that
+    // cashier_id on orders matches staff_id on cashier_shifts, allowing
+    // _computeShiftSummary to correctly aggregate sales per shift.
+    final activeStaff = _ref.read(activeStaffProvider);
+    final cashierId = activeStaff?.id;
+    debugPrint('[Checkout] activeStaff: ${activeStaff?.name}, cashierId: $cashierId');
     Order order;
 
     if (existingOrderId != null) {
@@ -94,8 +102,7 @@ class CheckoutService {
             }
           } catch (e) {
             debugPrint('[Checkout] Stock check failed, using local cache: $e');
-            final cached =
-                await local.getProducts(profile!.businessId!);
+            final cached = await local.getProducts(profile!.businessId!);
             final p =
                 cached.where((p) => p.id == item.product.id).firstOrNull;
             if (p != null &&
@@ -141,6 +148,7 @@ class CheckoutService {
         items: items,
         tableId: tableUuid,
         notes: null,
+        cashierId: cashierId,   // ← staff_members.id, matches shift's staff_id
       );
 
       if (hasKitchen && _isOnline) {
@@ -181,7 +189,7 @@ class CheckoutService {
       method: paymentMethod,
       amountTendered: actualTendered,
       changeAmount: actualChange,
-      referenceNumber: cleanRef, // ← NEW
+      referenceNumber: cleanRef,
     );
 
     if (!hasKitchen) {
@@ -202,8 +210,7 @@ class CheckoutService {
             .select('name, address, phone, email')
             .eq('id', profile!.businessId!)
             .maybeSingle();
-        businessName =
-            businessRow?['name'] as String? ?? 'My Business';
+        businessName = businessRow?['name'] as String? ?? 'My Business';
         businessAddress = businessRow?['address'] as String?;
         businessPhone = businessRow?['phone'] as String?;
         businessEmail = businessRow?['email'] as String?;
@@ -217,7 +224,7 @@ class CheckoutService {
       paymentMethod: paymentMethod,
       amountTendered: actualTendered,
       changeAmount: actualChange,
-      referenceNumber: cleanRef, // ← NEW
+      referenceNumber: cleanRef,
     );
 
     await _ref.read(receiptServiceProvider).createReceipt(
@@ -227,7 +234,7 @@ class CheckoutService {
           businessPhone: businessPhone,
           businessEmail: businessEmail,
           taxRate: 0.12,
-          issuedBy: profile!.id,
+          issuedBy: profile!.id,   // ← staff_members.id, satisfies receipts FK
           footerText: isRestaurant
               ? 'Thank you for dining with us!'
               : 'Thank you for shopping with us!',

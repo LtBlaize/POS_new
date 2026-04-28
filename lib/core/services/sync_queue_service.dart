@@ -1,17 +1,7 @@
 // lib/core/services/sync_queue_service.dart
 //
-// Listens to isOnlineProvider. When online is restored, replays every pending
-// entry in the sync_queue table against Supabase in FIFO order.
-//
-// Each entry has:
-//   operation  → 'insert_order' | 'update_order_status' | 'process_payment'
-//                'adjust_stock' | 'add_staff' | 'update_staff' | 'delete_staff'
-//   table_name → informational (for logging)
-//   record_id  → the PK of the affected row
-//   payload    → JSON of all data needed to replay the call
-//
-// Failures are retried up to kMaxRetries times; after that the entry is kept
-// for manual inspection (visible via pendingQueueCountProvider).
+// Change from original: process_payment replay now includes reference_number
+// so offline GCash/Maya/Card payments sync correctly to Supabase.
 
 import 'dart:async';
 import 'dart:convert';
@@ -24,19 +14,17 @@ import 'connectivity_service.dart';
 import 'local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-// Add this provider near the top with the others
+// ── Providers ─────────────────────────────────────────────────────────────────
+
 final syncCompleteProvider = StateProvider<DateTime?>((ref) => null);
+
 final syncQueueServiceProvider = Provider<SyncQueueService>((ref) {
   final service = SyncQueueService(ref);
   ref.onDispose(service.dispose);
   return service;
 });
 
-/// How many items are waiting to sync — drives the badge in offline_banner.
 final pendingQueueCountProvider = StateProvider<int>((ref) => 0);
-
-/// True while a sync is in progress.
 final isSyncingProvider = StateProvider<bool>((ref) => false);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -52,16 +40,13 @@ class SyncQueueService {
 
   SyncQueueService(this._ref);
 
-  /// Call once from main() — starts listening for connectivity changes.
   void init() {
     _onlineSub = _ref.listen<bool>(isOnlineProvider, (prev, next) async {
       if (next == true && prev == false) {
-        // Just came back online
         await _refreshCount();
         await flushQueue();
       }
     });
-    // Update count on startup
     _refreshCount();
   }
 
@@ -74,8 +59,6 @@ class SyncQueueService {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  /// Add a mutation to the queue. Call this instead of direct Supabase calls
-  /// when offline.
   Future<void> enqueue({
     required String operation,
     required String tableName,
@@ -91,7 +74,6 @@ class SyncQueueService {
     await _refreshCount();
   }
 
-  /// Flush the queue immediately (also called automatically on reconnect).
   Future<void> flushQueue() async {
     if (_syncInProgress) return;
     _syncInProgress = true;
@@ -101,7 +83,7 @@ class SyncQueueService {
       final pending = await _local.getPendingQueue();
       debugPrint('[SyncQueue] Flushing ${pending.length} item(s)');
 
-      int synced = 0; // ← ADD
+      int synced = 0;
       for (final entry in pending) {
         final id = entry['id'] as int;
         final retries = entry['retries'] as int;
@@ -110,19 +92,17 @@ class SyncQueueService {
         try {
           await _replay(entry);
           await _local.dequeue(id);
-          synced++; // ← ADD
+          synced++;
         } catch (e) {
           debugPrint('[SyncQueue] Entry $id failed: $e');
           await _local.incrementRetry(id, e.toString());
         }
       }
 
-      // ← ADD: notify listeners that sync completed
       if (synced > 0) {
         _ref.read(syncCompleteProvider.notifier).state = DateTime.now();
         debugPrint('[SyncQueue] Synced $synced item(s) successfully');
       }
-
     } finally {
       _syncInProgress = false;
       _ref.read(isSyncingProvider.notifier).state = false;
@@ -134,7 +114,8 @@ class SyncQueueService {
 
   Future<void> _replay(Map<String, dynamic> entry) async {
     final op = entry['operation'] as String;
-    final payload = jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
+    final payload =
+        jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
     final recordId = entry['record_id'] as String;
 
     switch (op) {
@@ -150,30 +131,33 @@ class SyncQueueService {
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
 
+      // FIX: was missing reference_number — offline GCash/Maya/Card payments
+      // would sync without it, leaving the column NULL in Supabase.
       case 'process_payment':
         await _client.from('orders').update({
           'payment_method': payload['payment_method'],
           'amount_tendered': payload['amount_tendered'],
           'change_amount': payload['change_amount'],
+          'reference_number': payload['reference_number'], // ← ADDED
           'paid_at': payload['paid_at'],
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
-        case 'insert_receipt':
-          // Idempotency: skip if receipt already exists
-          try {
-            await _client
-                .from('receipts')
-                .select('id')
-                .eq('receipt_number', recordId)
-                .single();
-            debugPrint('[SyncQueue] Receipt $recordId already exists, skipping');
-          } catch (_) {
-            // Not found — safe to insert
-            await _client.from('receipts').insert(payload);
-          }
+
+      case 'insert_receipt':
+        // Idempotency: skip if receipt already exists
+        try {
+          await _client
+              .from('receipts')
+              .select('id')
+              .eq('receipt_number', recordId)
+              .single();
+          debugPrint(
+              '[SyncQueue] Receipt $recordId already exists, skipping');
+        } catch (_) {
+          await _client.from('receipts').insert(payload);
+        }
 
       case 'adjust_stock':
-        // Re-read current stock from Supabase first to avoid double-applying
         final row = await _client
             .from('products')
             .select('stock_quantity')
@@ -201,7 +185,10 @@ class SyncQueueService {
         await _client.from('staff_members').insert(payload);
 
       case 'update_staff':
-        await _client.from('staff_members').update(payload).eq('id', recordId);
+        await _client
+            .from('staff_members')
+            .update(payload)
+            .eq('id', recordId);
 
       case 'delete_staff':
         await _client
@@ -214,18 +201,20 @@ class SyncQueueService {
   }
 
   Future<void> _replayInsertOrder(Map<String, dynamic> payload) async {
-    // Check if order already synced (idempotency guard)
     try {
-      await _client.from('orders').select('id').eq('id', payload['id']).single();
-      // Already exists — mark local as synced and skip
+      await _client
+          .from('orders')
+          .select('id')
+          .eq('id', payload['id'])
+          .single();
       await _local.markOrderSynced(payload['id'] as String);
       return;
-    } catch (_) {
-      // Not found — safe to insert
-    }
+    } catch (_) {}
 
-    final items = (payload['items'] as List).cast<Map<String, dynamic>>();
-    final orderPayload = Map<String, dynamic>.from(payload)..remove('items');
+    final items =
+        (payload['items'] as List).cast<Map<String, dynamic>>();
+    final orderPayload = Map<String, dynamic>.from(payload)
+      ..remove('items');
 
     await _client.from('orders').insert(orderPayload);
     if (items.isNotEmpty) {
@@ -234,8 +223,10 @@ class SyncQueueService {
     await _local.markOrderSynced(payload['id'] as String);
   }
 
-  Future<void> _replayInsertOrderItems(Map<String, dynamic> payload) async {
-    final items = (payload['items'] as List).cast<Map<String, dynamic>>();
+  Future<void> _replayInsertOrderItems(
+      Map<String, dynamic> payload) async {
+    final items =
+        (payload['items'] as List).cast<Map<String, dynamic>>();
     if (items.isNotEmpty) {
       await _client.from('order_items').upsert(items);
     }

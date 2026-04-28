@@ -1,7 +1,7 @@
 // lib/core/providers/staff_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'package:flutter/foundation.dart';
 import '../models/staff.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
@@ -79,6 +79,38 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           (rows as List).map((r) => StaffMember.fromJson(r)).toList();
 
       await _local.upsertStaff(members);
+
+      // ── Auto-create owner staff row for accounts registered before
+      //    the staff_members insert was added to completeRegistration.
+      //    Runs silently; no-ops once the row exists.
+      final hasOwner = members.any((m) => m.role == StaffRole.owner);
+      if (!hasOwner) {
+        try {
+          final profileRow = await _client
+              .from('profiles')
+              .select('full_name')
+              .eq('business_id', _businessId)
+              .eq('role', 'owner')
+              .maybeSingle();
+
+          if (profileRow != null) {
+            debugPrint(
+                '[Staff] No owner staff row found — auto-creating for existing account...');
+            await _client.from('staff_members').insert({
+              'business_id': _businessId,
+              'name': profileRow['full_name'] as String,
+              'role': 'owner',
+              'pin_hash': '',
+              'is_active': true,
+            });
+            // Reload so the new row is in state immediately
+            return load();
+          }
+        } catch (e) {
+          debugPrint('[Staff] Could not auto-create owner staff row: $e');
+        }
+      }
+
       state = AsyncValue.data(members);
     } catch (e, s) {
       try {

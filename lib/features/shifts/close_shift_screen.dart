@@ -28,12 +28,13 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
   bool _loading = false;
   bool _confirming = false;
   String? _error;
-  CashierShift? _closedShift; // holds result for receipt view
+  CashierShift? _closedShift;
 
   static const _bg = Color(0xFF0B0E1A);
   static const _card = Color(0xFF141827);
   static const _surface = Color(0xFF1A1F35);
   static const _accent = Color(0xFFE94560);
+
   double get _actualCash =>
       double.tryParse(_actualCashCtrl.text.replaceAll(',', '')) ?? 0;
 
@@ -73,7 +74,6 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
   Widget build(BuildContext context) {
     final shiftAsync = ref.watch(currentShiftProvider);
 
-    // If shift was just closed, show the final receipt view
     if (_closedShift != null) {
       return _ShiftReceiptView(
         shift: _closedShift!,
@@ -85,8 +85,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
       loading: () => const Scaffold(
         backgroundColor: Color(0xFF0B0E1A),
         body: Center(
-            child:
-                CircularProgressIndicator(color: Color(0xFFE94560))),
+            child: CircularProgressIndicator(color: Color(0xFFE94560))),
       ),
       error: (e, _) => Scaffold(
         backgroundColor: _bg,
@@ -100,7 +99,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
             backgroundColor: _bg,
             body: Center(
               child: Text('No open shift found.',
-                  style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                  style:
+                      TextStyle(color: Colors.white.withOpacity(0.4))),
             ),
           );
         }
@@ -130,8 +130,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                 fontWeight: FontWeight.w700)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(
-              height: 1, color: Colors.white.withOpacity(0.06)),
+          child:
+              Divider(height: 1, color: Colors.white.withOpacity(0.06)),
         ),
       ),
       body: SingleChildScrollView(
@@ -141,17 +141,17 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Shift info banner ──────────────────────────────────
-              _ShiftInfoBanner(shift: shift, hours: hours, minutes: minutes),
+              _ShiftInfoBanner(
+                  shift: shift, hours: hours, minutes: minutes),
               const SizedBox(height: 20),
 
-              // ── Sales summary ──────────────────────────────────────
               _SectionTitle(title: 'SALES SUMMARY'),
               const SizedBox(height: 10),
+              // NOTE: totals are estimated from live orders — final totals
+              // are computed at close time by shift_service.dart
               _SalesSummaryCard(shift: shift),
               const SizedBox(height: 20),
 
-              // ── Cash reconciliation ────────────────────────────────
               _SectionTitle(title: 'CASH RECONCILIATION'),
               const SizedBox(height: 10),
               _CashReconciliationCard(
@@ -162,21 +162,18 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ── Over/Short preview ─────────────────────────────────
               _OverShortPreview(
-                expectedCash: shift.openingCash + shift.cashSales,
+                expectedCash: shift.expectedCash,  // uses the model getter
                 actualCash: _actualCash,
               ),
               const SizedBox(height: 20),
 
-              // ── Notes ──────────────────────────────────────────────
               _SectionTitle(title: 'NOTES (OPTIONAL)'),
               const SizedBox(height: 10),
               TextField(
                 controller: _notesCtrl,
                 maxLines: 3,
-                style:
-                    const TextStyle(color: Colors.white, fontSize: 14),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
                   hintText:
                       'Any notes for this shift (e.g. equipment issues, incidents)',
@@ -199,7 +196,6 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ── Error ──────────────────────────────────────────────
               if (_error != null)
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -211,17 +207,17 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                         Border.all(color: _accent.withOpacity(0.3)),
                   ),
                   child: Text(_error!,
-                      style:
-                          const TextStyle(color: _accent, fontSize: 13)),
+                      style: const TextStyle(
+                          color: _accent, fontSize: 13)),
                 ),
 
-              // ── Confirm button ─────────────────────────────────────
               if (!_confirming)
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
-                    onPressed:
-                        _loading ? null : () => setState(() => _confirming = true),
+                    onPressed: _loading
+                        ? null
+                        : () => setState(() => _confirming = true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accent,
                       foregroundColor: Colors.white,
@@ -234,26 +230,21 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white))
+                                strokeWidth: 2, color: Colors.white))
                         : const Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.lock_rounded, size: 18),
                               SizedBox(width: 10),
-                              Text(
-                                'Close Shift',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700),
-                              ),
+                              Text('Close Shift',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700)),
                             ],
                           ),
                   ),
                 )
               else
-                // Confirmation prompt
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -267,13 +258,11 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                       const Icon(Icons.warning_amber_rounded,
                           color: _accent, size: 32),
                       const SizedBox(height: 10),
-                      const Text(
-                        'Close this shift?',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700),
-                      ),
+                      const Text('Close this shift?',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       Text(
                         'This cannot be undone. Make sure all sales are recorded.',
@@ -292,8 +281,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white54,
                                 side: BorderSide(
-                                    color: Colors.white
-                                        .withOpacity(0.15)),
+                                    color:
+                                        Colors.white.withOpacity(0.15)),
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 14),
                                 shape: RoundedRectangleBorder(
@@ -327,8 +316,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                                           color: Colors.white))
                                   : const Text('Yes, Close Shift',
                                       style: TextStyle(
-                                          fontWeight:
-                                              FontWeight.w700)),
+                                          fontWeight: FontWeight.w700)),
                             ),
                           ),
                         ],
@@ -365,8 +353,7 @@ class _ShiftInfoBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Row(
         children: [
@@ -422,6 +409,9 @@ class _ShiftInfoBanner extends StatelessWidget {
 }
 
 // ── Sales Summary Card ────────────────────────────────────────────────────────
+// FIX: labels now match shift_service.dart grouping:
+//   gcashSales = GCash + Maya + E-Wallet
+//   otherSales = Card + anything else
 
 class _SalesSummaryCard extends StatelessWidget {
   final CashierShift shift;
@@ -430,13 +420,13 @@ class _SalesSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Column(
         children: [
@@ -447,43 +437,46 @@ class _SalesSummaryCard extends StatelessWidget {
             isBold: true,
           ),
           const _Divider(),
+
+          // Cash
           _SummaryRow(
-            label: 'Cash Sales',
+            label: 'Cash',
             icon: Icons.payments_outlined,
             value: shift.cashSales,
             color: const Color(0xFF10B981),
           ),
           const SizedBox(height: 8),
+
+          // GCash / Maya / E-Wallet (grouped)
           _SummaryRow(
-            label: 'GCash / E-Wallet',
+            label: 'GCash / Maya / E-Wallet',
             icon: Icons.phone_android_outlined,
             value: shift.gcashSales,
             color: const Color(0xFF3B82F6),
+            subtitle: 'Includes GCash & Maya',
           ),
           const SizedBox(height: 8),
+
+          // Card / Other
           _SummaryRow(
-            label: 'Other Payments',
+            label: 'Card / Other',
             icon: Icons.credit_card_outlined,
             value: shift.otherSales,
             color: const Color(0xFF8B5CF6),
+            subtitle: 'Includes Card Payments',
           ),
-          const _Divider(),
-          _SummaryRow(
-            label: 'Utang / Credit Given',
-            icon: Icons.receipt_long_outlined,
-            value: shift.creditGiven,
-            color: const Color(0xFFE94560),
-            prefix: '+',
-          ),
-          const SizedBox(height: 8),
-          _SummaryRow(
-            label: 'Expenses',
-            icon: Icons.remove_circle_outline,
-            value: shift.expenses,
-            color: const Color(0xFFF59E0B),
-            prefix: '-',
-            subtitle: 'Expense tab coming soon',
-          ),
+         
+
+          if (shift.creditGiven > 0) ...[
+            const _Divider(),
+            _SummaryRow(
+              label: 'Utang / Credit Given',
+              icon: Icons.receipt_long_outlined,
+              value: shift.creditGiven,
+              color: const Color(0xFFE94560),
+              prefix: '+',
+            ),
+          ],
         ],
       ),
     );
@@ -530,18 +523,13 @@ class _CashReconciliationCard extends StatelessWidget {
             color: const Color(0xFF10B981),
             prefix: '+',
           ),
-          const SizedBox(height: 8),
-          _SummaryRow(
-            label: 'Expenses',
-            icon: Icons.remove_circle_outline,
-            value: shift.expenses,
-            color: const Color(0xFFF59E0B),
-            prefix: '-',
-          ),
           const _Divider(),
+          // FIX: expenses placeholder removed from expected calculation
+          // since expenses is always 0 — showing it confuses the reconciliation.
+          // When expenses tab ships, add it back here.
           _SummaryRow(
             label: 'Expected in Drawer',
-            value: shift.openingCash + shift.cashSales - shift.expenses,
+            value: shift.openingCash + shift.cashSales,
             color: Colors.white,
             isBold: true,
           ),
@@ -554,8 +542,7 @@ class _CashReconciliationCard extends StatelessWidget {
               color: const Color(0xFF1A1F35),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color:
-                      const Color(0xFFE94560).withOpacity(0.3)),
+                  color: const Color(0xFFE94560).withOpacity(0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,9 +567,8 @@ class _CashReconciliationCard extends StatelessWidget {
                       child: TextField(
                         controller: actualCashCtrl,
                         onChanged: (_) => onChanged(),
-                        keyboardType:
-                            const TextInputType.numberWithOptions(
-                                decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                               RegExp(r'[\d.]')),
@@ -596,8 +582,7 @@ class _CashReconciliationCard extends StatelessWidget {
                           border: InputBorder.none,
                           hintText: '0.00',
                           hintStyle: TextStyle(
-                              color: Color(0xFF374151),
-                              fontSize: 28),
+                              color: Color(0xFF374151), fontSize: 28),
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
@@ -640,11 +625,7 @@ class _OverShortPreview extends StatelessWidget {
         : isOver
             ? const Color(0xFF3B82F6)
             : const Color(0xFFE94560);
-    final label = isExact
-        ? 'Exact'
-        : isOver
-            ? 'Over'
-            : 'Short';
+    final label = isExact ? 'Exact' : isOver ? 'Over' : 'Short';
     final icon = isExact
         ? Icons.check_circle_outline
         : isOver
@@ -663,13 +644,11 @@ class _OverShortPreview extends StatelessWidget {
           Icon(icon, color: color, size: 22),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700),
-            ),
+            child: Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
           ),
           Text(
             '${diff >= 0 ? '+' : ''}₱${NumberFormat('#,##0.00').format(diff.abs())}',
@@ -684,7 +663,8 @@ class _OverShortPreview extends StatelessWidget {
   }
 }
 
-// ── Shift Receipt View (shown after closing) ──────────────────────────────────
+// ── Shift Receipt View ────────────────────────────────────────────────────────
+// FIX: labels updated to match shift_service.dart grouping
 
 class _ShiftReceiptView extends StatelessWidget {
   final CashierShift shift;
@@ -695,8 +675,7 @@ class _ShiftReceiptView extends StatelessWidget {
   static const _accent = Color(0xFFE94560);
   static const _green = Color(0xFF10B981);
 
-  const _ShiftReceiptView(
-      {required this.shift, required this.onDone});
+  const _ShiftReceiptView({required this.shift, required this.onDone});
 
   @override
   Widget build(BuildContext context) {
@@ -768,8 +747,7 @@ class _ShiftReceiptView extends StatelessWidget {
                             DateFormat('MMM d, y · h:mm a')
                                 .format(shift.closedAt!),
                             style: TextStyle(
-                                color:
-                                    Colors.white.withOpacity(0.35),
+                                color: Colors.white.withOpacity(0.35),
                                 fontSize: 12),
                           ),
                         ],
@@ -780,7 +758,7 @@ class _ShiftReceiptView extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // ── Receipt-style card ───────────────────────────────────
+              // ── Receipt card ─────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -807,8 +785,7 @@ class _ShiftReceiptView extends StatelessWidget {
                           Text(
                             '${DateFormat('h:mm a').format(shift.openedAt)} – ${DateFormat('h:mm a').format(shift.closedAt!)}',
                             style: TextStyle(
-                                color:
-                                    Colors.white.withOpacity(0.35),
+                                color: Colors.white.withOpacity(0.35),
                                 fontSize: 13),
                           ),
                         ],
@@ -817,44 +794,50 @@ class _ShiftReceiptView extends StatelessWidget {
                     const SizedBox(height: 20),
                     _ReceiptDivider(),
 
-                    // Sales
+                    // ── Sales breakdown ──────────────────────────────
                     const SizedBox(height: 16),
                     _ReceiptLabel('SALES'),
                     const SizedBox(height: 10),
                     _ReceiptRow('Total Sales', shift.totalSales,
                         bold: true),
+                    // FIX: labels match shift_service.dart grouping
                     _ReceiptRow('  Cash', shift.cashSales,
                         color: _green),
-                    _ReceiptRow('  GCash / E-Wallet', shift.gcashSales,
+                    _ReceiptRow(
+                        '  GCash / Maya / E-Wallet', shift.gcashSales,
                         color: const Color(0xFF3B82F6)),
-                    _ReceiptRow('  Other', shift.otherSales,
+                    _ReceiptRow('  Card / Other', shift.otherSales,
                         color: const Color(0xFF8B5CF6)),
-                    _ReceiptRow('  Utang / Credit', shift.creditGiven,
-                        color: _accent, prefix: '+'),
+                    if (shift.creditGiven > 0)
+                      _ReceiptRow(
+                          '  Utang / Credit', shift.creditGiven,
+                          color: _accent, prefix: '+'),
+
                     const SizedBox(height: 16),
                     _ReceiptDivider(),
 
-                    // Cash
+                    // ── Cash reconciliation ──────────────────────────
                     const SizedBox(height: 16),
                     _ReceiptLabel('CASH RECONCILIATION'),
                     const SizedBox(height: 10),
                     _ReceiptRow('Opening Cash', shift.openingCash),
                     _ReceiptRow('Cash Sales', shift.cashSales,
                         prefix: '+'),
-                    _ReceiptRow('Expenses', shift.expenses,
-                        prefix: '-'),
                     const SizedBox(height: 8),
-                    _ReceiptRow(
-                        'Expected in Drawer', shift.expectedCash,
+                    // FIX: expectedCash = openingCash + cashSales only
+                    // (expenses excluded until expenses tab ships)
+                    _ReceiptRow('Expected in Drawer',
+                        shift.openingCash + shift.cashSales,
                         bold: true),
                     _ReceiptRow(
-                        'Actual Cash Count', shift.actualCashCount ?? 0,
+                        'Actual Cash Count',
+                        shift.actualCashCount ?? 0,
                         bold: true),
                     const SizedBox(height: 16),
                     _ReceiptDivider(),
                     const SizedBox(height: 16),
 
-                    // Over/Short
+                    // ── Over/Short ───────────────────────────────────
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
@@ -909,7 +892,6 @@ class _ShiftReceiptView extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // Done button
               SizedBox(
                 height: 54,
                 child: ElevatedButton(
@@ -940,6 +922,7 @@ class _ShiftReceiptView extends StatelessWidget {
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle({required this.title});
+
   @override
   Widget build(BuildContext context) {
     return Text(title,
@@ -1004,7 +987,8 @@ class _SummaryRow extends StatelessWidget {
           style: TextStyle(
               color: color,
               fontSize: isBold ? 15 : 13,
-              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600),
+              fontWeight:
+                  isBold ? FontWeight.w800 : FontWeight.w600),
         ),
       ],
     );
@@ -1013,6 +997,7 @@ class _SummaryRow extends StatelessWidget {
 
 class _Divider extends StatelessWidget {
   const _Divider();
+
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1032,6 +1017,7 @@ class _ReceiptDivider extends StatelessWidget {
 class _ReceiptLabel extends StatelessWidget {
   final String text;
   const _ReceiptLabel(this.text);
+
   @override
   Widget build(BuildContext context) => Text(text,
       style: TextStyle(

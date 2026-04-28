@@ -1,3 +1,4 @@
+// lib/features/settings/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/auth_provider.dart';
@@ -9,7 +10,6 @@ import 'widgets/table_settings_section.dart';
 import 'widgets/room_settings_section.dart';
 import 'widgets/staff_settings_section.dart';
 import 'widgets/lan_settings_section.dart';
-
 
 class SettingsScreen extends ConsumerWidget {
   final featureManager;
@@ -24,58 +24,59 @@ class SettingsScreen extends ConsumerWidget {
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (profile) {
-        final businessAsync = ref.watch(profileProvider);
+        final business = profile?.business;
+        if (business == null) {
+          return const Scaffold(
+              body: Center(child: Text('No business found')));
+        }
 
-        return businessAsync.when(
-          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
-          data: (profile) {
-            final business = profile?.business;
-            if (business == null) {
-              return const Scaffold(body: Center(child: Text('No business found')));
-            }
+        final isRestaurant = business.businessType.isRestaurant;
+        final activeStaff = ref.watch(activeStaffProvider);
+        final isOwner = activeStaff?.role == StaffRole.owner;
 
-            final isRestaurant = business.businessType.isRestaurant;
-            final activeStaff = ref.watch(activeStaffProvider);
-            final isOwner = activeStaff?.role == StaffRole.owner;
+        return Scaffold(
+          backgroundColor: const Color(0xFFF4F5F7),
+          appBar: AppBar(
+            title: const Text('Settings',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Divider(height: 1, color: AppColors.divider),
+            ),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── General (always visible) ──────────────────────────
+              GeneralSettingsSection(business: business),
 
-            return Scaffold(
-              backgroundColor: const Color(0xFFF4F5F7),
-              appBar: AppBar(
-                title: const Text('Settings',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                backgroundColor: Colors.white,
-                elevation: 0,
-                surfaceTintColor: Colors.transparent,
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(1),
-                  child: Divider(height: 1, color: AppColors.divider),
-                ),
-              ),
-              body: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  GeneralSettingsSection(business: business),
-                  const SizedBox(height: 16),
-                  _SectionCard(child: const LanSettingsSection()), // ← add this
-                  if (isRestaurant) ...[
-                    const SizedBox(height: 16),
-                    _SectionCard(child: const RoomSettingsSection()),
-                    const SizedBox(height: 12),
-                    _SectionCard(child: const TableSettingsSection()),
-                  ],
-                  if (isOwner) ...[
-                    const SizedBox(height: 16),
-                    _SectionCard(child: const OwnerPinSection()), 
-                    const SizedBox(height: 16),
-                    _SectionCard(child: const StaffSettingsSection()),
-                  ],
-                  const SizedBox(height: 32),
-                ],
-              ),
-            );
-          },
-        );              
+              // ── Restaurant-only sections ──────────────────────────
+              if (isRestaurant) ...[
+                const SizedBox(height: 16),
+                // LAN only for restaurant — they always need 2 devices
+                _SectionCard(child: const LanSettingsSection()),
+                const SizedBox(height: 16),
+                _SectionCard(child: const RoomSettingsSection()),
+                const SizedBox(height: 12),
+                _SectionCard(child: const TableSettingsSection()),
+              ],
+
+              // ── Owner-only sections ───────────────────────────────
+              if (isOwner) ...[
+                const SizedBox(height: 16),
+                _SectionCard(child: const OwnerPinSection()),
+                const SizedBox(height: 16),
+                _SectionCard(child: const StaffSettingsSection()),
+              ],
+
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
       },
     );
   }
