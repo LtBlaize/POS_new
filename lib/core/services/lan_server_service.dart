@@ -13,21 +13,24 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/order.dart';
 import 'event_bus.dart';
 import 'local_db_service.dart';
+import 'connectivity_service.dart';
+import 'sync_queue_service.dart';
 
 final lanServerServiceProvider = Provider<LanServerService>((ref) {
-  final s = LanServerService(ref.read(localDbServiceProvider));
+  final s = LanServerService(ref);   // pass ref instead of just localDb
   ref.onDispose(s.stop);
   return s;
 });
 
 class LanServerService {
-  final LocalDbService _local;
-  HttpServer? _server;
-  // All connected kitchen WebSocket clients
-  final Set<WebSocketChannel> _clients = {};
+  final Ref _ref;                                    // ← was just LocalDbService
+  LocalDbService get _local => _ref.read(localDbServiceProvider);
   static const int port = 8080;
 
-  LanServerService(this._local);
+  HttpServer? _server;
+  final Set<WebSocketChannel> _clients = {};
+
+  LanServerService(this._ref);      
 
   Future<void> start() async {
     if (_server != null) return;
@@ -134,18 +137,39 @@ class LanServerService {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final statusStr = body['status'] as String?;
       if (statusStr == null) {
-        return Response.badRequest(body: jsonEncode({'error': 'status required'}));
+        return Response.badRequest(
+            body: jsonEncode({'error': 'status required'}));
       }
+
       final status = OrderStatusX.fromString(statusStr);
+
+      // 1. Update local DB (same as before)
       await _local.markOrderStatus(orderId, status);
 
-      // Push the change to all other WS clients immediately
-      _broadcast({'type': 'order_status_changed', 'payload': {'order_id': orderId, 'status': statusStr}});
+      // 2. FIX: enqueue to Supabase so the status isn't lost when internet returns
+      await _ref.read(syncQueueServiceProvider).enqueue(
+        operation: 'update_order_status',
+        tableName: 'orders',
+        recordId: orderId,
+        payload: {'status': statusStr},
+      );
+
+      // 3. If online right now, flush immediately — no need to wait for next reconnect
+      if (_ref.read(isOnlineProvider)) {
+        _ref.read(syncQueueServiceProvider).flushQueue();
+      }
+
+      // 4. Broadcast to other WS clients (same as before)
+      _broadcast({
+        'type': 'order_status_changed',
+        'payload': {'order_id': orderId, 'status': statusStr},
+      });
 
       return Response.ok(jsonEncode({'success': true}),
           headers: {'content-type': 'application/json'});
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'error': '$e'}));
+      return Response.internalServerError(
+          body: jsonEncode({'error': '$e'}));
     }
   }
 

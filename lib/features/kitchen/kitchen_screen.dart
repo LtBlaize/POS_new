@@ -3,12 +3,15 @@
 // Kitchen display — reads from kitchenStateProvider (LAN) instead of
 // Supabase. Works fully offline as long as both devices share a WiFi network.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/order.dart';
 import '../../core/providers/lan_orders_notifier.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
 
 import '../../core/services/lan_config_service.dart';
@@ -21,28 +24,44 @@ class KitchenScreen extends ConsumerStatefulWidget {
   ConsumerState<KitchenScreen> createState() => _KitchenScreenState();
 }
 
-class _KitchenScreenState extends ConsumerState<KitchenScreen> {
+class _KitchenScreenState extends ConsumerState<KitchenScreen>
+    with WidgetsBindingObserver {
   @override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _connect());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _connect();
+  }
+
+  void _connect() {
     final ip = ref.read(savedPosIpProvider);
     if (ip.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'No POS IP configured. Go to Settings → LAN Connection.'),
-          duration: Duration(seconds: 5),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'No POS IP configured. Go to Settings → LAN Connection.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
       return;
     }
     ref.read(cashierIpProvider.notifier).state = ip;
     final businessId = ref.read(businessProvider)?.id ?? '';
     ref.read(kitchenStateProvider.notifier).connect(businessId);
-  });
-}
-
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,10 +79,10 @@ void initState() {
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          // ── Connection banner ────────────────────────────────────────────
+          // ── Connection banner ──────────────────────────────────────────
           _ConnectionBanner(state: kitchenState.connection),
 
-          // ── Header ───────────────────────────────────────────────────────
+          // ── Header ────────────────────────────────────────────────────
           Container(
             color: Colors.black87,
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
@@ -99,7 +118,7 @@ void initState() {
             ),
           ),
 
-          // ── Columns ──────────────────────────────────────────────────────
+          // ── Columns ───────────────────────────────────────────────────
           Expanded(
             child: orders.isEmpty
                 ? _EmptyKitchen(state: kitchenState.connection)
@@ -180,12 +199,12 @@ class _LanIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (state) {
       LanConnectionState.connected => AppColors.success,
-      LanConnectionState.polling   => AppColors.warning,
-      _                            => Colors.red,
+      LanConnectionState.polling => AppColors.warning,
+      _ => Colors.red,
     };
     final label = switch (state) {
       LanConnectionState.connected => 'LAN live',
-      LanConnectionState.polling   => 'Polling',
+      LanConnectionState.polling => 'Polling',
       LanConnectionState.connecting => 'Connecting',
       LanConnectionState.disconnected => 'Offline',
     };
@@ -312,13 +331,15 @@ class _KitchenColumn extends StatelessWidget {
                       child: Text('No orders',
                           style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.textSecondary.withOpacity(0.4))))
+                              color:
+                                  AppColors.textSecondary.withOpacity(0.4))))
                   : ListView.separated(
                       padding: const EdgeInsets.all(10),
                       itemCount: orders.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _KitchenOrderCard(
-                        key: ValueKey('${orders[i].id}-${orders[i].status}'),
+                        key: ValueKey(
+                            '${orders[i].id}-${orders[i].status}'),
                         order: orders[i],
                       ),
                     ),
@@ -342,19 +363,35 @@ class _KitchenOrderCard extends ConsumerStatefulWidget {
 
 class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
   bool _loading = false;
+  late Timer _ageTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tick every minute so the age chip and red border stay current
+    // even when no new orders arrive.
+    _ageTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ageTimer.cancel();
+    super.dispose();
+  }
 
   Future<void> _advance() async {
     final next = switch (widget.order.status) {
-      OrderStatus.pending   => OrderStatus.preparing,
+      OrderStatus.pending => OrderStatus.preparing,
       OrderStatus.preparing => OrderStatus.ready,
-      OrderStatus.ready     => OrderStatus.completed,
-      _                     => null,
+      OrderStatus.ready => OrderStatus.completed,
+      _ => null,
     };
     if (next == null) return;
 
     setState(() => _loading = true);
     try {
-      // Optimistic update + LAN patch with automatic retry queue
       await ref
           .read(kitchenStateProvider.notifier)
           .advanceStatus(widget.order.id, next);
@@ -370,20 +407,32 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     }
   }
 
+  /// Resolves the human-readable table number from the tableId UUID.
+  /// Falls back to a shortened UUID if not found in local provider.
+  String? _resolveTableLabel() {
+    final tableId = widget.order.tableId;
+    if (tableId == null || tableId.isEmpty) return null;
+    final tableNumber =
+        ref.read(tableProvider).tableNameForUuid(tableId);
+    if (tableNumber != null) return 'Table $tableNumber';
+    // Fallback: show last 6 chars of UUID so it's at least short
+    return 'Table …${tableId.substring(tableId.length - 6)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
 
     final (buttonLabel, buttonColor) = switch (order.status) {
-      OrderStatus.pending   => ('Start Preparing', AppColors.warning),
-      OrderStatus.preparing => ('Mark Ready',      AppColors.info),
-      OrderStatus.ready     => ('Mark Served',     AppColors.success),
-      _                     => ('',                Colors.transparent),
+      OrderStatus.pending => ('Start Preparing', AppColors.warning),
+      OrderStatus.preparing => ('Mark Ready', AppColors.info),
+      OrderStatus.ready => ('Mark Served', AppColors.success),
+      _ => ('', Colors.transparent),
     };
 
-    // Age indicator — turns red after 10 minutes
     final age = DateTime.now().difference(order.createdAt);
     final isOld = age.inMinutes >= 10;
+    final tableLabel = _resolveTableLabel();
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -414,9 +463,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isOld
-                      ? Colors.red.shade50
-                      : AppColors.surface,
+                  color: isOld ? Colors.red.shade50 : AppColors.surface,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                       color: isOld
@@ -436,10 +483,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
             ],
           ),
 
-          if (order.tableId != null && order.tableId!.isNotEmpty) ...[
+          if (tableLabel != null) ...[
             const SizedBox(height: 2),
             Text(
-              'Table ${order.tableId}',
+              tableLabel,
               style: const TextStyle(
                   fontSize: 11, color: AppColors.textSecondary),
             ),
@@ -484,8 +531,8 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                 ))
           else
             const Text('Loading items...',
-                style:
-                    TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
 
           const SizedBox(height: 10),
 
@@ -499,8 +546,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                       child: SizedBox(
                           width: 18,
                           height: 18,
-                          child:
-                              CircularProgressIndicator(strokeWidth: 2)))
+                          child: CircularProgressIndicator(strokeWidth: 2)))
                   : ElevatedButton(
                       onPressed: _advance,
                       style: ElevatedButton.styleFrom(

@@ -23,6 +23,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../main.dart';
 import '../../../shared/widgets/app_colors.dart';
+import '../../../features/auth/auth_provider.dart';
+import '../../../core/providers/lan_orders_notifier.dart';
 
 class IpSetupScreen extends ConsumerStatefulWidget {
   const IpSetupScreen({super.key});
@@ -60,6 +62,13 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
 
     if (reachable) {
       await savePosIp(ip, ref);
+
+      // FIX: actually start the LAN connection after saving the IP
+      final businessId =
+          ref.read(businessProvider)?.id ?? '';
+      ref.read(kitchenStateProvider.notifier).connect(businessId);
+      // ─────────────────────────────────────────────────────────
+
       setState(() {
         _probing = false;
         _probeSuccess = true;

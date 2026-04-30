@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/business.dart';
-import '../../config/business_config.dart';
+import '../../config/business_config.dart' show BusinessFeatures;
 import '../../core/services/feature_manager.dart';
+import '../../features/settings/settings_provider.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -45,9 +46,21 @@ final featureManagerProvider = Provider<FeatureManager?>((ref) {
   final businessType = ref.watch(businessTypeProvider);
   if (businessType == null) return null;
 
-  final features = businessType.isRestaurant
-      ? BusinessConfig.restaurant
-      : BusinessConfig.retail;
+  // retail keeps all its features as-is
+  // restaurant base is just 'inventory' — kitchen/tables depend on config toggles
+  final base = businessType.isRestaurant
+      ? ['inventory']
+      : BusinessFeatures.retail;
+
+  final features = List<String>.from(base);
+
+  if (businessType.isRestaurant) {
+    final config = ref.watch(businessConfigProvider);
+    if (config != null) {
+      if (config.enableKitchenDisplay) features.add('kitchen');
+      if (config.enableTableManagement) features.add('tables');
+    }
+  }
 
   return FeatureManager(features);
 });
@@ -171,8 +184,8 @@ class AuthService {
       // Retail: cashier only, with utang/credits
       final rolePermissions = businessType == 'restaurant'
           ? {
-              'manager': ['pos', 'orders', 'kitchen', 'inventory', 'reports'],
-              'cashier': ['pos', 'orders'],
+              'manager': ['pos', 'orders', 'kitchen', 'inventory', 'reports', 'settings'],
+              'cashier': ['pos', 'orders', 'settings'],
               'kitchen': ['kitchen'],
             }
           : {

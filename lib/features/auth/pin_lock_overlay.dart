@@ -1,14 +1,17 @@
+// lib/features/auth/pin_lock_overlay.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
-import '../../core/providers/shift_provider.dart';   // ← ADD
-import '../../features/shifts/open_shift_screen.dart'; // ← ADD
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:async';
-
+import '../../core/providers/shift_provider.dart';
+import '../../features/shifts/open_shift_screen.dart';
+import '../../core/providers/role_permissions_provider.dart';
 // ── Providers ─────────────────────────────────────────────────────────────────
+
 final appLockedProvider = StateProvider<bool>((ref) => true);
 
 final inactivityProvider =
@@ -20,6 +23,7 @@ class InactivityNotifier extends Notifier<void> {
 }
 
 // ── PinLockOverlay ────────────────────────────────────────────────────────────
+
 class PinLockOverlay extends ConsumerStatefulWidget {
   final Widget child;
   const PinLockOverlay({super.key, required this.child});
@@ -30,21 +34,38 @@ class PinLockOverlay extends ConsumerStatefulWidget {
 
 class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   StaffMember? _selectedStaff;
-   bool _showShiftGate = false;  // ← ADD
-  Timer? _inactivityTimer; // ← ADD
+  bool _showShiftGate = false;
+  Timer? _inactivityTimer;
 
   @override
   void dispose() {
-    _inactivityTimer?.cancel(); // ← ADD
+    _inactivityTimer?.cancel();
     super.dispose();
   }
 
   void _resetTimer() {
     if (ref.read(appLockedProvider)) return;
-    _inactivityTimer?.cancel(); // ← cancel previous timer
+    _inactivityTimer?.cancel();
     _inactivityTimer = Timer(const Duration(minutes: 10), () {
       if (mounted) ref.read(appLockedProvider.notifier).state = true;
     });
+  }
+
+  Future<void> _handleUnlock() async {
+    setState(() => _selectedStaff = null);
+
+    // currentShiftProvider watches activeStaffProvider, which was just set
+    // in _verify() before this is called — so this is correctly scoped.
+    final shift = await ref.read(currentShiftProvider.future);
+
+    if (!mounted) return;
+
+    if (shift == null) {
+      setState(() => _showShiftGate = true);
+    } else {
+      ref.read(appLockedProvider.notifier).state = false;
+      _resetTimer();
+    }
   }
 
   @override
@@ -58,7 +79,7 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
         children: [
           widget.child,
 
-          // ── Shift gate (on top of everything, before POS is visible) ──
+          // ── Shift gate ────────────────────────────────────────────────
           if (_showShiftGate)
             Material(
               color: const Color(0xFF0B0E1A),
@@ -76,36 +97,16 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
             _PinScreen(
               selectedStaff: _selectedStaff,
               onStaffSelected: (s) => setState(() => _selectedStaff = s),
-              onUnlocked: _handleUnlock,  // ← changed
+              onUnlocked: _handleUnlock,
             ),
         ],
       ),
     );
   }
-
-  Future<void> _handleUnlock() async {  // ← ADD this method
-    setState(() => _selectedStaff = null);
-
-    // Check if this staff member has an open shift
-    final shift = await ref.read(currentShiftProvider.future);
-
-    if (!mounted) return;
-
-    if (shift == null) {
-      // No open shift → show shift gate before unlocking
-      setState(() => _showShiftGate = true);
-    } else {
-      // Already has an open shift → unlock normally
-      ref.read(appLockedProvider.notifier).state = false;
-      _resetTimer();
-    }
-  }
 }
 
-  
-
-
 // ── PIN Screen ────────────────────────────────────────────────────────────────
+
 class _PinScreen extends ConsumerStatefulWidget {
   final StaffMember? selectedStaff;
   final ValueChanged<StaffMember> onStaffSelected;
@@ -144,13 +145,15 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
   }
 
   void _verify() {
-    final staff = widget.selectedStaff;
-    if (staff == null) return;
-    if (staff.checkPin(_pin)) {
-      HapticFeedback.lightImpact();
-      ref.read(activeStaffProvider.notifier).login(staff);
-      widget.onUnlocked();
-    } else {
+  final staff = widget.selectedStaff;
+  if (staff == null) return;
+  if (staff.checkPin(_pin)) {
+    HapticFeedback.lightImpact();
+    ref.read(activeStaffProvider.notifier).login(staff);
+    // Re-fetch permissions from Supabase for the newly logged-in staff role
+    ref.read(rolePermissionsProvider.notifier).refresh();
+    widget.onUnlocked();
+  } else {
       HapticFeedback.heavyImpact();
       setState(() {
         _error = true;
@@ -178,7 +181,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
         child: SafeArea(
           child: Row(
             children: [
-              // ── LEFT: Who's there? + staff avatars ───────────────────
+              // ── LEFT: staff avatars ───────────────────────────────────
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -194,7 +197,6 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Logo
                         Container(
                           width: 48,
                           height: 48,
@@ -213,7 +215,6 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                               color: Colors.white, size: 28),
                         ),
                         const SizedBox(height: 24),
-
                         const Text(
                           "Who's there?",
                           style: TextStyle(
@@ -232,8 +233,6 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                           ),
                         ),
                         const SizedBox(height: 36),
-
-                        // Staff avatars
                         if (staffList.isEmpty)
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -302,7 +301,6 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                         : Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Selected staff card
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 14),
@@ -319,8 +317,9 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                                   children: [
                                     CircleAvatar(
                                       radius: 18,
-                                      backgroundColor: _roleColor(selected.role)
-                                          .withOpacity(0.2),
+                                      backgroundColor:
+                                          _roleColor(selected.role)
+                                              .withOpacity(0.2),
                                       child: Text(
                                         selected.name[0].toUpperCase(),
                                         style: TextStyle(
@@ -381,8 +380,9 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                                       boxShadow: filled && !_error
                                           ? [
                                               BoxShadow(
-                                                color: _roleColor(selected.role)
-                                                    .withOpacity(0.5),
+                                                color:
+                                                    _roleColor(selected.role)
+                                                        .withOpacity(0.5),
                                                 blurRadius: 8,
                                               )
                                             ]
@@ -392,14 +392,13 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                                 }),
                               ),
 
-                              // Error / hint — fixed height
                               SizedBox(
                                 height: 28,
                                 child: Center(
                                   child: _error
-                                      ? Row(
+                                      ? const Row(
                                           mainAxisSize: MainAxisSize.min,
-                                          children: const [
+                                          children: [
                                             Icon(Icons.error_outline,
                                                 color: Colors.red, size: 13),
                                             SizedBox(width: 4),
@@ -423,10 +422,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
                               ),
 
                               const SizedBox(height: 8),
-
-                              // Numpad
                               _Numpad(onKey: _onKey, onDelete: _onDelete),
-
                               const SizedBox(height: 16),
 
                               TextButton(
@@ -455,12 +451,13 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
         title: const Text('Reset PIN',
             style: TextStyle(fontWeight: FontWeight.w800)),
         content: const Text(
-          'A password reset link will be sent to the owner\'s registered email address.',
+          'A password reset link will be sent to your business '
+          'account email address.',
         ),
         actions: [
           TextButton(
@@ -476,7 +473,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Reset email sent to owner.'),
+                    content: Text('Reset email sent.'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -497,6 +494,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
 }
 
 // ── Staff Avatar ──────────────────────────────────────────────────────────────
+
 class _StaffAvatar extends StatelessWidget {
   final StaffMember staff;
   final bool selected;
@@ -562,8 +560,9 @@ class _StaffAvatar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color:
-                    selected ? Colors.white : Colors.white.withOpacity(0.45),
+                color: selected
+                    ? Colors.white
+                    : Colors.white.withOpacity(0.45),
                 fontSize: 11,
                 fontWeight:
                     selected ? FontWeight.w700 : FontWeight.w400,
@@ -586,6 +585,7 @@ class _StaffAvatar extends StatelessWidget {
 }
 
 // ── Numpad ────────────────────────────────────────────────────────────────────
+
 class _Numpad extends StatelessWidget {
   final ValueChanged<String> onKey;
   final VoidCallback onDelete;

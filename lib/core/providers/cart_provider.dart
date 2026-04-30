@@ -7,7 +7,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   CartNotifier() : super([]);
 
   void addProduct(Product product) {
-    if (product.trackInventory && product.stockQuantity <= 0) return;
+    // In addProduct, change the silent return to still add but cap at stock:
+
 
     final index = state.indexWhere((item) => item.product.id == product.id);
     if (index >= 0) {

@@ -7,8 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'config/app_router.dart';
+import 'core/providers/lan_orders_notifier.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/services/lan_client_service.dart';
 import 'core/services/lan_server_service.dart';
@@ -16,23 +18,7 @@ import 'core/services/local_db_service.dart';
 import 'core/services/sync_queue_service.dart';
 
 // ── Device role ────────────────────────────────────────────────────────────────
-//
-// POS     = Windows / Linux / macOS desktop  → runs LAN HTTP + WebSocket server
-// Kitchen = Android / iOS tablet             → connects to POS over LAN
-//
-// Role is inferred from the platform — no manual configuration needed.
-
-bool get _isPosDevice =>
-    !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
-
-bool get _isKitchenDevice =>
-    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-
-final deviceRoleProvider = Provider<DeviceRole>((ref) {
-  if (_isPosDevice) return DeviceRole.pos;
-  if (_isKitchenDevice) return DeviceRole.kitchen;
-  return DeviceRole.pos; // web fallback
-});
+final deviceRoleProvider = StateProvider<DeviceRole>((ref) => DeviceRole.pos);
 
 enum DeviceRole { pos, kitchen }
 
@@ -41,8 +27,9 @@ enum DeviceRole { pos, kitchen }
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Desktop only — Android/iOS use native sqflite, no FFI needed
-  if (_isPosDevice) {
+  // Desktop FFI init — not needed on Android/iOS (uses native sqflite)
+  if (!kIsWeb &&
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
@@ -52,50 +39,99 @@ Future<void> main() async {
     anonKey: 'sb_publishable_IMKcLGls9al71UvjElf_Kw_iC0N4Dqu',
   );
 
+  final prefs = await SharedPreferences.getInstance();
   final container = ProviderContainer();
 
   // 1. Local DB — wait for it to be ready
   await container.read(localDbServiceProvider).db;
 
-  // 2. Connectivity (internet probe + LAN probe)
+  // 2. Load saved device role
+  //    null = first launch on this device → show role selection screen
+  final savedRole = prefs.getString('device_role');
+  final role = savedRole == 'kitchen' ? DeviceRole.kitchen : DeviceRole.pos;
+  container.read(deviceRoleProvider.notifier).state = role;
+
+  final isPos = role == DeviceRole.pos;
+  final isKitchen = role == DeviceRole.kitchen;
+
+  // 3. Prune old synced orders on POS boot
+  if (isPos) {
+    final businessId = prefs.getString('business_id') ?? '';
+    if (businessId.isNotEmpty) {
+      await container
+          .read(localDbServiceProvider)
+          .clearStaleData(businessId);
+    }
+  }
+
+  // 4. Connectivity (internet probe + LAN probe)
   await container.read(connectivityServiceProvider).init();
 
-  // 3. Sync queue — starts listening for internet reconnects → flush to Supabase
+  // 5. Sync queue — flushes to Supabase on internet reconnect
   container.read(syncQueueServiceProvider).init();
 
-  // 4a. POS (desktop): start the LAN HTTP + WebSocket server
-  if (_isPosDevice) {
+  // 6. POS: start the LAN HTTP + WebSocket server
+  if (isPos) {
     await container.read(lanServerServiceProvider).start();
 
-    // Cache the local IP so the QR screen can read it without async work
+    if (!kIsWeb && Platform.isAndroid) {
+      await WakelockPlus.enable();
+    }
+
     final ip = await _getLocalIp();
     if (ip != null) {
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pos_local_ip', ip);
       debugPrint('[Boot] POS server started — local IP: $ip');
     }
   }
 
-  // 4b. Kitchen (mobile/tablet): restore the saved POS IP
-  if (_isKitchenDevice) {
-    final prefs = await SharedPreferences.getInstance();
+  // 7. Kitchen: restore saved POS IP and connect
+  if (isKitchen) {
     final cachedIp = prefs.getString('cashier_ip');
     if (cachedIp != null && cachedIp.isNotEmpty) {
       container.read(cashierIpProvider.notifier).state = cachedIp;
       debugPrint('[Boot] Kitchen — POS IP restored: $cachedIp');
-      // Probe in background — sets isLanConnectedProvider before first frame
-      _unawaited(
-        container.read(connectivityServiceProvider).probeLan(cachedIp),
-      );
+
+      final reachable = await container
+          .read(connectivityServiceProvider)
+          .probeLan(cachedIp);
+
+      if (reachable) {
+        final businessId = prefs.getString('business_id') ?? '';
+        container.read(kitchenStateProvider.notifier).connect(businessId);
+        debugPrint('[Boot] Kitchen — LAN client connected to $cachedIp');
+      }
     } else {
-      debugPrint('[Boot] Kitchen — no POS IP saved. Open Settings → Connect to POS.');
+      debugPrint(
+          '[Boot] Kitchen — no POS IP saved. Open Settings → Connect to POS.');
     }
   }
+
+  // 8. Determine initial route
+  //
+  //   Priority order:
+  //   a) No saved device role → first launch → /role-select
+  //   b) Has active Supabase session → already logged in → /pos
+  //   c) No session → returning user who needs to sign in → /login
+  //
+  //   NOTE: /business-type is ONLY reached via RegisterScreen navigation.
+  //   It is never used as an initial route — it requires pendingUserIdProvider
+  //   to be set, which only happens during registration flow.
+  final String initialRoute;
+  if (savedRole == null) {
+    initialRoute = '/role-select';
+  } else if (Supabase.instance.client.auth.currentSession != null) {
+    initialRoute = '/pos';
+  } else {
+    initialRoute = '/login';
+  }
+
+  debugPrint('[Boot] initialRoute: $initialRoute');
 
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const MyApp(),
+      child: MyApp(initialRoute: initialRoute),
     ),
   );
 }
@@ -103,7 +139,8 @@ Future<void> main() async {
 // ── Root app ───────────────────────────────────────────────────────────────────
 
 class MyApp extends ConsumerWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+  const MyApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -127,8 +164,8 @@ class MyApp extends ConsumerWidget {
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
         ),
       );
     });
@@ -141,7 +178,8 @@ class MyApp extends ConsumerWidget {
         useMaterial3: true,
         fontFamily: 'Inter',
       ),
-      initialRoute: '/login',
+      navigatorKey: router.navigatorKey,
+      initialRoute: initialRoute,
       onGenerateRoute: router.onGenerateRoute,
     );
   }
@@ -150,7 +188,6 @@ class MyApp extends ConsumerWidget {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /// Returns the device's current WiFi/LAN IPv4 address.
-/// Uses dart:io NetworkInterface directly — no extra package required.
 Future<String?> _getLocalIp() async {
   try {
     final interfaces = await NetworkInterface.list(
@@ -169,15 +206,6 @@ Future<String?> _getLocalIp() async {
   }
   return null;
 }
-
-/// Explicitly discards a Future — avoids unawaited_futures lint
-/// without pulling in async_helper package.
-void _unawaited(Future<void> future) {
-  future.catchError((Object e) => debugPrint('[unawaited] $e'));
-}
-
-
-
 
 // ── Helpers exposed to other files ────────────────────────────────────────────
 

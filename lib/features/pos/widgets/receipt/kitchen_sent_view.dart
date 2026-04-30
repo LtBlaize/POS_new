@@ -7,7 +7,7 @@ import '../../../../shared/widgets/app_colors.dart';
 class KitchenSentView extends StatelessWidget {
   final Order order;
   final VoidCallback onDone;
-  final int? tableNumber;   
+  final String? tableNumber;   
 
   const KitchenSentView({
     super.key,

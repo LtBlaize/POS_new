@@ -470,7 +470,7 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
         if (match.isNotEmpty) {
           ref
               .read(tableProvider.notifier)
-              .selectTable(match.first.number);
+              .selectTable(match.first.name);
         }
       }
 

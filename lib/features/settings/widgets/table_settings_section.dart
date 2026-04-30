@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../settings_provider.dart';
 import '../../tables/table_provider.dart';
+import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 
 class TableSettingsSection extends ConsumerStatefulWidget {
@@ -13,28 +13,79 @@ class TableSettingsSection extends ConsumerStatefulWidget {
 }
 
 class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
-  int _addCount = 1;
-  String? _selectedRoomId;
+  final _nameController = TextEditingController();
+  bool _adding = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addTable() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final tables = ref.read(tableProvider).tables;
+    final duplicate = tables.any(
+      (t) => t.name.toLowerCase() == name.toLowerCase(),
+    );
+    if (duplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$name" already exists')),
+      );
+      return;
+    }
+
+    setState(() => _adding = true);
+    try {
+      final businessId =
+          ref.read(profileProvider).asData?.value?.businessId;
+      if (businessId == null) return;
+
+      final client = ref.read(supabaseClientProvider);
+      await client.from('restaurant_tables').insert({
+        'business_id': businessId,
+        'table_number': name,
+        'is_active': true,
+        'is_occupied': false,
+      });
+
+      _nameController.clear();
+      await ref.read(tableProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final tableState = ref.watch(tableProvider);
-    final settingsState = ref.watch(settingsProvider);
     final tables = tableState.tables;
-    final rooms = settingsState.rooms;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Section header ──────────────────────────────────────────────────
-        _SectionHeader(
-          icon: Icons.table_restaurant_outlined,
-          title: 'Tables',
-          subtitle: '${tables.length} total',
+        // Header
+        Row(
+          children: [
+            const Icon(Icons.table_restaurant_outlined,
+                size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            const Text('Tables',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
+            const SizedBox(width: 6),
+            Text('· ${tables.length} total',
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          ],
         ),
         const SizedBox(height: 12),
 
-        // ── Add tables row ──────────────────────────────────────────────────
+        // Add table input
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -45,63 +96,44 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Add tables',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary),
-              ),
+              const Text('Add table',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  // Count stepper
-                  _CountStepper(
-                    value: _addCount,
-                    onChanged: (v) => setState(() => _addCount = v),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Room picker (only shows if rooms exist)
-                  if (rooms.isNotEmpty) ...[
-                    Expanded(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: _selectedRoomId,
-                          hint: const Text('No room',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary)),
-                          isDense: true,
-                          borderRadius: BorderRadius.circular(10),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('No room',
-                                  style: TextStyle(fontSize: 13)),
-                            ),
-                            ...rooms.map((r) => DropdownMenuItem<String?>(
-                                  value: r.id,
-                                  child: Text(r.name,
-                                      style: const TextStyle(fontSize: 13)),
-                                )),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _selectedRoomId = v),
+                  Expanded(
+                    child: TextField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. 1, Table 1, Bar, VIP',
+                        hintStyle: const TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                        filled: true,
+                        fillColor: Colors.white,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              BorderSide(color: AppColors.divider),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              BorderSide(color: AppColors.divider),
                         ),
                       ),
+                      style: const TextStyle(fontSize: 13),
+                      onSubmitted: (_) => _addTable(),
                     ),
-                    const SizedBox(width: 12),
-                  ],
-
-                  // Add button
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: () async {
-                      await ref
-                          .read(settingsProvider.notifier)
-                          .addTables(_addCount, _selectedRoomId);
-                      ref.read(tableProvider.notifier).refresh();
-                    },
+                    onPressed: _adding ? null : _addTable,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -111,9 +143,16 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
                           borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    child: const Text('Add',
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    child: _adding
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Add',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -123,9 +162,16 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
 
         const SizedBox(height: 12),
 
-        // ── Table list ──────────────────────────────────────────────────────
+        // Table chips
         if (tableState.isLoading)
           const Center(child: CircularProgressIndicator())
+        else if (tables.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text('No tables yet.',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          )
         else
           Wrap(
             spacing: 8,
@@ -137,7 +183,6 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
   }
 }
 
-// ── Table chip with delete ────────────────────────────────────────────────────
 class _TableChip extends ConsumerWidget {
   final TableEntry table;
   const _TableChip({required this.table});
@@ -163,11 +208,12 @@ class _TableChip extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'T${table.number}',
+            table.name,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: isOccupied ? AppColors.danger : AppColors.textPrimary,
+              color:
+                  isOccupied ? AppColors.danger : AppColors.textPrimary,
             ),
           ),
           if (!isOccupied && table.uuid != null) ...[
@@ -179,7 +225,7 @@ class _TableChip extends ConsumerWidget {
                   builder: (_) => AlertDialog(
                     title: const Text('Delete table?'),
                     content: Text(
-                        'Table ${table.number} will be removed. This cannot be undone.'),
+                        '"${table.name}" will be removed permanently.'),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(context, false),
@@ -192,111 +238,20 @@ class _TableChip extends ConsumerWidget {
                     ],
                   ),
                 );
-                if (confirm == true) {
-                  await ref
-                      .read(settingsProvider.notifier)
-                      .deleteTable(table.uuid!);
+                if (confirm == true && table.uuid != null) {
+                  final client = ref.read(supabaseClientProvider);
+                  await client
+                      .from('restaurant_tables')
+                      .update({'is_active': false}).eq('id', table.uuid!);
                   ref.read(tableProvider.notifier).refresh();
                 }
               },
-              child: const Icon(Icons.close, size: 13,
-                  color: AppColors.textSecondary),
+              child: const Icon(Icons.close,
+                  size: 13, color: AppColors.textSecondary),
             ),
           ],
         ],
       ),
-    );
-  }
-}
-
-// ── Count stepper ─────────────────────────────────────────────────────────────
-class _CountStepper extends StatelessWidget {
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _CountStepper({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _StepBtn(
-            icon: Icons.remove,
-            onTap: value > 1 ? () => onChanged(value - 1) : null),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            '$value',
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary),
-          ),
-        ),
-        _StepBtn(
-            icon: Icons.add,
-            onTap: value < 50 ? () => onChanged(value + 1) : null),
-      ],
-    );
-  }
-}
-
-class _StepBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  const _StepBtn({required this.icon, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: onTap != null ? AppColors.surface : AppColors.divider,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Icon(icon,
-            size: 15,
-            color: onTap != null
-                ? AppColors.textPrimary
-                : AppColors.textSecondary),
-      ),
-    );
-  }
-}// ── Section header ────────────────────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.primary),
-        const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
-        if (subtitle.isNotEmpty) ...[
-          const SizedBox(width: 6),
-          Text('· $subtitle',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
-        ],
-      ],
     );
   }
 }

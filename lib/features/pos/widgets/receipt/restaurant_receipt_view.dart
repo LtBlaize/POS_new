@@ -10,7 +10,7 @@ class RestaurantReceiptView extends StatelessWidget {
   final double change;
   final VoidCallback onDone;
   final bool showKitchenBanner; 
-  final int? tableNumber;        // ← add this
+  final String? tableNumber;        // ← add this
   final String? roomName;  // ← add this
 
   const RestaurantReceiptView({

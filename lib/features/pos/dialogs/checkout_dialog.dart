@@ -1,29 +1,26 @@
 // lib/features/pos/dialogs/checkout_dialog.dart
-//
-// Premium Checkout Dialog — with reference number support for
-// Card / GCash / Maya payments.
-//
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/models/order.dart';
 import '../../../core/providers/cart_provider.dart';
 import '../../../core/services/checkout_service.dart';
 import '../../../core/services/feature_manager.dart';
-import '../../tables/table_provider.dart';
-import '../widgets/receipt/kitchen_sent_view.dart';
-import '../widgets/receipt/retail_receipt_view.dart';
-import '../widgets/receipt/restaurant_receipt_view.dart';
 import '../../credits/widgets/add_credit_dialog.dart';
+import '../../tables/table_provider.dart';
+import '../widgets/checkout/numpad.dart';
+import '../widgets/checkout/reference_number_panel.dart';
+import '../widgets/receipt/kitchen_sent_view.dart';
+import '../widgets/receipt/restaurant_receipt_view.dart';
+import '../widgets/receipt/retail_receipt_view.dart';
 
 // ── Payment method selector ───────────────────────────────────────────────────
 final _selectedPaymentProvider =
     StateProvider.autoDispose<PaymentMethod>((ref) => PaymentMethod.cash);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design tokens
-// ─────────────────────────────────────────────────────────────────────────────
-class _C {
+// ── Design tokens ─────────────────────────────────────────────────────────────
+class CheckoutTheme {
   static const bg = Color(0xFF0F1117);
   static const card = Color(0xFF1A1D27);
   static const elevated = Color(0xFF22263A);
@@ -36,22 +33,16 @@ class _C {
   static const rose = Color(0xFFFF4D6D);
   static const roseDim = Color(0xFFFF4D6D15);
 
-
   static const textHigh = Color(0xFFF0F2FF);
   static const textMid = Color(0xFF8B90A8);
   static const textLow = Color(0xFF4A4F6A);
 
   static const gcash = Color(0xFF007DFF);
-  static const gcashDim = Color(0xFF007DFF15);
   static const maya = Color(0xFF00C472);
-  static const mayaDim = Color(0xFF00C47215);
   static const card_ = Color(0xFFFFB547);
-  static const cardDim = Color(0xFFFFB54715);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CheckoutDialog (unchanged outer shell)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── CheckoutDialog ────────────────────────────────────────────────────────────
 class CheckoutDialog extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final String? existingOrderId;
@@ -68,7 +59,7 @@ class CheckoutDialog extends ConsumerStatefulWidget {
 
 class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   final _tenderedController = TextEditingController();
-  final _refController = TextEditingController(); // ← NEW
+  final _refController = TextEditingController();
   bool _placing = false;
   bool _sendingToKitchen = false;
   Order? _completedOrder;
@@ -99,8 +90,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     super.dispose();
   }
 
+  // FIX 1: watch instead of read so subtotal stays live if cart changes
   double get _subtotal {
-    final items = ref.read(cartProvider);
+    final items = ref.watch(cartProvider);
     return items.fold(0.0, (s, i) => s + i.total);
   }
 
@@ -110,9 +102,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   double get _change => (_tendered - _subtotal).clamp(0, double.infinity);
 
   bool get _canConfirm {
+    final items = ref.read(cartProvider);
+    if (items.isEmpty && widget.existingOrderId == null) return false;
     final method = ref.read(_selectedPaymentProvider);
     if (method == PaymentMethod.cash) return _tendered >= _subtotal;
-    // Non-cash: reference number required
     return _refController.text.trim().isNotEmpty;
   }
 
@@ -135,9 +128,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             change: _change,
             subtotal: _subtotal,
             items: items,
+            discountAmount: 0,
             referenceNumber: _refController.text.trim().isEmpty
                 ? null
-                : _refController.text.trim(), // ← NEW
+                : _refController.text.trim(),
           );
 
       if (!mounted) return;
@@ -188,10 +182,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
           const SizedBox(width: 8),
           Expanded(child: Text(msg)),
         ]),
-        backgroundColor: _C.rose,
+        backgroundColor: CheckoutTheme.rose,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -201,17 +194,13 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   Widget build(BuildContext context) {
     if (_completedOrder != null) {
       if (_sentToKitchenOnly) {
-        final tableNumber = ref.read(tableProvider).selectedTableNumber;
         return KitchenSentView(
           order: _completedOrder!,
           onDone: () => Navigator.of(context).pop(),
-          tableNumber: tableNumber,
+          tableNumber: ref.read(tableProvider).selectedTableName,
         );
       }
       final tableState = ref.read(tableProvider);
-      final tableNumber = tableState.selectedTableNumber;
-      final roomId = tableState.selectedRoomId;
-
       return _isRestaurant
           ? RestaurantReceiptView(
               order: _completedOrder!,
@@ -219,9 +208,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
               change: _savedChange,
               onDone: () => Navigator.of(context).pop(),
               showKitchenBanner: widget.existingOrderId == null,
-              tableNumber: tableNumber,
-              roomName: roomId,
-            )
+              tableNumber: tableState.selectedTableName,
+              roomName: null,
+          )
           : RetailReceiptView(
               order: _completedOrder!,
               tendered: _savedTendered,
@@ -235,7 +224,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       isRestaurant: _isRestaurant,
       existingOrderId: widget.existingOrderId,
       tenderedController: _tenderedController,
-      refController: _refController, // ← NEW
+      refController: _refController,
       subtotal: _subtotal,
       tendered: _tendered,
       change: _change,
@@ -249,15 +238,13 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _PremiumCheckoutForm
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _PremiumCheckoutForm ──────────────────────────────────────────────────────
 class _PremiumCheckoutForm extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final bool isRestaurant;
   final String? existingOrderId;
   final TextEditingController tenderedController;
-  final TextEditingController refController; // ← NEW
+  final TextEditingController refController;
   final double subtotal;
   final double tendered;
   final double change;
@@ -347,7 +334,7 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
     final isCash = method == PaymentMethod.cash;
     final isBusy = widget.placing || widget.sendingToKitchen;
     final selectedTable = widget.isRestaurant
-        ? ref.watch(tableProvider).selectedTableNumber
+        ? ref.watch(tableProvider).selectedTableName
         : null;
 
     return FadeTransition(
@@ -362,9 +349,9 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
             maxHeight: MediaQuery.of(context).size.height * 0.92,
           ),
           decoration: BoxDecoration(
-            color: _C.bg,
+            color: CheckoutTheme.bg,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: _C.border),
+            border: Border.all(color: CheckoutTheme.border),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.6),
@@ -395,7 +382,6 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                       _OrderSummaryCard(
                         items: items,
                         subtotal: widget.subtotal,
-                        isRestaurant: widget.isRestaurant,
                       ),
                       const SizedBox(height: 16),
 
@@ -408,13 +394,11 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                           ref
                               .read(_selectedPaymentProvider.notifier)
                               .state = m;
-                          // Clear ref field when switching methods
                           widget.refController.clear();
                         },
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Cash: numpad flow ────────────────────────
                       if (isCash) ...[
                         _SectionLabel('Amount Tendered'),
                         const SizedBox(height: 8),
@@ -425,17 +409,19 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                           onExact: isBusy ? null : _setExact,
                         ),
                         const SizedBox(height: 10),
-                        _QuickAmountRow(
+                        QuickAmountRow(
                           subtotal: widget.subtotal,
                           isBusy: isBusy,
+                          // FIX 2: set as fixed-point string so numpad decimal
+                          // guard works correctly after a quick-amount tap
                           onSelect: (v) {
                             widget.tenderedController.text =
-                                v.toStringAsFixed(0);
+                                v.toStringAsFixed(2);
                             HapticFeedback.mediumImpact();
                           },
                         ),
                         const SizedBox(height: 10),
-                        _Numpad(onTap: isBusy ? null : _numpadTap),
+                        Numpad(onTap: isBusy ? null : _numpadTap),
                         const SizedBox(height: 12),
                         if (!widget.isRestaurant) ...[
                           _UtangButton(
@@ -450,9 +436,8 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                         ],
                       ],
 
-                      // ── Non-cash: reference number panel ─────────
                       if (!isCash) ...[
-                        _ReferenceNumberPanel(
+                        ReferenceNumberPanel(
                           method: method,
                           controller: widget.refController,
                           isBusy: isBusy,
@@ -486,230 +471,10 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Reference Number Panel  ← NEW
-// ─────────────────────────────────────────────────────────────────────────────
-class _ReferenceNumberPanel extends StatelessWidget {
-  final PaymentMethod method;
-  final TextEditingController controller;
-  final bool isBusy;
-  final double subtotal;
-
-  const _ReferenceNumberPanel({
-    required this.method,
-    required this.controller,
-    required this.isBusy,
-    required this.subtotal,
-  });
-
-  (Color accent, Color dim, String label, String hint, IconData icon)
-      get _meta => switch (method) {
-            PaymentMethod.gcash => (
-                _C.gcash,
-                _C.gcashDim,
-                'GCash Reference',
-                'e.g. 1234567890',
-                Icons.account_balance_wallet_outlined,
-              ),
-            PaymentMethod.maya => (
-                _C.maya,
-                _C.mayaDim,
-                'Maya Reference',
-                'e.g. TXN-XXXXXXXXXX',
-                Icons.phone_android_outlined,
-              ),
-            PaymentMethod.card => (
-                _C.card_,
-                _C.cardDim,
-                'Card Approval Code',
-                'e.g. 123456',
-                Icons.credit_card_outlined,
-              ),
-            _ => (
-                _C.mint,
-                _C.mintDim,
-                'Reference',
-                '',
-                Icons.receipt_outlined,
-              ),
-          };
-
-  @override
-  Widget build(BuildContext context) {
-    final (accent, dim, label, hint, icon) = _meta;
-    final hasValue = controller.text.trim().isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Total reminder ────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: dim,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: accent.withOpacity(0.25)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: accent, size: 20),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Amount to collect',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: accent.withOpacity(0.7),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '₱${subtotal.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  method == PaymentMethod.card
-                      ? 'CARD'
-                      : method == PaymentMethod.gcash
-                          ? 'GCASH'
-                          : 'MAYA',
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-        _SectionLabel(label),
-        const SizedBox(height: 8),
-
-        // ── Reference input ───────────────────────────────────────────
-        Container(
-          decoration: BoxDecoration(
-            color: _C.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: hasValue
-                  ? accent.withOpacity(0.5)
-                  : _C.border,
-              width: hasValue ? 1.5 : 1,
-            ),
-          ),
-          child: TextField(
-            controller: controller,
-            enabled: !isBusy,
-            autofocus: true,
-            textCapitalization: TextCapitalization.characters,
-            style: TextStyle(
-              color: hasValue ? _C.textHigh : _C.textMid,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(
-                color: _C.textLow,
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0,
-              ),
-              prefixIcon: Padding(
-                padding: const EdgeInsets.only(left: 14, right: 10),
-                child: Icon(
-                  Icons.tag_rounded,
-                  color: hasValue ? accent : _C.textLow,
-                  size: 20,
-                ),
-              ),
-              prefixIconConstraints:
-                  const BoxConstraints(minWidth: 0, minHeight: 0),
-              suffixIcon: hasValue
-                  ? GestureDetector(
-                      onTap: controller.clear,
-                      child: const Padding(
-                        padding: EdgeInsets.only(right: 12),
-                        child: Icon(Icons.close,
-                            color: _C.textMid, size: 18),
-                      ),
-                    )
-                  : null,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 16),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        // ── Validation hint ───────────────────────────────────────────
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: hasValue
-              ? Row(
-                  key: const ValueKey('ok'),
-                  children: [
-                    Icon(Icons.check_circle_outline,
-                        color: accent, size: 14),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Reference number entered',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: accent,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                )
-              : Row(
-                  key: const ValueKey('hint'),
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: _C.textLow, size: 14),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Enter the reference number from the payment app',
-                      style: const TextStyle(
-                          fontSize: 12, color: _C.textLow),
-                    ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Header
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _Header ───────────────────────────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final bool isRestaurant;
-  final int? tableNumber;
+  final String? tableNumber;
   final bool isBusy;
   final VoidCallback onCancel;
 
@@ -724,23 +489,23 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 14, 18),
-      decoration:
-          const BoxDecoration(border: Border(bottom: BorderSide(color: _C.border))),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: CheckoutTheme.border))),
       child: Row(
         children: [
           Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _C.mintDim,
+              color: CheckoutTheme.mintDim,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _C.mintBorder),
+              border: Border.all(color: CheckoutTheme.mintBorder),
             ),
             child: Icon(
               isRestaurant
                   ? Icons.restaurant_outlined
                   : Icons.point_of_sale_outlined,
-              color: _C.mint,
+              color: CheckoutTheme.mint,
               size: 18,
             ),
           ),
@@ -751,7 +516,7 @@ class _Header extends StatelessWidget {
               Text(
                 isRestaurant ? 'Restaurant Checkout' : 'Checkout',
                 style: const TextStyle(
-                  color: _C.textHigh,
+                  color: CheckoutTheme.textHigh,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
@@ -760,12 +525,13 @@ class _Header extends StatelessWidget {
               if (tableNumber != null)
                 Text('Table $tableNumber',
                     style: const TextStyle(
-                        color: _C.mint,
+                        color: CheckoutTheme.mint,
                         fontSize: 11,
                         fontWeight: FontWeight.w600))
               else
                 const Text('Ready to collect payment',
-                    style: TextStyle(color: _C.textMid, fontSize: 11)),
+                    style: TextStyle(
+                        color: CheckoutTheme.textMid, fontSize: 11)),
             ],
           ),
           const Spacer(),
@@ -775,10 +541,11 @@ class _Header extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: _C.elevated,
+                color: CheckoutTheme.elevated,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.close, color: _C.textMid, size: 16),
+              child: const Icon(Icons.close,
+                  color: CheckoutTheme.textMid, size: 16),
             ),
           ),
         ],
@@ -787,9 +554,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// No-table banner
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _NoTableBanner ────────────────────────────────────────────────────────────
 class _NoTableBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -797,8 +562,8 @@ class _NoTableBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       color: const Color(0xFFFFB54712),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           Icon(Icons.table_restaurant_outlined,
               size: 13, color: Color(0xFFFFB547)),
           SizedBox(width: 6),
@@ -810,27 +575,23 @@ class _NoTableBanner extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Order summary card
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _OrderSummaryCard ─────────────────────────────────────────────────────────
 class _OrderSummaryCard extends StatelessWidget {
   final List items;
   final double subtotal;
-  final bool isRestaurant;
 
   const _OrderSummaryCard({
     required this.items,
     required this.subtotal,
-    required this.isRestaurant,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: _C.card,
+        color: CheckoutTheme.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: CheckoutTheme.border),
       ),
       child: Column(
         children: [
@@ -846,7 +607,7 @@ class _OrderSummaryCard extends StatelessWidget {
                         width: 24,
                         height: 24,
                         decoration: BoxDecoration(
-                          color: _C.elevated,
+                          color: CheckoutTheme.elevated,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Center(
@@ -855,7 +616,7 @@ class _OrderSummaryCard extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
-                              color: _C.mint,
+                              color: CheckoutTheme.mint,
                             ),
                           ),
                         ),
@@ -864,14 +625,15 @@ class _OrderSummaryCard extends StatelessWidget {
                       Expanded(
                         child: Text(item.product.name,
                             style: const TextStyle(
-                                fontSize: 13, color: _C.textHigh)),
+                                fontSize: 13,
+                                color: CheckoutTheme.textHigh)),
                       ),
                       Text(
                         '₱${item.total.toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: _C.textHigh),
+                            color: CheckoutTheme.textHigh),
                       ),
                     ],
                   ),
@@ -882,20 +644,20 @@ class _OrderSummaryCard extends StatelessWidget {
           Container(
               margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               height: 1,
-              color: _C.border),
+              color: CheckoutTheme.border),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Row(
               children: [
                 const Text('Total',
                     style: TextStyle(
-                        color: _C.textMid,
+                        color: CheckoutTheme.textMid,
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('₱${subtotal.toStringAsFixed(2)}',
                     style: const TextStyle(
-                        color: _C.mint,
+                        color: CheckoutTheme.mint,
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.5)),
@@ -908,9 +670,7 @@ class _OrderSummaryCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section label
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _SectionLabel ─────────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -920,7 +680,7 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: const TextStyle(
-        color: _C.textLow,
+        color: CheckoutTheme.textLow,
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
@@ -929,9 +689,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Payment method row
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _PaymentMethodRow ─────────────────────────────────────────────────────────
 class _PaymentMethodRow extends StatelessWidget {
   final PaymentMethod selected;
   final bool isBusy;
@@ -977,46 +735,50 @@ class _MethodCard extends StatelessWidget {
   });
 
   (String label, IconData icon, Color color) get _meta => switch (method) {
-        PaymentMethod.cash => ('Cash', Icons.payments_outlined, _C.mint),
+        PaymentMethod.cash =>
+          ('Cash', Icons.payments_outlined, CheckoutTheme.mint),
         PaymentMethod.card =>
-          ('Card', Icons.credit_card_outlined, _C.card_),
+          ('Card', Icons.credit_card_outlined, CheckoutTheme.card_),
         PaymentMethod.gcash => (
             'GCash',
             Icons.account_balance_wallet_outlined,
-            _C.gcash
+            CheckoutTheme.gcash,
           ),
         PaymentMethod.maya =>
-          ('Maya', Icons.phone_android_outlined, _C.maya),
+          ('Maya', Icons.phone_android_outlined, CheckoutTheme.maya),
       };
 
   @override
   Widget build(BuildContext context) {
     final (label, icon, color) = _meta;
     return GestureDetector(
-      onTap: isBusy ? null : () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
+      onTap: isBusy
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : _C.card,
+          color: selected ? color.withOpacity(0.12) : CheckoutTheme.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? color.withOpacity(0.6) : _C.border,
+            color: selected ? color.withOpacity(0.6) : CheckoutTheme.border,
             width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? color : _C.textMid, size: 22),
+            Icon(icon,
+                color: selected ? color : CheckoutTheme.textMid, size: 22),
             const SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: selected ? color : _C.textMid)),
+                    color: selected ? color : CheckoutTheme.textMid)),
           ],
         ),
       ),
@@ -1024,9 +786,7 @@ class _MethodCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tendered display (cash only)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _TenderedDisplay ──────────────────────────────────────────────────────────
 class _TenderedDisplay extends StatelessWidget {
   final double tendered;
   final double subtotal;
@@ -1049,12 +809,14 @@ class _TenderedDisplay extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: _C.card,
+        color: CheckoutTheme.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasAmount
-              ? (isShort ? _C.rose.withOpacity(0.4) : _C.mintBorder)
-              : _C.border,
+              ? (isShort
+                  ? CheckoutTheme.rose.withOpacity(0.4)
+                  : CheckoutTheme.mintBorder)
+              : CheckoutTheme.border,
         ),
       ),
       child: Column(
@@ -1064,7 +826,7 @@ class _TenderedDisplay extends StatelessWidget {
             children: [
               const Text('₱',
                   style: TextStyle(
-                      color: _C.textMid,
+                      color: CheckoutTheme.textMid,
                       fontSize: 18,
                       fontWeight: FontWeight.w400)),
               const SizedBox(width: 4),
@@ -1075,7 +837,9 @@ class _TenderedDisplay extends StatelessWidget {
                     tendered > 0 ? tendered.toStringAsFixed(2) : '0.00',
                     key: ValueKey(tendered),
                     style: TextStyle(
-                      color: hasAmount ? _C.textHigh : _C.textLow,
+                      color: hasAmount
+                          ? CheckoutTheme.textHigh
+                          : CheckoutTheme.textLow,
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
@@ -1089,14 +853,14 @@ class _TenderedDisplay extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _C.elevated,
+                    color: CheckoutTheme.elevated,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text('EXACT',
                       style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: _C.textMid,
+                          color: CheckoutTheme.textMid,
                           letterSpacing: 0.8)),
                 ),
               ),
@@ -1104,21 +868,28 @@ class _TenderedDisplay extends StatelessWidget {
           ),
           if (hasAmount) ...[
             const SizedBox(height: 10),
-            Container(height: 1, color: _C.border),
+            Container(height: 1, color: CheckoutTheme.border),
             const SizedBox(height: 10),
             Row(
               children: [
-                Text(isShort ? 'Still needed' : 'Change',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isShort ? _C.rose : _C.mint,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  isShort ? 'Still needed' : 'Change',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color:
+                          isShort ? CheckoutTheme.rose : CheckoutTheme.mint,
+                      fontWeight: FontWeight.w600),
+                ),
                 const Spacer(),
-                Text('₱${(isShort ? due : change).abs().toStringAsFixed(2)}',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: isShort ? _C.rose : _C.mint)),
+                Text(
+                  '₱${(isShort ? due : change).abs().toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: isShort
+                          ? CheckoutTheme.rose
+                          : CheckoutTheme.mint),
+                ),
               ],
             ),
           ],
@@ -1128,182 +899,7 @@ class _TenderedDisplay extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Quick amount row
-// ─────────────────────────────────────────────────────────────────────────────
-class _QuickAmountRow extends StatelessWidget {
-  final double subtotal;
-  final bool isBusy;
-  final ValueChanged<double> onSelect;
-
-  const _QuickAmountRow({
-    required this.subtotal,
-    required this.isBusy,
-    required this.onSelect,
-  });
-
-  List<double> get _amounts {
-    final amounts = <double>[];
-    final niceBills = [20, 50, 100, 200, 500, 1000];
-    for (final b in niceBills) {
-      final rounded = (subtotal / b).ceil() * b.toDouble();
-      if (!amounts.contains(rounded) && rounded >= subtotal) {
-        amounts.add(rounded);
-        if (amounts.length == 4) break;
-      }
-    }
-    return amounts;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: _amounts
-          .map((v) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: GestureDetector(
-                    onTap: isBusy ? null : () => onSelect(v),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      decoration: BoxDecoration(
-                        color: _C.elevated,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _C.border),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text('₱${v.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              color: _C.textHigh,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ),
-              ))
-          .toList(),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Numpad
-// ─────────────────────────────────────────────────────────────────────────────
-class _Numpad extends StatelessWidget {
-  final ValueChanged<String>? onTap;
-  const _Numpad({required this.onTap});
-
-  static const _keys = [
-    ['7', '8', '9'],
-    ['4', '5', '6'],
-    ['1', '2', '3'],
-    ['.', '0', '⌫'],
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: _keys.map((row) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: row.map((k) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _NumpadKey(
-                    label: k,
-                    isBackspace: k == '⌫',
-                    onTap: onTap == null ? null : () => onTap!(k),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _NumpadKey extends StatefulWidget {
-  final String label;
-  final bool isBackspace;
-  final VoidCallback? onTap;
-
-  const _NumpadKey({
-    required this.label,
-    required this.isBackspace,
-    required this.onTap,
-  });
-
-  @override
-  State<_NumpadKey> createState() => _NumpadKeyState();
-}
-
-class _NumpadKeyState extends State<_NumpadKey>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ac;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 80));
-    _scale = Tween(begin: 1.0, end: 0.92)
-        .animate(CurvedAnimation(parent: _ac, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _ac.dispose();
-    super.dispose();
-  }
-
-  void _press() async {
-    if (widget.onTap == null) return;
-    _ac.forward();
-    await Future.delayed(const Duration(milliseconds: 80));
-    _ac.reverse();
-    widget.onTap!();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _press,
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: widget.isBackspace ? _C.roseDim : _C.elevated,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.isBackspace
-                  ? _C.rose.withOpacity(0.25)
-                  : _C.border,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: widget.isBackspace
-              ? const Icon(Icons.backspace_outlined,
-                  color: _C.rose, size: 18)
-              : Text(widget.label,
-                  style: const TextStyle(
-                      color: _C.textHigh,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600)),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Utang button
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _UtangButton ──────────────────────────────────────────────────────────────
 class _UtangButton extends ConsumerWidget {
   final bool isBusy;
   final double subtotal;
@@ -1327,60 +923,90 @@ class _UtangButton extends ConsumerWidget {
       onTap: isBusy
           ? null
           : () async {
+              // Step 1: collect customer info first — bail early if cancelled
               final result = await showDialog<AddCreditResult>(
                 context: context,
                 builder: (_) => AddCreditDialog(amount: subtotal),
               );
-              if (result != null && context.mounted) {
-                await ref.read(checkoutServiceProvider).placeOrder(
-                      payNow: false,
-                      isRestaurant: isRestaurant,
-                      hasKitchen: featureManager.hasFeature('kitchen'),
-                      existingOrderId: existingOrderId,
-                      paymentMethod: PaymentMethod.cash,
-                      tendered: 0,
-                      change: 0,
-                      subtotal: subtotal,
-                      items: ref.read(cartProvider),
-                    );
-                ref.read(cartProvider.notifier).clear();
-                onDone();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(children: [
-                        const Icon(Icons.receipt_long_outlined,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                            'Utang recorded for ${result.customer.name}'),
-                      ]),
-                      backgroundColor: _C.rose,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      margin: const EdgeInsets.all(16),
-                    ),
-                  );
-                }
+              if (result == null || !context.mounted) return;
+
+              // Step 2: place the order (service clears cart internally)
+              final checkoutResult =
+                  await ref.read(checkoutServiceProvider).placeOrder(
+                        payNow: false,
+                        isRestaurant: isRestaurant,
+                        hasKitchen: featureManager.hasFeature('kitchen'),
+                        existingOrderId: existingOrderId,
+                        paymentMethod: PaymentMethod.cash,
+                        tendered: 0,
+                        change: 0,
+                        subtotal: subtotal,
+                        discountAmount: 0,
+                        items: ref.read(cartProvider),
+                      );
+
+              if (!context.mounted) return;
+
+              // FIX: do NOT manually clear cart — service already did it.
+              // Only close + show confirmation if the order actually succeeded.
+              if (checkoutResult.status == CheckoutStatus.error) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: Text(checkoutResult.errorMessage ??
+                              'Failed to record utang.')),
+                    ]),
+                    backgroundColor: CheckoutTheme.rose,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
+                return;
+              }
+
+              onDone();
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(children: [
+                      const Icon(Icons.receipt_long_outlined,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Utang recorded for ${result.customer.name}'),
+                    ]),
+                    backgroundColor: CheckoutTheme.rose,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
               }
             },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
-          color: _C.roseDim,
+          color: CheckoutTheme.roseDim,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.rose.withOpacity(0.3)),
+          border: Border.all(color: CheckoutTheme.rose.withOpacity(0.3)),
         ),
-        child: Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.receipt_long_outlined, color: _C.rose, size: 16),
+          children: [
+            Icon(Icons.receipt_long_outlined,
+                color: CheckoutTheme.rose, size: 16),
             SizedBox(width: 8),
             Text('Record as Utang',
                 style: TextStyle(
-                    color: _C.rose,
+                    color: CheckoutTheme.rose,
                     fontSize: 13,
                     fontWeight: FontWeight.w700)),
           ],
@@ -1390,9 +1016,7 @@ class _UtangButton extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bottom action bar
-// ─────────────────────────────────────────────────────────────────────────────
+// ── _ActionBar ────────────────────────────────────────────────────────────────
 class _ActionBar extends StatelessWidget {
   final bool isRestaurant;
   final String? existingOrderId;
@@ -1434,8 +1058,8 @@ class _ActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration:
-          const BoxDecoration(border: Border(top: BorderSide(color: _C.border))),
+      decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: CheckoutTheme.border))),
       child: Column(
         children: [
           Row(
@@ -1470,7 +1094,7 @@ class _ActionBar extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 11,
-                  color: _C.textLow,
+                  color: CheckoutTheme.textLow,
                   fontStyle: FontStyle.italic),
             ),
           ],
@@ -1480,6 +1104,7 @@ class _ActionBar extends StatelessWidget {
   }
 }
 
+// ── _ConfirmButton ────────────────────────────────────────────────────────────
 class _ConfirmButton extends StatelessWidget {
   final String label;
   final bool loading;
@@ -1506,15 +1131,15 @@ class _ConfirmButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         height: 52,
         decoration: BoxDecoration(
-          color: enabled ? _C.mint : _C.elevated,
+          color: enabled ? CheckoutTheme.mint : CheckoutTheme.elevated,
           borderRadius: BorderRadius.circular(14),
           boxShadow: enabled
               ? [
                   BoxShadow(
-                    color: _C.mint.withOpacity(0.30),
+                    color: CheckoutTheme.mint.withOpacity(0.30),
                     blurRadius: 20,
                     offset: const Offset(0, 6),
-                  )
+                  ),
                 ]
               : [],
         ),
@@ -1524,18 +1149,22 @@ class _ConfirmButton extends StatelessWidget {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: _C.bg))
-            : Text(label,
+                    strokeWidth: 2.5, color: CheckoutTheme.bg))
+            : Text(
+                label,
                 style: TextStyle(
-                    color: enabled ? _C.bg : _C.textLow,
+                    color:
+                        enabled ? CheckoutTheme.bg : CheckoutTheme.textLow,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2)),
+                    letterSpacing: -0.2),
+              ),
       ),
     );
   }
 }
 
+// ── _GhostButton ──────────────────────────────────────────────────────────────
 class _GhostButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1558,9 +1187,9 @@ class _GhostButton extends StatelessWidget {
       child: Container(
         height: 52,
         decoration: BoxDecoration(
-          color: _C.elevated,
+          color: CheckoutTheme.elevated,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: CheckoutTheme.border),
         ),
         alignment: Alignment.center,
         child: loading
@@ -1568,15 +1197,15 @@ class _GhostButton extends StatelessWidget {
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: _C.textMid))
+                    strokeWidth: 2, color: CheckoutTheme.textMid))
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, color: _C.textMid, size: 16),
+                  Icon(icon, color: CheckoutTheme.textMid, size: 16),
                   const SizedBox(width: 6),
                   Text(label,
                       style: const TextStyle(
-                          color: _C.textMid,
+                          color: CheckoutTheme.textMid,
                           fontSize: 13,
                           fontWeight: FontWeight.w700)),
                 ],

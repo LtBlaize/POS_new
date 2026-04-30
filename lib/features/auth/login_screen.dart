@@ -5,6 +5,7 @@ import 'register_screen.dart';
 import 'widgets/auth_text_field.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // add this at the top
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -52,17 +53,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passCtrl.text,
           );
 
-      // Step 2: wait for profileProvider to finish loading.
-      // login() only calls signInWithPassword — it triggers authStateProvider
-      // which then kicks off profileProvider as an async side effect. If we
-      // navigate immediately, featureManager is still null and the wrong POS
-      // (or a loading screen) is shown. We must wait here until the profile
-      // — and therefore the business type — is fully resolved.
+      // Step 2: wait for profile to load
       if (mounted) {
-        await ref.read(profileProvider.future);
+        final profile = await ref.read(profileProvider.future);
+
+        // Step 3: save business_id for boot-time use
+        if (profile?.business?.id != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('business_id', profile!.business!.id);
+        }
       }
 
-      // Step 3: navigate only after profile is confirmed loaded
+      // Step 4: navigate
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/pos');
       }

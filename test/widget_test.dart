@@ -8,7 +8,7 @@ void main() {
     // ProviderScope is required since MyApp is now a ConsumerWidget
     await tester.pumpWidget(
       const ProviderScope(
-        child: MyApp(),
+        child: MyApp(initialRoute: '/login'),
       ),
     );
     await tester.pump();

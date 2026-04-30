@@ -1,4 +1,3 @@
-// lib/features/tables/table_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/auth_provider.dart';
@@ -6,80 +5,75 @@ import '../../features/auth/auth_provider.dart';
 enum TableStatus { available, occupied, reserved }
 
 class TableEntry {
-  final int number;
+  final String name;
   final String? uuid;
-  final String? roomId;
   final TableStatus status;
   final String? orderId;
 
   const TableEntry({
-    required this.number,
+    required this.name,
     this.uuid,
-    this.roomId,
     this.status = TableStatus.available,
     this.orderId,
   });
 
   TableEntry copyWith({
     String? uuid,
-    String? roomId,
     TableStatus? status,
     String? orderId,
     bool clearOrder = false,
   }) {
     return TableEntry(
-      number: number,
+      name: name,
       uuid: uuid ?? this.uuid,
-      roomId: roomId ?? this.roomId,
       status: status ?? this.status,
       orderId: clearOrder ? null : (orderId ?? this.orderId),
     );
   }
 }
 
-// ── Table state ───────────────────────────────────────────────────────────────
 class TableState {
   final List<TableEntry> tables;
-  final int? selectedTableNumber;
-  final String? selectedRoomId;
+  final String? selectedTableName;
   final bool isLoading;
 
   const TableState({
     required this.tables,
-    this.selectedTableNumber,
-    this.selectedRoomId,
+    this.selectedTableName,
     this.isLoading = false,
   });
 
   TableState copyWith({
     List<TableEntry>? tables,
-    int? selectedTableNumber,
+    String? selectedTableName,
     bool clearSelection = false,
-    String? selectedRoomId,
-    bool clearRoomSelection = false,
     bool? isLoading,
   }) {
     return TableState(
       tables: tables ?? this.tables,
-      selectedTableNumber:
-          clearSelection ? null : selectedTableNumber ?? this.selectedTableNumber,
-      selectedRoomId: clearRoomSelection
-          ? null
-          : selectedRoomId ?? this.selectedRoomId,
+      selectedTableName:
+          clearSelection ? null : selectedTableName ?? this.selectedTableName,
       isLoading: isLoading ?? this.isLoading,
     );
   }
 
-  String? uuidForTable(int number) {
+  String? uuidForTable(String name) {
     try {
-      return tables.firstWhere((t) => t.number == number).uuid;
+      return tables.firstWhere((t) => t.name == name).uuid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? tableNameForUuid(String uuid) {
+    try {
+      return tables.firstWhere((t) => t.uuid == uuid).name;
     } catch (_) {
       return null;
     }
   }
 }
 
-// ── Notifier ──────────────────────────────────────────────────────────────────
 class TableNotifier extends StateNotifier<TableState> {
   final SupabaseClient _client;
   final String? _businessId;
@@ -97,17 +91,15 @@ class TableNotifier extends StateNotifier<TableState> {
     try {
       final rows = await _client
           .from('restaurant_tables')
-          .select('id, table_number, is_occupied, room_id')
+          .select('id, table_number, is_occupied')
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number');
 
       final tables = (rows as List).map((row) {
-        final num = int.tryParse(row['table_number'].toString()) ?? 0;
         return TableEntry(
-          number: num,
+          name: row['table_number'].toString(),
           uuid: row['id'] as String,
-          roomId: row['room_id'] as String?,
           status: (row['is_occupied'] as bool? ?? false)
               ? TableStatus.occupied
               : TableStatus.available,
@@ -116,79 +108,61 @@ class TableNotifier extends StateNotifier<TableState> {
 
       state = state.copyWith(tables: tables, isLoading: false);
     } catch (e) {
-      state = state.copyWith(
-        tables: List.generate(10, (i) => TableEntry(number: i + 1)),
-        isLoading: false,
-      );
+      state = state.copyWith(tables: [], isLoading: false);
     }
   }
 
   Future<void> refresh() => _loadTables();
 
-  void selectTable(int number) {
-    if (state.selectedTableNumber == number) {
+  void selectTable(String name) {
+    if (state.selectedTableName == name) {
       state = state.copyWith(clearSelection: true);
     } else {
-      state = state.copyWith(selectedTableNumber: number);
+      state = state.copyWith(selectedTableName: name);
     }
   }
 
-  void selectRoom(String roomId) {
-    if (state.selectedRoomId == roomId) {
-      state = state.copyWith(clearRoomSelection: true);
-    } else {
-      state = state.copyWith(
-        selectedRoomId: roomId,
-        clearSelection: true,
-      );
-    }
-  }
+  void clearSelection() => state = state.copyWith(clearSelection: true);
 
-  void clearRoomSelection() =>
-      state = state.copyWith(clearRoomSelection: true);
-
-  void occupyTable(int number, String orderId) {
+  void occupyTable(String name, String orderId) {
     state = state.copyWith(
       tables: [
         for (final t in state.tables)
-          if (t.number == number)
+          if (t.name == name)
             t.copyWith(status: TableStatus.occupied, orderId: orderId)
           else
             t,
       ],
     );
-    _updateOccupied(number, occupied: true);
+    _updateOccupied(name, occupied: true);
   }
 
-  void freeTable(int number) {
+  void freeTable(String name) {
     state = state.copyWith(
       tables: [
         for (final t in state.tables)
-          if (t.number == number)
-            TableEntry(number: number, uuid: t.uuid, roomId: t.roomId)
+          if (t.name == name)
+            TableEntry(name: name, uuid: t.uuid)
           else
             t,
       ],
-      clearSelection: state.selectedTableNumber == number,
+      clearSelection: state.selectedTableName == name,
     );
-    _updateOccupied(number, occupied: false);
+    _updateOccupied(name, occupied: false);
   }
 
-  void clearSelection() => state = state.copyWith(clearSelection: true);
-
-  Future<void> _updateOccupied(int number, {required bool occupied}) async {
+  Future<void> _updateOccupied(String name, {required bool occupied}) async {
     if (_businessId == null) return;
     try {
       await _client
           .from('restaurant_tables')
           .update({'is_occupied': occupied})
           .eq('business_id', _businessId)
-          .eq('table_number', number.toString());
+          .eq('table_number', name);
     } catch (_) {}
   }
 }
 
-// ── Providers ─────────────────────────────────────────────────────────────────
 final tableProvider =
     StateNotifierProvider<TableNotifier, TableState>((ref) {
   final client = ref.watch(supabaseClientProvider);
@@ -196,11 +170,6 @@ final tableProvider =
   return TableNotifier(client: client, businessId: businessId);
 });
 
-final selectedTableProvider = Provider<int?>((ref) {
-  return ref.watch(tableProvider).selectedTableNumber;
-});
-
-// ← this was inside the class before — now correctly outside
-final selectedRoomProvider = Provider<String?>((ref) {
-  return ref.watch(tableProvider).selectedRoomId;
+final selectedTableProvider = Provider<String?>((ref) {
+  return ref.watch(tableProvider).selectedTableName;
 });

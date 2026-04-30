@@ -1,4 +1,4 @@
-class BusinessConfig {
+class BusinessFeatures {
   static const retail = [
     'inventory',
     'barcode',

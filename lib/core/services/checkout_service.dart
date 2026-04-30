@@ -5,11 +5,12 @@ import '../models/order.dart';
 import '../providers/cart_provider.dart';
 import '../models/cart_item.dart';
 import '../providers/order_provider.dart';
-import '../providers/staff_provider.dart';          // ← required for activeStaffProvider
+import '../providers/staff_provider.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
+import '../../features/settings/settings_provider.dart';
 import 'reciept_service.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
@@ -24,7 +25,7 @@ class CheckoutService {
 
   Future<String?> resolveTableUuid({
     required String businessId,
-    required int tableNumber,
+    required String tableNumber,
   }) async {
     final localUuid = _ref.read(tableProvider).uuidForTable(tableNumber);
     if (localUuid != null) return localUuid;
@@ -50,6 +51,7 @@ class CheckoutService {
     required double change,
     required double subtotal,
     required List<CartItem> items,
+    required double discountAmount,
     String? referenceNumber,
   }) async {
     final profile = _ref.read(profileProvider).asData?.value;
@@ -68,21 +70,23 @@ class CheckoutService {
 
     final service = _ref.read(orderServiceProvider);
     final local = _ref.read(localDbServiceProvider);
-    final selectedTableNumber = _ref.read(tableProvider).selectedTableNumber;
+    final selectedTableName = _ref.read(tableProvider).selectedTableName;
 
-    // ── Resolve cashier ID from active staff session ───────────────────────
-    // IMPORTANT: always use staff_members.id (not Supabase auth UID) so that
-    // cashier_id on orders matches staff_id on cashier_shifts, allowing
-    // _computeShiftSummary to correctly aggregate sales per shift.
+    // Read tax rate from business config
+    final config = _ref.read(businessConfigProvider);
+    final taxRate = config?.taxRate ?? 0.0;
+
+    // Resolve cashier ID from active staff session
     final activeStaff = _ref.read(activeStaffProvider);
     final cashierId = activeStaff?.id;
     debugPrint('[Checkout] activeStaff: ${activeStaff?.name}, cashierId: $cashierId');
+
     Order order;
 
     if (existingOrderId != null) {
       order = await service.fetchOrderWithItems(existingOrderId);
     } else {
-      // ── Stock validation ──────────────────────────────────────────────
+      // ── Stock validation ────────────────────────────────────────────────
       if (_isOnline) {
         final client = _ref.read(supabaseClientProvider);
         for (final item in items) {
@@ -130,16 +134,16 @@ class CheckoutService {
         }
       }
 
-      // ── Table resolution ──────────────────────────────────────────────
+      // ── Table resolution ────────────────────────────────────────────────
       String? tableUuid;
-      if (isRestaurant && selectedTableNumber != null) {
+      if (isRestaurant && selectedTableName != null) {
         tableUuid = await resolveTableUuid(
           businessId: profile!.businessId!,
-          tableNumber: selectedTableNumber,
+          tableNumber: selectedTableName,
         );
         if (tableUuid == null && _isOnline) {
           return CheckoutResult.error(
-              'Could not find Table $selectedTableNumber.');
+              'Could not find Table $selectedTableName.');
         }
       }
 
@@ -148,7 +152,9 @@ class CheckoutService {
         items: items,
         tableId: tableUuid,
         notes: null,
-        cashierId: cashierId,   // ← staff_members.id, matches shift's staff_id
+        cashierId: cashierId,
+        taxRate: taxRate,
+        discountAmount: discountAmount,
       );
 
       if (hasKitchen && _isOnline) {
@@ -164,10 +170,10 @@ class CheckoutService {
         }
       }
 
-      if (isRestaurant && selectedTableNumber != null) {
+      if (isRestaurant && selectedTableName != null) {
         _ref
             .read(tableProvider.notifier)
-            .occupyTable(selectedTableNumber, order.id);
+            .occupyTable(selectedTableName, order.id);
       }
 
       if (!payNow) {
@@ -176,13 +182,15 @@ class CheckoutService {
       }
     }
 
-    // ── Process payment ───────────────────────────────────────────────
+    // ── Process payment ─────────────────────────────────────────────────────
     final actualTendered =
         paymentMethod == PaymentMethod.cash ? tendered : subtotal;
     final actualChange =
         paymentMethod == PaymentMethod.cash ? change : 0.0;
     final cleanRef =
-        referenceNumber?.trim().isEmpty == true ? null : referenceNumber?.trim();
+        referenceNumber?.trim().isEmpty == true
+            ? null
+            : referenceNumber?.trim();
 
     await service.processPayment(
       orderId: order.id,
@@ -196,7 +204,7 @@ class CheckoutService {
       await service.updateStatus(order.id, OrderStatus.completed);
     }
 
-    // ── Receipt ───────────────────────────────────────────────────────
+    // ── Receipt ─────────────────────────────────────────────────────────────
     String businessName = 'My Business';
     String? businessAddress;
     String? businessPhone;
@@ -233,8 +241,8 @@ class CheckoutService {
           businessAddress: businessAddress,
           businessPhone: businessPhone,
           businessEmail: businessEmail,
-          taxRate: 0.12,
-          issuedBy: profile!.id,   // ← staff_members.id, satisfies receipts FK
+          taxRate: taxRate,             // ← from business config, not hardcoded
+          issuedBy: profile!.id,        // profiles.id (Supabase auth UUID), correct for receipts FK
           footerText: isRestaurant
               ? 'Thank you for dining with us!'
               : 'Thank you for shopping with us!',

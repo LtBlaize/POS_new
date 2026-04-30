@@ -28,6 +28,7 @@ class LanStatusQueue {
   final LanClientService _client;
   final List<_PendingPatch> _queue = [];
   Timer? _timer;
+  bool _flushing = false;
   static const _maxAttempts = 20; // ~60s total before giving up
 
   LanStatusQueue(this._client);
@@ -48,34 +49,42 @@ class LanStatusQueue {
 
   void dispose() {
     _timer?.cancel();
+    _timer = null;
   }
 
   Future<void> _flush() async {
-    if (_queue.isEmpty) {
-      _timer?.cancel();
-      _timer = null;
-      return;
-    }
+    if (_flushing) return;
+    _flushing = true;
+    try {
+      if (_queue.isEmpty) {
+        _timer?.cancel();
+        _timer = null;
+        return;
+      }
 
-    final toRemove = <_PendingPatch>[];
-    for (final patch in List.of(_queue)) {
-      if (patch.attempts >= _maxAttempts) {
-        debugPrint('[LanQueue] Giving up on ${patch.orderId} after ${patch.attempts} attempts');
-        toRemove.add(patch);
-        continue;
+      final toRemove = <_PendingPatch>[];
+      for (final patch in List.of(_queue)) {
+        if (patch.attempts >= _maxAttempts) {
+          debugPrint(
+              '[LanQueue] Giving up on ${patch.orderId} after ${patch.attempts} attempts');
+          toRemove.add(patch);
+          continue;
+        }
+        patch.attempts++;
+        final ok = await _client.patchStatus(patch.orderId, patch.status);
+        if (ok) {
+          debugPrint('[LanQueue] Sent ${patch.orderId} → ${patch.status}');
+          toRemove.add(patch);
+        }
       }
-      patch.attempts++;
-      final ok = await _client.patchStatus(patch.orderId, patch.status);
-      if (ok) {
-        debugPrint('[LanQueue] Sent ${patch.orderId} → ${patch.status}');
-        toRemove.add(patch);
-      }
+      _queue.removeWhere(toRemove.contains);
+    } finally {
+      _flushing = false;
     }
-    _queue.removeWhere(toRemove.contains);
   }
 }
 
 // Riverpod extension for easy access
 extension LanStatusQueueX on LanStatusQueue {
-  String get pendingCount => '${_queue.length}';
+  int get pendingCount => _queue.length;
 }

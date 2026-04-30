@@ -1,11 +1,4 @@
 // lib/core/providers/order_provider.dart
-//
-// Offline-first orders:
-//   Online  → place via Supabase, stream live updates, cache locally
-//   Offline → generate local UUID, store in SQLite, queue for Supabase sync
-//
-// ordersStreamProvider always yields data (live stream or cached snapshot).
-
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -57,28 +50,40 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
       .eq('business_id', businessId)
       .order('created_at', ascending: false)
       .asyncMap((rows) async {
-        final orders = await Future.wait(rows.map((row) async {
+        if (rows.isEmpty) return <Order>[];
+
+        // FIX: fetch all order items in one query instead of N+1
+        final orderIds = rows.map((r) => r['id'] as String).toList();
+
+        final allItemRows = await client
+            .from('order_items')
+            .select(
+                '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
+            .inFilter('order_id', orderIds);
+
+        // Group items by order_id
+        final itemsByOrder = <String, List<CartItem>>{};
+        for (final item in allItemRows as List) {
+          final orderId = item['order_id'] as String;
+          final pMap =
+              item['products'] as Map<String, dynamic>? ?? {};
+          final product = Product.fromMap({
+            ...pMap,
+            'category': '',
+            'business_id': pMap['business_id'] ?? '',
+          });
+          itemsByOrder
+              .putIfAbsent(orderId, () => [])
+              .add(CartItem(
+                  product: product,
+                  quantity: item['quantity'] as int));
+        }
+
+        final orders = rows.map((row) {
           final orderId = row['id'] as String;
-          final itemRows = await client
-              .from('order_items')
-              .select(
-                  '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
-              .eq('order_id', orderId);
-
-          final cartItems = (itemRows as List).map((item) {
-            final pMap =
-                item['products'] as Map<String, dynamic>? ?? {};
-            final product = Product.fromMap({
-              ...pMap,
-              'category': '',
-              'business_id': pMap['business_id'] ?? '',
-            });
-            return CartItem(
-                product: product, quantity: item['quantity'] as int);
-          }).toList();
-
-          return Order.fromMap(row, items: cartItems);
-        }));
+          return Order.fromMap(
+              row, items: itemsByOrder[orderId] ?? []);
+        }).toList();
 
         await local.upsertOrders(orders);
         return orders;
@@ -98,7 +103,9 @@ final pendingOrdersProvider = Provider<List<Order>>((ref) {
 
 final completedOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersStreamProvider).asData?.value ?? [];
-  return orders.where((o) => o.status == OrderStatus.completed).toList();
+  return orders
+      .where((o) => o.status == OrderStatus.completed)
+      .toList();
 });
 
 // ── OrderService ──────────────────────────────────────────────────────────────
@@ -139,7 +146,7 @@ class OrderService {
     String? notes,
     double taxRate = 0.0,
     double discountAmount = 0.0,
-    String? cashierId,  
+    String? cashierId,
   }) async {
     if (_isOnline) {
       return _placeOnline(
@@ -149,7 +156,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
-        cashierId: cashierId, 
+        cashierId: cashierId,
       );
     } else {
       return _placeOffline(
@@ -159,7 +166,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
-        cashierId: cashierId, 
+        cashierId: cashierId,
       );
     }
   }
@@ -171,7 +178,7 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
-    String? cashierId,  
+    String? cashierId,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -224,7 +231,7 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
-    String? cashierId,  
+    String? cashierId,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -238,7 +245,7 @@ class OrderService {
       id: offlineId,
       businessId: businessId,
       tableId: tableId,
-       cashierId: cashierId,
+      cashierId: cashierId,
       orderNumber: localOrderNumber,
       orderType: OrderType.walkIn,
       status: OrderStatus.pending,
@@ -301,7 +308,8 @@ class OrderService {
         }).eq('id', orderId);
         return;
       } catch (e) {
-        debugPrint('[OrderService] updateStatus online failed, queuing: $e');
+        debugPrint(
+            '[OrderService] updateStatus online failed, queuing: $e');
       }
     }
     await _syncQueue.enqueue(
@@ -313,20 +321,19 @@ class OrderService {
   }
 
   // ── Process payment ─────────────────────────────────────────────────────────
-  // referenceNumber is required for card/GCash/Maya, null for cash.
 
   Future<void> processPayment({
     required String orderId,
     required PaymentMethod method,
     required double amountTendered,
     required double changeAmount,
-    String? referenceNumber, // ← NEW
+    String? referenceNumber,
   }) async {
     final payload = {
       'payment_method': method.value,
       'amount_tendered': amountTendered,
       'change_amount': changeAmount,
-      'reference_number': referenceNumber, // ← NEW
+      'reference_number': referenceNumber,
       'paid_at': DateTime.now().toIso8601String(),
     };
 
@@ -337,7 +344,6 @@ class OrderService {
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', orderId);
 
-        // Also persist reference number locally
         await _local.updateOrderPayment(
           orderId: orderId,
           method: method,
@@ -352,7 +358,6 @@ class OrderService {
       }
     }
 
-    // Offline: persist locally + queue
     await _local.updateOrderPayment(
       orderId: orderId,
       method: method,
@@ -387,7 +392,8 @@ class OrderService {
             .eq('order_id', orderId);
 
         final cartItems = (itemRows as List).map((row) {
-          final pMap = row['products'] as Map<String, dynamic>? ?? {};
+          final pMap =
+              row['products'] as Map<String, dynamic>? ?? {};
           final product = Product.fromMap({
             ...pMap,
             'category': '',
@@ -412,7 +418,7 @@ class OrderService {
     throw Exception('Order $orderId not found in local cache');
   }
 
-  // ── Inventory deduction helper ──────────────────────────────────────────────
+  // ── Inventory deduction ─────────────────────────────────────────────────────
 
   Future<void> _deductInventory(
       String businessId, List<CartItem> items) async {
@@ -437,7 +443,10 @@ class OrderService {
   }
 }
 
-// ── LEGACY: kept for backward compat ─────────────────────────────────────────
+// ── DEAD CODE — do not use ────────────────────────────────────────────────────
+// Kitchen uses kitchenStateProvider.
+// POS uses orderServiceProvider.
+// This stub exists for backward compat only.
 
 class OrderNotifier extends StateNotifier<List<Order>> {
   OrderNotifier() : super([]);

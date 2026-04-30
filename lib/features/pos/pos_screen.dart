@@ -22,16 +22,15 @@ import 'widgets/product/product_grid.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/close_shift_screen.dart';
 
-
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
 
 // ── Layout mode ───────────────────────────────────────────────────────────────
 
 enum _Layout {
-  phonePortrait,   // w < 600, portrait  — bottom nav + bottom-sheet cart
-  phoneLandscape,  // w < 900, landscape — compact sidebar + narrow cart
-  tabletPortrait,  // w >= 600, portrait — compact sidebar + bottom-sheet cart
-  tabletLandscape, // w >= 900, landscape — full sidebar + full cart panel
+  phonePortrait,
+  phoneLandscape,
+  tabletPortrait,
+  tabletLandscape,
 }
 
 _Layout _layoutOf(BuildContext context) {
@@ -54,11 +53,29 @@ class POSScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final layout = _layoutOf(context);
     final activeIndex = ref.watch(_activeIndexProvider);
+
+    // FIX: use activeStaffTabsProvider as the single source of truth.
+    //
+    // Previously this used:
+    //   ref.watch(rolePermissionsProvider).value ?? {}
+    //
+    // That AsyncNotifier returns null while loading/refreshing, so ?? {}
+    // produced an empty map and hid ALL tabs for non-owners until the
+    // provider settled. activeStaffTabsProvider is a synchronous Provider
+    // that handles the owner shortcut and the async fallback internally —
+    // it never returns an empty set mid-reload.
+    final allowedTabs = ref.watch(activeStaffTabsProvider);
     final activeStaff = ref.watch(activeStaffProvider);
-    final role = activeStaff?.role ?? StaffRole.cashier;
-    final perms = ref.watch(rolePermissionsProvider).value ?? {};
-    final screens = _buildScreens(featureManager, role, perms, layout);
-    final safeIndex = screens.isEmpty ? 0 : activeIndex.clamp(0, screens.length - 1);
+
+    final screens = _buildScreens(
+      featureManager,
+      activeStaff?.role ?? StaffRole.cashier,
+      allowedTabs,
+      layout,
+    );
+
+    final safeIndex =
+        screens.isEmpty ? 0 : activeIndex.clamp(0, screens.length - 1);
 
     return Scaffold(
       body: PinLockOverlay(
@@ -84,53 +101,54 @@ class POSScreen extends ConsumerWidget {
     );
   }
 
+  // FIX: accepts Set<String> allowedTabs instead of the raw perms map.
+  // No more role.key lookup that could silently miss on key mismatch.
   List<_ScreenEntry> _buildScreens(
     FeatureManager fm,
     StaffRole role,
-    Map<String, Set<String>> perms,
+    Set<String> allowedTabs,
     _Layout layout,
   ) {
-    bool allowed(String tab) =>
-        role == StaffRole.owner || (perms[role.key]?.contains(tab) ?? false);
+    bool allowed(String tab) => allowedTabs.contains(tab);
 
     return [
-      if (allowed('pos') && role.canAccessPOS)
+      if (allowed('pos'))
         _ScreenEntry(
           icon: Icons.point_of_sale_rounded,
           label: 'POS',
           widget: _POSMain(featureManager: fm, layout: layout),
         ),
-      if (allowed('orders') && role.canAccessOrders)
+      if (allowed('orders'))
         _ScreenEntry(
           icon: Icons.receipt_long_rounded,
           label: 'Orders',
           widget: OrdersScreen(featureManager: fm),
         ),
-      if (allowed('kitchen') && fm.hasFeature('kitchen') && role.canAccessKitchen)
+      if (allowed('kitchen') && fm.hasFeature('kitchen'))
         _ScreenEntry(
           icon: Icons.kitchen_rounded,
           label: 'Kitchen',
           widget: const KitchenScreen(),
         ),
-      if (allowed('inventory') && fm.hasFeature('inventory') && role.canAccessInventory)
+      if (allowed('inventory') && fm.hasFeature('inventory'))
         _ScreenEntry(
           icon: Icons.inventory_2_rounded,
           label: 'Inventory',
           widget: const InventoryScreen(),
         ),
       if (allowed('utang') && fm.hasFeature('credits'))
-      _ScreenEntry(
-        icon: Icons.account_balance_wallet_outlined,
-        label: 'Utang',
-        widget: CreditsScreen(featureManager: fm),
-      ),
-      if (allowed('reports') && role.canAccessReports)
+        _ScreenEntry(
+          icon: Icons.account_balance_wallet_outlined,
+          label: 'Utang',
+          widget: CreditsScreen(featureManager: fm),
+        ),
+      if (allowed('reports'))
         _ScreenEntry(
           icon: Icons.bar_chart_rounded,
           label: 'Reports',
           widget: ReportsScreen(featureManager: fm),
         ),
-      if (allowed('settings') && role.canAccessSettings)
+      if (allowed('settings'))
         _ScreenEntry(
           icon: Icons.settings_outlined,
           label: 'Settings',
@@ -320,8 +338,7 @@ class _BottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border:
-            Border(top: BorderSide(color: Colors.grey.shade200)),
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
@@ -480,8 +497,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log out?'),
-        content:
-            const Text('You will be returned to the login screen.'),
+        content: const Text('You will be returned to the login screen.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -505,27 +521,28 @@ class _AdaptiveSidebar extends ConsumerWidget {
     }
   }
 
+  void _showCloseShift(BuildContext context, WidgetRef ref) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CloseShiftScreen(
+          onShiftClosed: () {
+            Navigator.pop(context);
+            ref.read(activeStaffProvider.notifier).logout();
+            ref.read(appLockedProvider.notifier).state = true;
+          },
+          onCancel: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final compact = _compact;
     final activeStaff = ref.watch(activeStaffProvider);
     const accent = Color(0xFFE94560);
 
-    void _showCloseShift(BuildContext context, WidgetRef ref) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => CloseShiftScreen(
-        onShiftClosed: () {
-          Navigator.pop(context);
-          ref.read(activeStaffProvider.notifier).logout();
-          ref.read(appLockedProvider.notifier).state = true;
-        },
-        onCancel: () => Navigator.pop(context),
-      ),
-    ),
-  );
-}
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
@@ -559,8 +576,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                   shape: BoxShape.circle,
                   color: _roleColor(activeStaff.role).withOpacity(0.2),
                   border: Border.all(
-                    color:
-                        _roleColor(activeStaff.role).withOpacity(0.6),
+                    color: _roleColor(activeStaff.role).withOpacity(0.6),
                     width: 1.5,
                   ),
                 ),
@@ -638,38 +654,39 @@ class _AdaptiveSidebar extends ConsumerWidget {
               ),
             ),
           ),
+
           // Close shift button — only shown when a shift is open
-Consumer(
-  builder: (context, ref, _) {
-    final shift = ref.watch(currentShiftProvider).value;
-    if (shift == null) return const SizedBox.shrink();
-    return Tooltip(
-      message: 'Close Shift',
-      child: GestureDetector(
-        onTap: () => _showCloseShift(context, ref),
-        child: Container(
-          margin: EdgeInsets.symmetric(
-              horizontal: compact ? 6 : 10),
-          padding: EdgeInsets.symmetric(
-              vertical: compact ? 8 : 10),
-          child: Column(children: [
-            Icon(Icons.lock_clock_outlined,
-                color: const Color(0xFFE94560).withOpacity(0.8),
-                size: compact ? 18 : 22),
-            if (!compact) ...[
-              const SizedBox(height: 4),
-              Text('Close',
-                  style: TextStyle(
-                      fontSize: 9,
-                      color: const Color(0xFFE94560)
-                          .withOpacity(0.8))),
-            ],
-          ]),
-        ),
-      ),
-    );
-  },
-),
+          Consumer(
+            builder: (context, ref, _) {
+              final shift = ref.watch(currentShiftProvider).value;
+              if (shift == null) return const SizedBox.shrink();
+              return Tooltip(
+                message: 'Close Shift',
+                child: GestureDetector(
+                  onTap: () => _showCloseShift(context, ref),
+                  child: Container(
+                    margin: EdgeInsets.symmetric(
+                        horizontal: compact ? 6 : 10),
+                    padding: EdgeInsets.symmetric(
+                        vertical: compact ? 8 : 10),
+                    child: Column(children: [
+                      Icon(Icons.lock_clock_outlined,
+                          color: const Color(0xFFE94560).withOpacity(0.8),
+                          size: compact ? 18 : 22),
+                      if (!compact) ...[
+                        const SizedBox(height: 4),
+                        Text('Close',
+                            style: TextStyle(
+                                fontSize: 9,
+                                color: const Color(0xFFE94560)
+                                    .withOpacity(0.8))),
+                      ],
+                    ]),
+                  ),
+                ),
+              );
+            },
+          ),
 
           const Divider(color: Colors.white12, height: 1),
 

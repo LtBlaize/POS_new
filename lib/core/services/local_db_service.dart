@@ -755,12 +755,39 @@ class LocalDbService {
     final cutoff = DateTime.now()
         .subtract(const Duration(days: 30))
         .toIso8601String();
+
+    // Delete orphaned order_items first to avoid dangling rows
+    await d.rawDelete('''
+      DELETE FROM order_items
+      WHERE order_id IN (
+        SELECT id FROM orders
+        WHERE business_id = ?
+          AND created_at < ?
+          AND is_offline = 0
+      )
+    ''', [businessId, cutoff]);
+
+    // Then delete the orders themselves
     await d.delete(
       'orders',
-      where:
-          'business_id = ? AND created_at < ? AND is_offline = 0',
+      where: 'business_id = ? AND created_at < ? AND is_offline = 0',
       whereArgs: [businessId, cutoff],
     );
+
+    // Also prune stale report cache beyond 90 days (less critical, keep longer)
+    await d.delete(
+      'reports_cache',
+      where: 'business_id = ? AND date < ?',
+      whereArgs: [
+        businessId,
+        DateTime.now()
+            .subtract(const Duration(days: 90))
+            .toIso8601String()
+            .substring(0, 10), // date only: 'YYYY-MM-DD'
+      ],
+    );
+
+    debugPrint('[LocalDb] Pruned stale data older than 30 days');
   }
 
   Future<void> close() async {

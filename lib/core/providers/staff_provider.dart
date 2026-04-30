@@ -17,14 +17,13 @@ final staffListProvider =
   final businessId = ref.watch(profileProvider).asData?.value?.businessId;
   final local = ref.read(localDbServiceProvider);
   final syncQueue = ref.read(syncQueueServiceProvider);
-  final isOnline = ref.read(isOnlineProvider);
 
   return StaffListNotifier(
     client: client,
     businessId: businessId,
     local: local,
     syncQueue: syncQueue,
-    isOnline: isOnline,
+    ref: ref,
   );
 });
 
@@ -33,30 +32,33 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   final String? _businessId;
   final LocalDbService _local;
   final SyncQueueService _syncQueue;
-  final bool _isOnline;
+  final Ref _ref;
 
   StaffListNotifier({
     required SupabaseClient client,
     required String? businessId,
     required LocalDbService local,
     required SyncQueueService syncQueue,
-    required bool isOnline,
+    required Ref ref,
   })  : _client = client,
         _businessId = businessId,
         _local = local,
         _syncQueue = syncQueue,
-        _isOnline = isOnline,
+        _ref = ref,
         super(const AsyncValue.loading()) {
     load();
   }
 
-  Future<void> load() async {
+  // Read connectivity fresh at call time — never cache it
+  bool get _isOnline => _ref.read(isOnlineProvider);
+
+  Future<void> load({bool retrying = false}) async {
     if (_businessId == null) {
       state = const AsyncValue.data([]);
       return;
     }
 
-    // Unfiltered cache — PIN lock needs to show owner too
+    // Serve cache immediately so PIN lock isn't blocked
     try {
       final cached = await _local.getStaff(_businessId);
       if (cached.isNotEmpty) {
@@ -80,11 +82,12 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
       await _local.upsertStaff(members);
 
-      // ── Auto-create owner staff row for accounts registered before
-      //    the staff_members insert was added to completeRegistration.
-      //    Runs silently; no-ops once the row exists.
+      // Auto-create owner staff row for accounts registered before
+      // staff_members insert was added to completeRegistration.
+      // retrying guard prevents infinite recursion if RLS/replication
+      // delays mean the row isn't visible immediately after insert.
       final hasOwner = members.any((m) => m.role == StaffRole.owner);
-      if (!hasOwner) {
+      if (!hasOwner && !retrying) {
         try {
           final profileRow = await _client
               .from('profiles')
@@ -95,7 +98,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
           if (profileRow != null) {
             debugPrint(
-                '[Staff] No owner staff row found — auto-creating for existing account...');
+                '[Staff] No owner staff row — auto-creating for existing account...');
             await _client.from('staff_members').insert({
               'business_id': _businessId,
               'name': profileRow['full_name'] as String,
@@ -103,8 +106,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
               'pin_hash': '',
               'is_active': true,
             });
-            // Reload so the new row is in state immediately
-            return load();
+            return load(retrying: true);
           }
         } catch (e) {
           debugPrint('[Staff] Could not auto-create owner staff row: $e');
