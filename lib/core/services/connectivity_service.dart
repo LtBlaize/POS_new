@@ -60,10 +60,24 @@ class ConnectivityService {
   Timer? _internetPollTimer;
   Timer? _lanPollTimer;
 
-  // Internet probe target — reliable, always up
-  static const _internetHost = 'supabase.com';
-  static const _internetPort = 443;
-  static const _probeTimeout = Duration(seconds: 4);
+  // Internet probe targets — tried in order, first success = online.
+  //
+  // Why raw IPs in addition to hostnames?
+  // On Windows, Socket.connect with a hostname requires DNS resolution.
+  // Some routers/networks block or delay DNS even when TCP works fine,
+  // causing false "offline" even when the device has internet.
+  // Raw IPs bypass DNS entirely and give a reliable TCP reachability check.
+  //
+  //   8.8.8.8   = Google Public DNS (port 53)  — almost never blocked
+  //   1.1.1.1   = Cloudflare DNS (port 53)     — very reliable
+  //   142.250.x = Google (port 80)             — hostname fallback
+  static const _probeTargets = <(String, int)>[
+    ('8.8.8.8',      53),   // Google DNS — raw IP, no DNS needed
+    ('1.1.1.1',      53),   // Cloudflare DNS — raw IP, no DNS needed
+    ('google.com',   80),   // hostname fallback
+    ('supabase.com', 443),  // our own backend
+  ];
+  static const _probeTimeout = Duration(seconds: 3);
   static const _internetPollInterval = Duration(seconds: 15);
 
   // LAN probe — checks if POS server is up on port 8080
@@ -102,19 +116,26 @@ class ConnectivityService {
   bool get isLanConnected => _ref.read(isLanConnectedProvider);
 
   // ── Internet probe ─────────────────────────────────────────────────────────
+  //
+  // Tries each target in order. Returns true on first success.
+  // This means a single blocked endpoint won't falsely report offline.
 
   Future<bool> _probeInternet() async {
-    bool online;
-    try {
-      final sock = await Socket.connect(
-        _internetHost,
-        _internetPort,
-        timeout: _probeTimeout,
-      );
-      sock.destroy();
-      online = true;
-    } catch (_) {
-      online = false;
+    bool online = false;
+
+    for (final (host, port) in _probeTargets) {
+      try {
+        final sock = await Socket.connect(
+          host,
+          port,
+          timeout: _probeTimeout,
+        );
+        sock.destroy();
+        online = true;
+        break; // one success is enough
+      } catch (_) {
+        // try next target
+      }
     }
 
     if (_ref.read(isOnlineProvider) != online) {
@@ -131,7 +152,6 @@ class ConnectivityService {
   Future<bool> probeLan([String? posIp]) async {
     final ip = posIp ?? _ref.read(cashierIpProvider);
     if (ip == null || ip.isEmpty) {
-      // No IP configured yet — can't probe
       _setLan(false);
       return false;
     }

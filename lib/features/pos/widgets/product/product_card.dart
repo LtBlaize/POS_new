@@ -1,4 +1,4 @@
-// lib/features/pos/widgets/product_card.dart
+// lib/features/pos/widgets/product/product_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +35,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
   late final Animation<double> _scaleAnim;
   bool _added = false;
 
-  // ✅ Declared as a class field — NOT inside initState
   late final _liveProductProvider = Provider<Product>((ref) {
     final products = ref.watch(productListProvider).asData?.value ?? [];
     return products.firstWhere(
@@ -64,7 +63,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
     await _controller.forward();
     await _controller.reverse();
 
-    // ✅ Always reads the freshest product from the live stream
     final liveProduct = ref.read(_liveProductProvider);
 
     if (liveProduct.trackInventory && liveProduct.stockQuantity <= 0) {
@@ -88,7 +86,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Watch live product so card reacts to stock/availability changes
     final liveProduct = ref.watch(_liveProductProvider);
     final cartItems = ref.watch(cartProvider);
     final inCart = cartItems
@@ -120,9 +117,8 @@ class _ProductCardState extends ConsumerState<ProductCard>
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Gradient band ───────────────────────────────────────
+              // ── Gradient band (fixed height) ───────────────────────
               SizedBox(
                 height: 90,
                 child: Stack(
@@ -147,7 +143,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
                                   size: 32,
                                   key: ValueKey('check'))
                               : Text(
-                                  // ✅ Use liveProduct, not widget.product
                                   liveProduct.name[0],
                                   key: const ValueKey('letter'),
                                   style: TextStyle(
@@ -171,8 +166,9 @@ class _ProductCardState extends ConsumerState<ProductCard>
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
-                                  blurRadius: 4)
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 4,
+                              ),
                             ],
                           ),
                           child: Text(
@@ -189,13 +185,20 @@ class _ProductCardState extends ConsumerState<ProductCard>
                 ),
               ),
 
-               // Bottom (flexible — THIS FIXES OVERFLOW)
+              // ── Info section (fills remaining space) ───────────────
+              // Use Expanded so the column gets a definite height,
+              // then spaceBetween to pin name top and price bottom.
+              // No Spacer needed — Spacer inside a bounded column is
+              // fine but Spacer inside mainAxisSize:max can overflow
+              // when the parent gives less height than the content needs.
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Product name — clipped to 2 lines max
                       Text(
                         liveProduct.name,
                         maxLines: 2,
@@ -208,8 +211,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                         ),
                       ),
 
-                      const Spacer(), // 👈 pushes price to bottom cleanly
-
+                      // Price + add button pinned to bottom
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -240,59 +242,6 @@ class _ProductCardState extends ConsumerState<ProductCard>
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // ── Info section ────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      // ✅ Use liveProduct, not widget.product
-                      liveProduct.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            // ✅ Use liveProduct, not widget.product
-                            '₱${liveProduct.price.toStringAsFixed(0)}',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: gradColors.first,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: gradColors.first.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(
-                            Icons.add_rounded,
-                            size: 13,
-                            color: gradColors.first,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ),
             ],

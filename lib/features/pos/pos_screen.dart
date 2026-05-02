@@ -53,17 +53,6 @@ class POSScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final layout = _layoutOf(context);
     final activeIndex = ref.watch(_activeIndexProvider);
-
-    // FIX: use activeStaffTabsProvider as the single source of truth.
-    //
-    // Previously this used:
-    //   ref.watch(rolePermissionsProvider).value ?? {}
-    //
-    // That AsyncNotifier returns null while loading/refreshing, so ?? {}
-    // produced an empty map and hid ALL tabs for non-owners until the
-    // provider settled. activeStaffTabsProvider is a synchronous Provider
-    // that handles the owner shortcut and the async fallback internally —
-    // it never returns an empty set mid-reload.
     final allowedTabs = ref.watch(activeStaffTabsProvider);
     final activeStaff = ref.watch(activeStaffProvider);
 
@@ -101,8 +90,6 @@ class POSScreen extends ConsumerWidget {
     );
   }
 
-  // FIX: accepts Set<String> allowedTabs instead of the raw perms map.
-  // No more role.key lookup that could silently miss on key mismatch.
   List<_ScreenEntry> _buildScreens(
     FeatureManager fm,
     StaffRole role,
@@ -193,8 +180,7 @@ class _PortraitShell extends ConsumerWidget {
               onTap: () => _showCartSheet(context),
             )
           : null,
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: _BottomNav(
         screens: screens,
         activeIndex: activeIndex,
@@ -216,8 +202,7 @@ class _PortraitShell extends ConsumerWidget {
         builder: (ctx, _) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
@@ -230,9 +215,7 @@ class _PortraitShell extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Expanded(
-                child: CartPanel(featureManager: featureManager),
-              ),
+              Expanded(child: CartPanel(featureManager: featureManager)),
             ],
           ),
         ),
@@ -303,8 +286,7 @@ class _POSMain extends StatelessWidget {
 
     if (isPortrait) return productArea;
 
-    final cartWidth =
-        layout == _Layout.phoneLandscape ? 260.0 : 340.0;
+    final cartWidth = layout == _Layout.phoneLandscape ? 260.0 : 340.0;
 
     return Row(
       children: [
@@ -377,9 +359,7 @@ class _BottomNav extends StatelessWidget {
                         child: Icon(
                           screen.icon,
                           size: 22,
-                          color: isActive
-                              ? accent
-                              : Colors.grey.shade400,
+                          color: isActive ? accent : Colors.grey.shade400,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -390,9 +370,7 @@ class _BottomNav extends StatelessWidget {
                           fontWeight: isActive
                               ? FontWeight.w600
                               : FontWeight.w400,
-                          color: isActive
-                              ? accent
-                              : Colors.grey.shade400,
+                          color: isActive ? accent : Colors.grey.shade400,
                         ),
                       ),
                     ],
@@ -421,8 +399,7 @@ class _CartFAB extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFF0F3460),
           borderRadius: BorderRadius.circular(30),
@@ -500,8 +477,9 @@ class _AdaptiveSidebar extends ConsumerWidget {
         content: const Text('You will be returned to the login screen.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -511,14 +489,32 @@ class _AdaptiveSidebar extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    await ref.read(authServiceProvider).logout();
-    ref.read(cartProvider.notifier).clear();
-    ref.read(activeStaffProvider.notifier).logout();
-    ref.read(appLockedProvider.notifier).state = true;
+
+    // ── Capture everything from ref BEFORE any await ───────────────────────
+    // After navigation the widget is disposed and ref becomes invalid.
+    final authService = ref.read(authServiceProvider);
+    final cart        = ref.read(cartProvider.notifier);
+    final activeStaff = ref.read(activeStaffProvider.notifier);
+    final appLocked   = ref.read(appLockedProvider.notifier);
+
+    // ── Clear local state immediately ──────────────────────────────────────
+    cart.clear();
+    activeStaff.logout();
+    appLocked.state = true;
+
+    // ── Navigate instantly — don't wait for Supabase ───────────────────────
+    // signOut is a network call that can take 1–3 seconds.
+    // We navigate first so the user sees the login screen immediately,
+    // then fire signOut in the background. The session is already
+    // cleared locally so the app behaves as logged out right away.
     if (context.mounted) {
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/login', (_) => false);
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     }
+
+    // Fire and forget — runs after navigation, we don't await it
+    authService.logout().catchError((e) {
+      debugPrint('[Logout] Supabase signOut error (ignored): $e');
+    });
   }
 
   void _showCloseShift(BuildContext context, WidgetRef ref) {
@@ -567,8 +563,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
 
           if (activeStaff != null)
             Tooltip(
-              message:
-                  '${activeStaff.name} (${activeStaff.role.label})',
+              message: '${activeStaff.name} (${activeStaff.role.label})',
               child: Container(
                 width: compact ? 26 : 36,
                 height: compact ? 26 : 36,
@@ -623,27 +618,30 @@ class _AdaptiveSidebar extends ConsumerWidget {
                           borderRadius:
                               BorderRadius.circular(compact ? 8 : 10),
                           border: isActive
-                              ? Border.all(
-                                  color: accent.withOpacity(0.4))
+                              ? Border.all(color: accent.withOpacity(0.4))
                               : null,
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(screen.icon,
-                                color: isActive
-                                    ? accent
-                                    : Colors.white.withOpacity(0.4),
-                                size: compact ? 20 : 24),
+                            Icon(
+                              screen.icon,
+                              color: isActive
+                                  ? accent
+                                  : Colors.white.withOpacity(0.4),
+                              size: compact ? 20 : 24,
+                            ),
                             if (!compact) ...[
                               const SizedBox(height: 4),
-                              Text(screen.label,
-                                  style: TextStyle(
-                                      fontSize: 9,
-                                      color: isActive
-                                          ? accent
-                                          : Colors.white
-                                              .withOpacity(0.4))),
+                              Text(
+                                screen.label,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: isActive
+                                      ? accent
+                                      : Colors.white.withOpacity(0.4),
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -655,7 +653,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
             ),
           ),
 
-          // Close shift button — only shown when a shift is open
+          // Close shift — only when a shift is open
           Consumer(
             builder: (context, ref, _) {
               final shift = ref.watch(currentShiftProvider).value;
@@ -670,16 +668,20 @@ class _AdaptiveSidebar extends ConsumerWidget {
                     padding: EdgeInsets.symmetric(
                         vertical: compact ? 8 : 10),
                     child: Column(children: [
-                      Icon(Icons.lock_clock_outlined,
-                          color: const Color(0xFFE94560).withOpacity(0.8),
-                          size: compact ? 18 : 22),
+                      Icon(
+                        Icons.lock_clock_outlined,
+                        color: const Color(0xFFE94560).withOpacity(0.8),
+                        size: compact ? 18 : 22,
+                      ),
                       if (!compact) ...[
                         const SizedBox(height: 4),
-                        Text('Close',
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: const Color(0xFFE94560)
-                                    .withOpacity(0.8))),
+                        Text(
+                          'Close',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: const Color(0xFFE94560).withOpacity(0.8),
+                          ),
+                        ),
                       ],
                     ]),
                   ),
@@ -690,6 +692,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
 
           const Divider(color: Colors.white12, height: 1),
 
+          // Lock
           Tooltip(
             message: 'Lock',
             child: GestureDetector(
@@ -698,26 +701,30 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 ref.read(appLockedProvider.notifier).state = true;
               },
               child: Container(
-                margin: EdgeInsets.symmetric(
-                    horizontal: compact ? 6 : 10),
-                padding: EdgeInsets.symmetric(
-                    vertical: compact ? 8 : 10),
+                margin: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
+                padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
                 child: Column(children: [
-                  Icon(Icons.lock_outline_rounded,
-                      color: Colors.white.withOpacity(0.4),
-                      size: compact ? 18 : 22),
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    color: Colors.white.withOpacity(0.4),
+                    size: compact ? 18 : 22,
+                  ),
                   if (!compact) ...[
                     const SizedBox(height: 4),
-                    Text('Lock',
-                        style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white.withOpacity(0.4))),
+                    Text(
+                      'Lock',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.white.withOpacity(0.4),
+                      ),
+                    ),
                   ],
                 ]),
               ),
             ),
           ),
 
+          // Logout
           Tooltip(
             message: 'Log out',
             child: GestureDetector(
@@ -727,18 +734,22 @@ class _AdaptiveSidebar extends ConsumerWidget {
                   vertical: compact ? 4 : 8,
                   horizontal: compact ? 6 : 10,
                 ),
-                padding: EdgeInsets.symmetric(
-                    vertical: compact ? 8 : 10),
+                padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
                 child: Column(children: [
-                  Icon(Icons.logout_rounded,
-                      color: Colors.white.withOpacity(0.4),
-                      size: compact ? 18 : 22),
+                  Icon(
+                    Icons.logout_rounded,
+                    color: Colors.white.withOpacity(0.4),
+                    size: compact ? 18 : 22,
+                  ),
                   if (!compact) ...[
                     const SizedBox(height: 4),
-                    Text('Logout',
-                        style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white.withOpacity(0.4))),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.white.withOpacity(0.4),
+                      ),
+                    ),
                   ],
                 ]),
               ),
@@ -752,7 +763,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
   }
 
   Color _roleColor(StaffRole role) => switch (role) {
-        StaffRole.owner => const Color(0xFFE94560),
+        StaffRole.owner   => const Color(0xFFE94560),
         StaffRole.manager => const Color(0xFF4CAF50),
         StaffRole.cashier => const Color(0xFF2196F3),
         StaffRole.kitchen => const Color(0xFFFF9800),

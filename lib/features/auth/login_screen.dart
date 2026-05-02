@@ -1,11 +1,13 @@
+// lib/features/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_provider.dart';
 import 'register_screen.dart';
 import 'widgets/auth_text_field.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // add this at the top
+import '../../../main.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -53,23 +55,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passCtrl.text,
           );
 
-      // Step 2: wait for profile to load
-      if (mounted) {
-        final profile = await ref.read(profileProvider.future);
+      // Step 2: wait for profile to fully load from Supabase.
+      // profileProvider.future waits for the FutureProvider to complete,
+      // giving us the actual Profile with businessType already populated.
+      if (!mounted) return;
+      final profile = await ref.read(profileProvider.future);
 
-        // Step 3: save business_id for boot-time use
-        if (profile?.business?.id != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('business_id', profile!.business!.id);
-        }
+      // Step 3: save business_id for boot-time use
+      if (profile?.business?.id != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('business_id', profile!.business!.id);
       }
 
-      // Step 4: navigate
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/pos');
+      // Step 4: decide where to navigate.
+      //
+      // IMPORTANT: Read businessType directly from the profile we just
+      // awaited — do NOT use businessTypeProvider here.
+      //
+      // businessTypeProvider is a synchronous Provider that reads
+      // profileProvider.asData?.value. But right after login, Supabase
+      // fires a signedIn auth event which causes profileProvider to
+      // invalidate and re-fetch. During that window .asData is null,
+      // so businessTypeProvider returns null and isRestaurant is false
+      // even for restaurant accounts — causing retail-path navigation.
+      //
+      // Reading from `profile` directly avoids this race entirely.
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      final savedRole = prefs.getString('device_role');
+      final isRestaurant = profile?.businessType?.isRestaurant ?? false;
+
+      if (savedRole == null && isRestaurant) {
+        // Restaurant, first time on this device → let user pick role
+        if (mounted) Navigator.pushReplacementNamed(context, '/role-select');
+      } else {
+        // Retail first launch: silently assign 'pos' so boot services work
+        if (savedRole == null) {
+          await prefs.setString('device_role', DeviceRole.pos.name);
+          ref.read(deviceRoleProvider.notifier).state = DeviceRole.pos;
+        }
+        if (mounted) Navigator.pushReplacementNamed(context, '/pos');
       }
     } catch (e) {
-      setState(() => _error = _friendlyError(e.toString()));
+      if (mounted) setState(() => _error = _friendlyError(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -118,7 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Sign in to your POS account',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -181,7 +209,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         "Don't have an account? ",
                         style: TextStyle(
                           color: AppColors.textSecondary,

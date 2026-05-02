@@ -46,12 +46,17 @@ Future<void> main() async {
   await container.read(localDbServiceProvider).db;
 
   // 2. Load saved device role
-  //    null = first launch on this device → show role selection screen
+  //    null  = first launch (or retail auto-assigned later in login)
+  //    'pos' / 'kitchen' = previously chosen
   final savedRole = prefs.getString('device_role');
-  final role = savedRole == 'kitchen' ? DeviceRole.kitchen : DeviceRole.pos;
-  container.read(deviceRoleProvider.notifier).state = role;
 
-  final isPos = role == DeviceRole.pos;
+  DeviceRole role = DeviceRole.pos; // safe default for boot services
+  if (savedRole != null) {
+    role = DeviceRole.values.byNameOrNull(savedRole) ?? DeviceRole.pos;
+    container.read(deviceRoleProvider.notifier).state = role;
+  }
+
+  final isPos     = savedRole == null || role == DeviceRole.pos;
   final isKitchen = role == DeviceRole.kitchen;
 
   // 3. Prune old synced orders on POS boot
@@ -110,23 +115,21 @@ Future<void> main() async {
   // 8. Determine initial route
   //
   //   Priority order:
-  //   a) No saved device role → first launch → /role-select
-  //   b) Has active Supabase session → already logged in → /pos
-  //   c) No session → returning user who needs to sign in → /login
+  //   a) Has active Supabase session → already logged in → /pos
+  //   b) No session → go to /login
   //
-  //   NOTE: /business-type is ONLY reached via RegisterScreen navigation.
-  //   It is never used as an initial route — it requires pendingUserIdProvider
-  //   to be set, which only happens during registration flow.
+  //   Role selection (/role-select) is NEVER an initial route.
+  //   It is shown AFTER login only for restaurant accounts that haven't
+  //   chosen a device role yet. Retail accounts never see it.
+  //   See login_screen.dart → _submit() for that logic.
   final String initialRoute;
-  if (savedRole == null) {
-    initialRoute = '/role-select';
-  } else if (Supabase.instance.client.auth.currentSession != null) {
+  if (Supabase.instance.client.auth.currentSession != null) {
     initialRoute = '/pos';
   } else {
     initialRoute = '/login';
   }
 
-  debugPrint('[Boot] initialRoute: $initialRoute');
+  debugPrint('[Boot] savedRole: $savedRole  initialRoute: $initialRoute');
 
   runApp(
     UncontrolledProviderScope(
@@ -205,6 +208,17 @@ Future<String?> _getLocalIp() async {
     debugPrint('[Boot] Could not determine local IP: $e');
   }
   return null;
+}
+
+// ── Extension ─────────────────────────────────────────────────────────────────
+
+extension _EnumByNameOrNull<T extends Enum> on Iterable<T> {
+  T? byNameOrNull(String name) {
+    for (final v in this) {
+      if (v.name == name) return v;
+    }
+    return null;
+  }
 }
 
 // ── Helpers exposed to other files ────────────────────────────────────────────
