@@ -9,48 +9,33 @@ import '../../../core/services/checkout_service.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../credits/widgets/add_credit_dialog.dart';
 import '../../tables/table_provider.dart';
+import '../widgets/checkout/action_buttons.dart';
+import '../widgets/checkout/checkout_theme.dart';
 import '../widgets/checkout/numpad.dart';
+import '../widgets/checkout/order_summary.dart';
+import '../widgets/checkout/payment_section.dart';
 import '../widgets/checkout/reference_number_panel.dart';
 import '../widgets/receipt/kitchen_sent_view.dart';
 import '../widgets/receipt/restaurant_receipt_view.dart';
 import '../widgets/receipt/retail_receipt_view.dart';
 
 // ── Payment method selector ───────────────────────────────────────────────────
+
 final _selectedPaymentProvider =
     StateProvider.autoDispose<PaymentMethod>((ref) => PaymentMethod.cash);
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-class CheckoutTheme {
-  static const bg = Color(0xFF0F1117);
-  static const card = Color(0xFF1A1D27);
-  static const elevated = Color(0xFF22263A);
-  static const border = Color(0xFF2E3248);
-
-  static const mint = Color(0xFF00D9A3);
-  static const mintDim = Color(0xFF00D9A315);
-  static const mintBorder = Color(0xFF00D9A340);
-
-  static const rose = Color(0xFFFF4D6D);
-  static const roseDim = Color(0xFFFF4D6D15);
-
-  static const textHigh = Color(0xFFF0F2FF);
-  static const textMid = Color(0xFF8B90A8);
-  static const textLow = Color(0xFF4A4F6A);
-
-  static const gcash = Color(0xFF007DFF);
-  static const maya = Color(0xFF00C472);
-  static const card_ = Color(0xFFFFB547);
-}
-
 // ── CheckoutDialog ────────────────────────────────────────────────────────────
+
 class CheckoutDialog extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final String? existingOrderId;
+  final Order? existingOrder; // ← pass this from pos_screen for Print Bill
 
   const CheckoutDialog({
     super.key,
     required this.featureManager,
     this.existingOrderId,
+    this.existingOrder,
   });
 
   @override
@@ -90,7 +75,6 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     super.dispose();
   }
 
-  // FIX 1: watch instead of read so subtotal stays live if cart changes
   double get _subtotal {
     final items = ref.watch(cartProvider);
     return items.fold(0.0, (s, i) => s + i.total);
@@ -119,6 +103,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
     try {
       final result = await ref.read(checkoutServiceProvider).placeOrder(
+            context: context,
             payNow: payNow,
             isRestaurant: _isRestaurant,
             hasKitchen: widget.featureManager.hasFeature('kitchen'),
@@ -138,10 +123,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
       switch (result.status) {
         case CheckoutStatus.error:
-          setState(() {
-            _placing = false;
-            _sendingToKitchen = false;
-          });
+          setState(() { _placing = false; _sendingToKitchen = false; });
           _showError(result.errorMessage ?? 'An error occurred.');
 
         case CheckoutStatus.sentToKitchen:
@@ -164,10 +146,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _placing = false;
-          _sendingToKitchen = false;
-        });
+        setState(() { _placing = false; _sendingToKitchen = false; });
         _showError('Failed: $e');
       }
     }
@@ -175,19 +154,17 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(children: [
-          const Icon(Icons.error_outline, color: Colors.white, size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text(msg)),
-        ]),
-        backgroundColor: CheckoutTheme.rose,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.error_outline, color: Colors.white, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(msg)),
+      ]),
+      backgroundColor: CheckoutTheme.rose,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+    ));
   }
 
   @override
@@ -210,7 +187,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
               showKitchenBanner: widget.existingOrderId == null,
               tableNumber: tableState.selectedTableName,
               roomName: null,
-          )
+            )
           : RetailReceiptView(
               order: _completedOrder!,
               tendered: _savedTendered,
@@ -219,10 +196,11 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             );
     }
 
-    return _PremiumCheckoutForm(
+    return _CheckoutForm(
       featureManager: widget.featureManager,
       isRestaurant: _isRestaurant,
       existingOrderId: widget.existingOrderId,
+      existingOrder: widget.existingOrder,
       tenderedController: _tenderedController,
       refController: _refController,
       subtotal: _subtotal,
@@ -238,11 +216,13 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   }
 }
 
-// ── _PremiumCheckoutForm ──────────────────────────────────────────────────────
-class _PremiumCheckoutForm extends ConsumerStatefulWidget {
+// ── _CheckoutForm ─────────────────────────────────────────────────────────────
+
+class _CheckoutForm extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final bool isRestaurant;
   final String? existingOrderId;
+  final Order? existingOrder;
   final TextEditingController tenderedController;
   final TextEditingController refController;
   final double subtotal;
@@ -255,10 +235,11 @@ class _PremiumCheckoutForm extends ConsumerStatefulWidget {
   final VoidCallback onSendToKitchen;
   final VoidCallback onCancel;
 
-  const _PremiumCheckoutForm({
+  const _CheckoutForm({
     required this.featureManager,
     required this.isRestaurant,
     required this.existingOrderId,
+    required this.existingOrder,
     required this.tenderedController,
     required this.refController,
     required this.subtotal,
@@ -273,11 +254,10 @@ class _PremiumCheckoutForm extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_PremiumCheckoutForm> createState() =>
-      _PremiumCheckoutFormState();
+  ConsumerState<_CheckoutForm> createState() => _CheckoutFormState();
 }
 
-class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
+class _CheckoutFormState extends ConsumerState<_CheckoutForm>
     with SingleTickerProviderStateMixin {
   late AnimationController _ac;
   late Animation<double> _fadeIn;
@@ -363,7 +343,7 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _Header(
+              _CheckoutHeader(
                 isRestaurant: widget.isRestaurant,
                 tableNumber: selectedTable,
                 isBusy: isBusy,
@@ -371,7 +351,7 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
               ),
 
               if (widget.isRestaurant && selectedTable == null)
-                _NoTableBanner(),
+                const _NoTableBanner(),
 
               Flexible(
                 child: SingleChildScrollView(
@@ -379,30 +359,25 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _OrderSummaryCard(
-                        items: items,
-                        subtotal: widget.subtotal,
-                      ),
+                      OrderSummaryCard(items: items, subtotal: widget.subtotal),
                       const SizedBox(height: 16),
 
-                      _SectionLabel('Payment Method'),
+                      const CheckoutSectionLabel('Payment Method'),
                       const SizedBox(height: 8),
-                      _PaymentMethodRow(
+                      PaymentMethodRow(
                         selected: method,
                         isBusy: isBusy,
                         onSelect: (m) {
-                          ref
-                              .read(_selectedPaymentProvider.notifier)
-                              .state = m;
+                          ref.read(_selectedPaymentProvider.notifier).state = m;
                           widget.refController.clear();
                         },
                       ),
                       const SizedBox(height: 16),
 
                       if (isCash) ...[
-                        _SectionLabel('Amount Tendered'),
+                        const CheckoutSectionLabel('Amount Tendered'),
                         const SizedBox(height: 8),
-                        _TenderedDisplay(
+                        TenderedDisplay(
                           tendered: widget.tendered,
                           subtotal: widget.subtotal,
                           change: widget.change,
@@ -412,8 +387,6 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                         QuickAmountRow(
                           subtotal: widget.subtotal,
                           isBusy: isBusy,
-                          // FIX 2: set as fixed-point string so numpad decimal
-                          // guard works correctly after a quick-amount tap
                           onSelect: (v) {
                             widget.tenderedController.text =
                                 v.toStringAsFixed(2);
@@ -450,7 +423,7 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                 ),
               ),
 
-              _ActionBar(
+              ActionBar(
                 isRestaurant: widget.isRestaurant,
                 existingOrderId: widget.existingOrderId,
                 isCash: isCash,
@@ -462,6 +435,9 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
                 onConfirm: widget.onConfirm,
                 onSendToKitchen: widget.onSendToKitchen,
                 method: method,
+                // Print Bill
+                currentOrder: widget.existingOrder,
+                tableNumber: selectedTable,
               ),
             ],
           ),
@@ -471,14 +447,15 @@ class _PremiumCheckoutFormState extends ConsumerState<_PremiumCheckoutForm>
   }
 }
 
-// ── _Header ───────────────────────────────────────────────────────────────────
-class _Header extends StatelessWidget {
+// ── _CheckoutHeader ───────────────────────────────────────────────────────────
+
+class _CheckoutHeader extends StatelessWidget {
   final bool isRestaurant;
   final String? tableNumber;
   final bool isBusy;
   final VoidCallback onCancel;
 
-  const _Header({
+  const _CheckoutHeader({
     required this.isRestaurant,
     required this.tableNumber,
     required this.isBusy,
@@ -516,11 +493,10 @@ class _Header extends StatelessWidget {
               Text(
                 isRestaurant ? 'Restaurant Checkout' : 'Checkout',
                 style: const TextStyle(
-                  color: CheckoutTheme.textHigh,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
+                    color: CheckoutTheme.textHigh,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2),
               ),
               if (tableNumber != null)
                 Text('Table $tableNumber',
@@ -555,13 +531,16 @@ class _Header extends StatelessWidget {
 }
 
 // ── _NoTableBanner ────────────────────────────────────────────────────────────
+
 class _NoTableBanner extends StatelessWidget {
+  const _NoTableBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      color: const Color(0xFFFFB54712),
+      color: const Color(0xffffb54712),
       child: const Row(
         children: [
           Icon(Icons.table_restaurant_outlined,
@@ -575,331 +554,8 @@ class _NoTableBanner extends StatelessWidget {
   }
 }
 
-// ── _OrderSummaryCard ─────────────────────────────────────────────────────────
-class _OrderSummaryCard extends StatelessWidget {
-  final List items;
-  final double subtotal;
-
-  const _OrderSummaryCard({
-    required this.items,
-    required this.subtotal,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: CheckoutTheme.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CheckoutTheme.border),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: Column(
-              children: items.map<Widget>((item) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: CheckoutTheme.elevated,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${item.quantity}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: CheckoutTheme.mint,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(item.product.name,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: CheckoutTheme.textHigh)),
-                      ),
-                      Text(
-                        '₱${item.total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: CheckoutTheme.textHigh),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          Container(
-              margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              height: 1,
-              color: CheckoutTheme.border),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-            child: Row(
-              children: [
-                const Text('Total',
-                    style: TextStyle(
-                        color: CheckoutTheme.textMid,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                const Spacer(),
-                Text('₱${subtotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: CheckoutTheme.mint,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── _SectionLabel ─────────────────────────────────────────────────────────────
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: const TextStyle(
-        color: CheckoutTheme.textLow,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-// ── _PaymentMethodRow ─────────────────────────────────────────────────────────
-class _PaymentMethodRow extends StatelessWidget {
-  final PaymentMethod selected;
-  final bool isBusy;
-  final ValueChanged<PaymentMethod> onSelect;
-
-  const _PaymentMethodRow({
-    required this.selected,
-    required this.isBusy,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: PaymentMethod.values
-          .map((m) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _MethodCard(
-                    method: m,
-                    selected: selected == m,
-                    isBusy: isBusy,
-                    onTap: () => onSelect(m),
-                  ),
-                ),
-              ))
-          .toList(),
-    );
-  }
-}
-
-class _MethodCard extends StatelessWidget {
-  final PaymentMethod method;
-  final bool selected;
-  final bool isBusy;
-  final VoidCallback onTap;
-
-  const _MethodCard({
-    required this.method,
-    required this.selected,
-    required this.isBusy,
-    required this.onTap,
-  });
-
-  (String label, IconData icon, Color color) get _meta => switch (method) {
-        PaymentMethod.cash =>
-          ('Cash', Icons.payments_outlined, CheckoutTheme.mint),
-        PaymentMethod.card =>
-          ('Card', Icons.credit_card_outlined, CheckoutTheme.card_),
-        PaymentMethod.gcash => (
-            'GCash',
-            Icons.account_balance_wallet_outlined,
-            CheckoutTheme.gcash,
-          ),
-        PaymentMethod.maya =>
-          ('Maya', Icons.phone_android_outlined, CheckoutTheme.maya),
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon, color) = _meta;
-    return GestureDetector(
-      onTap: isBusy
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              onTap();
-            },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : CheckoutTheme.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? color.withOpacity(0.6) : CheckoutTheme.border,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon,
-                color: selected ? color : CheckoutTheme.textMid, size: 22),
-            const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? color : CheckoutTheme.textMid)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── _TenderedDisplay ──────────────────────────────────────────────────────────
-class _TenderedDisplay extends StatelessWidget {
-  final double tendered;
-  final double subtotal;
-  final double change;
-  final VoidCallback? onExact;
-
-  const _TenderedDisplay({
-    required this.tendered,
-    required this.subtotal,
-    required this.change,
-    required this.onExact,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasAmount = tendered > 0;
-    final due = subtotal - tendered;
-    final isShort = due > 0;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: CheckoutTheme.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasAmount
-              ? (isShort
-                  ? CheckoutTheme.rose.withOpacity(0.4)
-                  : CheckoutTheme.mintBorder)
-              : CheckoutTheme.border,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text('₱',
-                  style: TextStyle(
-                      color: CheckoutTheme.textMid,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400)),
-              const SizedBox(width: 4),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 120),
-                  child: Text(
-                    tendered > 0 ? tendered.toStringAsFixed(2) : '0.00',
-                    key: ValueKey(tendered),
-                    style: TextStyle(
-                      color: hasAmount
-                          ? CheckoutTheme.textHigh
-                          : CheckoutTheme.textLow,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: onExact,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: CheckoutTheme.elevated,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text('EXACT',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: CheckoutTheme.textMid,
-                          letterSpacing: 0.8)),
-                ),
-              ),
-            ],
-          ),
-          if (hasAmount) ...[
-            const SizedBox(height: 10),
-            Container(height: 1, color: CheckoutTheme.border),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text(
-                  isShort ? 'Still needed' : 'Change',
-                  style: TextStyle(
-                      fontSize: 13,
-                      color:
-                          isShort ? CheckoutTheme.rose : CheckoutTheme.mint,
-                      fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                Text(
-                  '₱${(isShort ? due : change).abs().toStringAsFixed(2)}',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: isShort
-                          ? CheckoutTheme.rose
-                          : CheckoutTheme.mint),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 // ── _UtangButton ──────────────────────────────────────────────────────────────
+
 class _UtangButton extends ConsumerWidget {
   final bool isBusy;
   final double subtotal;
@@ -920,76 +576,67 @@ class _UtangButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: isBusy
-          ? null
-          : () async {
-              // Step 1: collect customer info first — bail early if cancelled
-              final result = await showDialog<AddCreditResult>(
-                context: context,
-                builder: (_) => AddCreditDialog(amount: subtotal),
-              );
-              if (result == null || !context.mounted) return;
+      onTap: isBusy ? null : () async {
+        final result = await showDialog<AddCreditResult>(
+          context: context,
+          builder: (_) => AddCreditDialog(amount: subtotal),
+        );
+        if (result == null || !context.mounted) return;
 
-              // Step 2: place the order (service clears cart internally)
-              final checkoutResult =
-                  await ref.read(checkoutServiceProvider).placeOrder(
-                        payNow: false,
-                        isRestaurant: isRestaurant,
-                        hasKitchen: featureManager.hasFeature('kitchen'),
-                        existingOrderId: existingOrderId,
-                        paymentMethod: PaymentMethod.cash,
-                        tendered: 0,
-                        change: 0,
-                        subtotal: subtotal,
-                        discountAmount: 0,
-                        items: ref.read(cartProvider),
-                      );
-
-              if (!context.mounted) return;
-
-              // FIX: do NOT manually clear cart — service already did it.
-              // Only close + show confirmation if the order actually succeeded.
-              if (checkoutResult.status == CheckoutStatus.error) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(children: [
-                      const Icon(Icons.error_outline,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                          child: Text(checkoutResult.errorMessage ??
-                              'Failed to record utang.')),
-                    ]),
-                    backgroundColor: CheckoutTheme.rose,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ),
+        final checkoutResult =
+            await ref.read(checkoutServiceProvider).placeOrder(
+                  
+                  context: context,
+                  payNow: false,
+                  isRestaurant: isRestaurant,
+                  hasKitchen: featureManager.hasFeature('kitchen'),
+                  existingOrderId: existingOrderId,
+                  paymentMethod: PaymentMethod.cash,
+                  tendered: 0,
+                  change: 0,
+                  subtotal: subtotal,
+                  discountAmount: 0,
+                  items: ref.read(cartProvider),
                 );
-                return;
-              }
 
-              onDone();
+        if (!context.mounted) return;
 
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(children: [
-                      const Icon(Icons.receipt_long_outlined,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Text('Utang recorded for ${result.customer.name}'),
-                    ]),
-                    backgroundColor: CheckoutTheme.rose,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
-              }
-            },
+        if (checkoutResult.status == CheckoutStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Text(
+                      checkoutResult.errorMessage ?? 'Failed to record utang.')),
+            ]),
+            backgroundColor: CheckoutTheme.rose,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ));
+          return;
+        }
+
+        onDone();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.receipt_long_outlined,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text('Utang recorded for ${result.customer.name}'),
+            ]),
+            backgroundColor: CheckoutTheme.rose,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ));
+        }
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -1011,205 +658,6 @@ class _UtangButton extends ConsumerWidget {
                     fontWeight: FontWeight.w700)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── _ActionBar ────────────────────────────────────────────────────────────────
-class _ActionBar extends StatelessWidget {
-  final bool isRestaurant;
-  final String? existingOrderId;
-  final bool isCash;
-  final double tendered;
-  final bool canConfirm;
-  final bool placing;
-  final bool sendingToKitchen;
-  final bool isBusy;
-  final VoidCallback onConfirm;
-  final VoidCallback onSendToKitchen;
-  final PaymentMethod method;
-
-  const _ActionBar({
-    required this.isRestaurant,
-    required this.existingOrderId,
-    required this.isCash,
-    required this.tendered,
-    required this.canConfirm,
-    required this.placing,
-    required this.sendingToKitchen,
-    required this.isBusy,
-    required this.onConfirm,
-    required this.onSendToKitchen,
-    required this.method,
-  });
-
-  String get _confirmLabel {
-    if (isCash) return 'Collect ₱${tendered.toStringAsFixed(2)}';
-    return switch (method) {
-      PaymentMethod.gcash => 'Confirm GCash Payment',
-      PaymentMethod.maya => 'Confirm Maya Payment',
-      PaymentMethod.card => 'Confirm Card Payment',
-      _ => 'Confirm Payment',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: CheckoutTheme.border))),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              if (isRestaurant && existingOrderId == null) ...[
-                Expanded(
-                  child: _GhostButton(
-                    label: sendingToKitchen ? 'Sending...' : 'Kitchen Only',
-                    icon: Icons.kitchen_outlined,
-                    loading: sendingToKitchen,
-                    disabled: isBusy,
-                    onTap: onSendToKitchen,
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                flex: 2,
-                child: _ConfirmButton(
-                  label: _confirmLabel,
-                  loading: placing,
-                  enabled: canConfirm && !isBusy,
-                  onTap: onConfirm,
-                ),
-              ),
-            ],
-          ),
-          if (isRestaurant && existingOrderId == null) ...[
-            const SizedBox(height: 8),
-            const Text(
-              '"Kitchen Only" sends to cook — customer pays later',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: CheckoutTheme.textLow,
-                  fontStyle: FontStyle.italic),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── _ConfirmButton ────────────────────────────────────────────────────────────
-class _ConfirmButton extends StatelessWidget {
-  final String label;
-  final bool loading;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _ConfirmButton({
-    required this.label,
-    required this.loading,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled
-          ? () {
-              HapticFeedback.mediumImpact();
-              onTap();
-            }
-          : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 52,
-        decoration: BoxDecoration(
-          color: enabled ? CheckoutTheme.mint : CheckoutTheme.elevated,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: enabled
-              ? [
-                  BoxShadow(
-                    color: CheckoutTheme.mint.withOpacity(0.30),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : [],
-        ),
-        alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: CheckoutTheme.bg))
-            : Text(
-                label,
-                style: TextStyle(
-                    color:
-                        enabled ? CheckoutTheme.bg : CheckoutTheme.textLow,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2),
-              ),
-      ),
-    );
-  }
-}
-
-// ── _GhostButton ──────────────────────────────────────────────────────────────
-class _GhostButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool loading;
-  final bool disabled;
-  final VoidCallback onTap;
-
-  const _GhostButton({
-    required this.label,
-    required this.icon,
-    required this.loading,
-    required this.disabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: CheckoutTheme.elevated,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: CheckoutTheme.border),
-        ),
-        alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: CheckoutTheme.textMid))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: CheckoutTheme.textMid, size: 16),
-                  const SizedBox(width: 6),
-                  Text(label,
-                      style: const TextStyle(
-                          color: CheckoutTheme.textMid,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../features/settings/settings_provider.dart';
 import 'reciept_service.dart';
+import 'thermal_print_service.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -42,6 +43,7 @@ class CheckoutService {
   }
 
   Future<CheckoutResult> placeOrder({
+    required BuildContext context,
     required bool payNow,
     required bool isRestaurant,
     required bool hasKitchen,
@@ -53,6 +55,8 @@ class CheckoutService {
     required List<CartItem> items,
     required double discountAmount,
     String? referenceNumber,
+    String? tableNumber,
+    String? roomName,
   }) async {
     final profile = _ref.read(profileProvider).asData?.value;
     if (profile?.businessId == null) {
@@ -236,20 +240,43 @@ class CheckoutService {
     );
 
     await _ref.read(receiptServiceProvider).createReceipt(
-          order: paidOrder,
-          businessName: businessName,
-          businessAddress: businessAddress,
-          businessPhone: businessPhone,
-          businessEmail: businessEmail,
-          taxRate: taxRate,             // ← from business config, not hardcoded
-          issuedBy: profile!.id,        // profiles.id (Supabase auth UUID), correct for receipts FK
-          footerText: isRestaurant
-              ? 'Thank you for dining with us!'
-              : 'Thank you for shopping with us!',
-        );
+      order: paidOrder,
+      businessName: businessName,
+      businessAddress: businessAddress,
+      businessPhone: businessPhone,
+      businessEmail: businessEmail,
+      taxRate: taxRate,
+      issuedBy: profile!.id,
+      footerText: isRestaurant
+          ? 'Thank you for dining with us!'
+          : 'Thank you for shopping with us!',
+    );
+
+    // ✅ NEW: Auto open cash drawer
+    if (isRestaurant && paymentMethod == PaymentMethod.cash) {
+      try {
+        await ThermalPrintService.openCashDrawer();
+      } catch (e) {
+        debugPrint('[Checkout] Cash drawer failed: $e');
+      }
+    }
+
+    // ✅ NEW: Auto print receipt
+    // ✅ Auto print receipt
+    try {
+      await ThermalPrintService.printReceipt(
+        order: paidOrder,
+        tendered: actualTendered,
+        change: actualChange,
+        businessName: businessName,
+        tableNumber: tableNumber,
+        roomName: roomName,
+      );
+    } catch (e) {
+      debugPrint('[Checkout] Print failed: $e');
+    }
 
     _ref.read(cartProvider.notifier).clear();
-
     return CheckoutResult.paid(
       order: paidOrder,
       tendered: actualTendered,
@@ -264,6 +291,7 @@ class CheckoutService {
         PaymentMethod.cash => 'cash',
       };
 }
+
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -305,4 +333,6 @@ class CheckoutResult {
         status: CheckoutStatus.error,
         errorMessage: message,
       );
+
+      
 }

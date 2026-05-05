@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/cart_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
+import '../../../../core/providers/product_provider.dart';
 
 // Matches pos_screen.dart breakpoint
 const _kBreakpointSm = 900.0;
 
+// Change class declaration
 class TopBar extends ConsumerWidget {
   const TopBar({super.key});
 
@@ -85,22 +87,25 @@ class TopBar extends ConsumerWidget {
                     size: isCompact ? 15 : 18,
                     color: AppColors.textSecondary),
                 const SizedBox(width: 6),
-                Expanded(
-                  child: TextField(
-                    style: TextStyle(fontSize: isCompact ? 12 : 13),
-                    decoration: InputDecoration(
-                      hintText: isCompact
-                          ? 'Search…'
-                          : 'Search products or scan barcode…',
-                      hintStyle: TextStyle(
-                          color: AppColors.textSecondary.withOpacity(0.7),
-                          fontSize: isCompact ? 12 : 13),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
+                // Replace the TextField widget in top_bar.dart
+                  Expanded(
+                    child: TextField(
+                      onChanged: (v) =>
+                          ref.read(posSearchQueryProvider.notifier).state = v,
+                      style: TextStyle(fontSize: isCompact ? 12 : 13),
+                      decoration: InputDecoration(
+                        hintText: isCompact
+                            ? 'Search…'
+                            : 'Search products or scan barcode…',
+                        hintStyle: TextStyle(
+                            color: AppColors.textSecondary.withOpacity(0.7),
+                            fontSize: isCompact ? 12 : 13),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
                   ),
-                ),
                 // Hide keyboard shortcut hint on compact
                 if (!isCompact)
                   Container(

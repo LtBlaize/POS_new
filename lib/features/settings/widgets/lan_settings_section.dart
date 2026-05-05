@@ -120,7 +120,7 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
                     width: 12,
                     height: 12,
                     child: CircularProgressIndicator(strokeWidth: 2)),
-                error: (_, __) => const Text('Unavailable',
+                error: (_, _) => const Text('Unavailable',
                     style: TextStyle(fontSize: 12)),
               ),
               const Spacer(),

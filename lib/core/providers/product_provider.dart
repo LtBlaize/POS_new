@@ -1,7 +1,6 @@
 // lib/core/providers/product_provider.dart
 
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,7 +10,10 @@ import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 
+
+
 // ── Product list ──────────────────────────────────────────────────────────────
+
 
 final productListProvider = StreamProvider<List<Product>>((ref) async* {
   final profile = await ref.watch(profileProvider.future);
@@ -37,6 +39,8 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     await completer.future;
     sub.close();
   }
+
+  
 
   final controller = StreamController<List<Product>>();
 
@@ -157,10 +161,14 @@ final categoryListProvider = FutureProvider<List<String>>((ref) async {
 // ── Selected category ─────────────────────────────────────────────────────────
 
 final selectedCategoryProvider = StateProvider<String?>((ref) => null);
+// add this after selectedCategoryProvider
+final posSearchQueryProvider = StateProvider<String>((ref) => '');
 
+// replace filteredProductsProvider
 final filteredProductsProvider = Provider<List<Product>>((ref) {
   final products = ref.watch(productListProvider).asData?.value ?? [];
   final category = ref.watch(selectedCategoryProvider);
+  final query = ref.watch(posSearchQueryProvider).toLowerCase().trim();
 
   bool isVisible(Product p) {
     if (!p.isAvailable) return false;
@@ -168,10 +176,16 @@ final filteredProductsProvider = Provider<List<Product>>((ref) {
     return true;
   }
 
-  if (category == null) return products.where(isVisible).toList();
-  return products
-      .where((p) => p.category == category && isVisible(p))
-      .toList();
+  return products.where((p) {
+    if (!isVisible(p)) return false;
+    if (category != null && p.category != category) return false;
+    if (query.isNotEmpty) {
+      return p.name.toLowerCase().contains(query) ||
+          p.category.toLowerCase().contains(query) ||
+          (p.barcode?.toLowerCase().contains(query) ?? false);
+    }
+    return true;
+  }).toList();
 });
 
 // ── Inventory service ─────────────────────────────────────────────────────────

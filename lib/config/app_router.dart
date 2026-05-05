@@ -61,7 +61,11 @@ class AppRouter {
     if (name == '/role-select')   return _route(const RoleSelectionScreen());
 
     if (featureManager == null) {
-      return _route(const _PendingPosScreen());
+      final user = _ref.read(authStateProvider).value;
+      if (user != null) {
+        return _route(const _PendingPosScreen());
+      }
+      return _route(const LoginScreen());
     }
 
     final fm = featureManager!;

@@ -42,6 +42,7 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
   state = const AsyncLoading();
   state = AsyncData(await build());
 }
+  @override
   Future<RolePermMap> build() async {
     final profile = await ref.watch(profileProvider.future);
     debugPrint('[Perms] businessId: ${profile?.businessId}');

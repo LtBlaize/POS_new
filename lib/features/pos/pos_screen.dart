@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/staff.dart';
 import '../../core/providers/cart_provider.dart';
+import '../../core/providers/product_provider.dart';
 import '../../core/providers/role_permissions_provider.dart';
 import '../../core/providers/staff_provider.dart';
 import '../../core/services/feature_manager.dart';
@@ -21,6 +22,7 @@ import 'widgets/layout/top_bar.dart';
 import 'widgets/product/product_grid.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/close_shift_screen.dart';
+import '../../shared/widgets/app_colors.dart';
 
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -277,7 +279,10 @@ class _POSMain extends StatelessWidget {
 
     final productArea = Column(
       children: [
-        if (layout != _Layout.phonePortrait) const TopBar(),
+        if (layout == _Layout.phonePortrait)
+          const _PhoneSearchBar()
+        else
+          const TopBar(),
         if (featureManager.hasFeature('tables')) const TableSelector(),
         const CategoryBar(),
         const Expanded(child: ProductGrid()),
@@ -299,6 +304,59 @@ class _POSMain extends StatelessWidget {
     );
   }
 }
+
+// ── Phone search bar ──────────────────────────────────────────────────────────
+
+class _PhoneSearchBar extends ConsumerWidget {
+  const _PhoneSearchBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider, width: 1),
+        ),
+      ),
+      child: Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 10),
+            const Icon(Icons.search,
+                size: 16, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                onChanged: (v) =>
+                    ref.read(posSearchQueryProvider.notifier).state = v,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search products or scan barcode…',
+                  hintStyle: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.7),
+                      fontSize: 13),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── Bottom nav ────────────────────────────────────────────────────────────────
 
@@ -490,28 +548,19 @@ class _AdaptiveSidebar extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    // ── Capture everything from ref BEFORE any await ───────────────────────
-    // After navigation the widget is disposed and ref becomes invalid.
     final authService = ref.read(authServiceProvider);
     final cart        = ref.read(cartProvider.notifier);
     final activeStaff = ref.read(activeStaffProvider.notifier);
     final appLocked   = ref.read(appLockedProvider.notifier);
 
-    // ── Clear local state immediately ──────────────────────────────────────
     cart.clear();
     activeStaff.logout();
     appLocked.state = true;
 
-    // ── Navigate instantly — don't wait for Supabase ───────────────────────
-    // signOut is a network call that can take 1–3 seconds.
-    // We navigate first so the user sees the login screen immediately,
-    // then fire signOut in the background. The session is already
-    // cleared locally so the app behaves as logged out right away.
     if (context.mounted) {
       Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     }
 
-    // Fire and forget — runs after navigation, we don't await it
     authService.logout().catchError((e) {
       debugPrint('[Logout] Supabase signOut error (ignored): $e');
     });
@@ -653,7 +702,6 @@ class _AdaptiveSidebar extends ConsumerWidget {
             ),
           ),
 
-          // Close shift — only when a shift is open
           Consumer(
             builder: (context, ref, _) {
               final shift = ref.watch(currentShiftProvider).value;
@@ -692,7 +740,6 @@ class _AdaptiveSidebar extends ConsumerWidget {
 
           const Divider(color: Colors.white12, height: 1),
 
-          // Lock
           Tooltip(
             message: 'Lock',
             child: GestureDetector(
@@ -724,7 +771,6 @@ class _AdaptiveSidebar extends ConsumerWidget {
             ),
           ),
 
-          // Logout
           Tooltip(
             message: 'Log out',
             child: GestureDetector(

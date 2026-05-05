@@ -48,7 +48,7 @@ class TableSelector extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 4, vertical: 10),
                       itemCount: tables.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (context, index) {
                         final table = tables[index];
                         final isSelected = selectedName == table.name;

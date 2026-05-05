@@ -1,11 +1,15 @@
+// lib/features/auth/business_type_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_provider.dart';
 import 'register_screen.dart';
 import 'widgets/auth_text_field.dart';
 import 'widgets/business_type_card.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../config/app_router.dart';
+import '../../main.dart'; // for DeviceRole + deviceRoleProvider
 
 class BusinessTypeScreen extends ConsumerStatefulWidget {
   const BusinessTypeScreen({super.key});
@@ -15,12 +19,12 @@ class BusinessTypeScreen extends ConsumerStatefulWidget {
 }
 
 class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _fullNameCtrl = TextEditingController();
+  final _formKey          = GlobalKey<FormState>();
+  final _fullNameCtrl     = TextEditingController();
   final _businessNameCtrl = TextEditingController();
 
   String? _selectedType;
-  bool _isLoading = false;
+  bool    _isLoading = false;
   String? _error;
 
   static const _options = [
@@ -46,7 +50,7 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
   }
 
   String _friendlyError(String raw) {
-    if (raw.contains('network')) return 'Network error. Check your connection.';
+    if (raw.contains('network'))    return 'Network error. Check your connection.';
     if (raw.contains('permission')) return 'Permission denied. Please try again.';
     return 'Could not save your business. Please try again.';
   }
@@ -54,19 +58,28 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-if (_selectedType == null) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Please select a business type.'),
-      backgroundColor: Colors.red,
-    ),
-  );
-  return;
-}
+    if (_selectedType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a business type.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-final userId = ref.read(pendingUserIdProvider);
+    final userId = ref.read(pendingUserIdProvider);
     if (userId == null) {
       setState(() => _error = 'Session expired. Please register again.');
+      return;
+    }
+
+    final ownerPin = ref.read(pendingOwnerPinProvider) ?? '0000';
+
+    // Get the navigator now, before any async gaps
+    final nav = ref.read(appRouterProvider).navigatorKey.currentState;
+    if (nav == null) {
+      setState(() => _error = 'Navigation error. Please restart the app.');
       return;
     }
 
@@ -77,20 +90,52 @@ final userId = ref.read(pendingUserIdProvider);
 
     try {
       await ref.read(authServiceProvider).completeRegistration(
-            userId: userId,
-            fullName: _fullNameCtrl.text.trim(),
+            userId:       userId,
+            fullName:     _fullNameCtrl.text.trim(),
             businessName: _businessNameCtrl.text.trim(),
             businessType: _selectedType!,
+            ownerPin:     ownerPin,
           );
 
-      // Clear the pending ID — registration is complete
-      ref.read(pendingUserIdProvider.notifier).state = null;
+      // Clear pending state — this also unblocks the auth listener in main.dart
+      // (which skipped navigation while pendingUserIdProvider was set).
+      // We clear it BEFORE navigating so the listener doesn't race us.
+      ref.read(pendingUserIdProvider.notifier).state   = null;
+      ref.read(pendingOwnerPinProvider.notifier).state = null;
 
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
+      // ✅ Navigate manually here — the auth listener in main.dart skipped
+      // navigation because pendingUserIdProvider was set during step 1.
+      // Now that the profile row exists in DB, we load it and navigate.
+      if (!mounted) return;
+
+      // Invalidate profileProvider so it re-fetches the newly created profile
+      ref.invalidate(profileProvider);
+      final profile      = await ref.read(profileProvider.future);
+      final isRestaurant = profile?.businessType?.isRestaurant ?? false;
+      final prefs        = await SharedPreferences.getInstance();
+      final savedRole    = prefs.getString('device_role');
+
+      if (profile?.business?.id != null) {
+        await prefs.setString('business_id', profile!.business!.id);
       }
+
+      if (!mounted) return;
+
+      if (savedRole == null && isRestaurant) {
+        debugPrint('[Registration] Complete → /role-select');
+        nav.pushNamedAndRemoveUntil('/role-select', (_) => false);
+      } else {
+        if (savedRole == null) {
+          await prefs.setString('device_role', DeviceRole.pos.name);
+          ref.read(deviceRoleProvider.notifier).state = DeviceRole.pos;
+        }
+        debugPrint('[Registration] Complete → /pos');
+        nav.pushNamedAndRemoveUntil('/pos', (_) => false);
+      }
+
     } catch (e) {
-      setState(() => _error = _friendlyError(e.toString()));
+      debugPrint('[Registration] completeRegistration error: $e');
+      if (mounted) setState(() => _error = _friendlyError(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -138,7 +183,7 @@ final userId = ref.read(pendingUserIdProvider);
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                const Text(
                   'Step 2 of 2 — Business details',
                   style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                 ),
@@ -164,7 +209,7 @@ final userId = ref.read(pendingUserIdProvider);
                 ),
                 const SizedBox(height: 28),
 
-                Text(
+                const Text(
                   'BUSINESS TYPE',
                   style: TextStyle(
                     fontSize: 13,
@@ -178,11 +223,11 @@ final userId = ref.read(pendingUserIdProvider);
                 ..._options.map((opt) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: BusinessTypeCard(
-                        type: opt.type,
-                        label: opt.label,
+                        type:        opt.type,
+                        label:       opt.label,
                         description: opt.description,
-                        icon: opt.icon,
-                        isSelected: _selectedType == opt.type,
+                        icon:        opt.icon,
+                        isSelected:  _selectedType == opt.type,
                         onTap: () => setState(() => _selectedType = opt.type),
                       ),
                     )),
@@ -214,7 +259,6 @@ final userId = ref.read(pendingUserIdProvider);
                   ),
                 ),
 
-                // Error banner
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -234,7 +278,7 @@ final userId = ref.read(pendingUserIdProvider);
                 const SizedBox(height: 28),
 
                 AppButton(
-                  label: 'Create Business',
+                  label: _isLoading ? 'Creating…' : 'Create Business',
                   onPressed: _isLoading ? null : _submit,
                   icon: Icons.check_rounded,
                 ),
@@ -248,10 +292,12 @@ final userId = ref.read(pendingUserIdProvider);
   }
 }
 
+// ── Data class ────────────────────────────────────────────────────────────────
+
 class _BusinessOption {
-  final String type;
-  final String label;
-  final String description;
+  final String   type;
+  final String   label;
+  final String   description;
   final IconData icon;
 
   const _BusinessOption({
@@ -261,6 +307,8 @@ class _BusinessOption {
     required this.icon,
   });
 }
+
+// ── Step indicator widgets ────────────────────────────────────────────────────
 
 class _StepDot extends StatelessWidget {
   final bool active;

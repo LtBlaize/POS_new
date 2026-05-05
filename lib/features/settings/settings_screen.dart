@@ -12,6 +12,7 @@ import '../../shared/widgets/app_colors.dart';
 
 import 'widgets/general_settings_section.dart';
 import 'widgets/lan_settings_section.dart';
+import 'widgets/printer_settings_section.dart';
 import 'widgets/staff_settings_section.dart';
 import 'widgets/table_settings_section.dart';
 
@@ -24,7 +25,7 @@ class SettingsScreen extends ConsumerWidget {
     final deviceRole = ref.watch(deviceRoleProvider);
     final isKitchenDevice = deviceRole == DeviceRole.kitchen;
 
-    // Kitchen device only needs LAN setup — no need to load profile
+    // Kitchen device only needs LAN + printer setup
     if (isKitchenDevice) {
       return Scaffold(
         backgroundColor: const Color(0xFFF4F5F7),
@@ -33,6 +34,8 @@ class SettingsScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _SectionCard(child: const LanSettingsSection()),
+            const SizedBox(height: 16),
+            _SectionCard(child: const PrinterSettingsSection()),
             const SizedBox(height: 16),
             _SectionCard(child: _ChangeRoleSection()),
             const SizedBox(height: 32),
@@ -67,10 +70,10 @@ class SettingsScreen extends ConsumerWidget {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ── General — all POS roles see this ─────────────────────────
+              // ── General — all POS roles ───────────────────────────────
               GeneralSettingsSection(business: business),
 
-              // ── LAN — all POS roles (they may need to connect kitchen) ───
+              // ── LAN — restaurant only ─────────────────────────────────
               if (isRestaurant) ...[
                 const SizedBox(height: 16),
                 _SectionCard(child: const LanSettingsSection()),
@@ -81,13 +84,17 @@ class SettingsScreen extends ConsumerWidget {
                 _SectionCard(child: const TableSettingsSection()),
               ],
 
-              // ── Staff management — owners only ────────────────────────────
+              // ── Printer — all POS roles ───────────────────────────────
+              const SizedBox(height: 16),
+              _SectionCard(child: const PrinterSettingsSection()),
+
+              // ── Staff management — owners only ────────────────────────
               if (isOwner) ...[
                 const SizedBox(height: 16),
                 _SectionCard(child: const StaffSettingsSection()),
               ],
 
-              // ── Device role — always show at the bottom ───────────────────
+              // ── Device role — always at the bottom ───────────────────
               const SizedBox(height: 16),
               _SectionCard(child: _ChangeRoleSection()),
 

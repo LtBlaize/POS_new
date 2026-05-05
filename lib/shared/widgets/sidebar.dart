@@ -114,10 +114,19 @@ class Sidebar extends ConsumerWidget {
     );
 
     if (confirmed != true) return;
-    await ref.read(authServiceProvider).logout();
+
+    // Capture before any async gap
+    final authService = ref.read(authServiceProvider);
+
+    // Navigate immediately — no spinner, no flicker
     if (context.mounted) {
       Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     }
+
+    // Sign out in background — don't await
+    authService.logout().catchError((e) {
+      debugPrint('[Sidebar] logout error (ignored): $e');
+    });
   }
 
   @override

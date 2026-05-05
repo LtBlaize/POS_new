@@ -336,7 +336,7 @@ class _KitchenColumn extends StatelessWidget {
                   : ListView.separated(
                       padding: const EdgeInsets.all(10),
                       itemCount: orders.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _KitchenOrderCard(
                         key: ValueKey(
                             '${orders[i].id}-${orders[i].status}'),

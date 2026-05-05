@@ -1,13 +1,17 @@
 // lib/features/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_provider.dart';
 import 'register_screen.dart';
 import 'widgets/auth_text_field.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
-import '../../../main.dart';
+
+// ── FIX: Removed import of main.dart ─────────────────────────────────────────
+// login_screen.dart previously imported main.dart to access DeviceRole and
+// deviceRoleProvider so it could navigate manually. That import is now gone
+// because navigation is handled entirely by MyApp's authStateProvider
+// listener. This screen only calls authServiceProvider.login().
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -49,58 +53,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      // Step 1: authenticate
+      // ── FIX: Only authenticate — do NOT navigate ───────────────────────────
+      //
+      // Previously this method did 4 things:
+      //   1. login()
+      //   2. await profileProvider.future          ← caused the race
+      //   3. SharedPreferences.setString           ← now in MyApp listener
+      //   4. Navigator.pushReplacementNamed(...)   ← caused the redirect loop
+      //
+      // Now it does exactly ONE thing: call login().
+      //
+      // After login() returns, Supabase fires an authStateChange event.
+      // MyApp's ref.listen(authStateProvider) catches it, loads the profile,
+      // saves business_id to SharedPreferences, and navigates to the correct
+      // route. No race, no double-navigation, no redirect loop.
       await ref.read(authServiceProvider).login(
             email: _emailCtrl.text.trim(),
             password: _passCtrl.text,
           );
 
-      // Step 2: wait for profile to fully load from Supabase.
-      // profileProvider.future waits for the FutureProvider to complete,
-      // giving us the actual Profile with businessType already populated.
-      if (!mounted) return;
-      final profile = await ref.read(profileProvider.future);
+      // ✅ Done. Do not call Navigator here.
+      // The auth listener in MyApp (main.dart) takes over from here.
+      // _isLoading will naturally reset when the widget is replaced.
 
-      // Step 3: save business_id for boot-time use
-      if (profile?.business?.id != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('business_id', profile!.business!.id);
-      }
-
-      // Step 4: decide where to navigate.
-      //
-      // IMPORTANT: Read businessType directly from the profile we just
-      // awaited — do NOT use businessTypeProvider here.
-      //
-      // businessTypeProvider is a synchronous Provider that reads
-      // profileProvider.asData?.value. But right after login, Supabase
-      // fires a signedIn auth event which causes profileProvider to
-      // invalidate and re-fetch. During that window .asData is null,
-      // so businessTypeProvider returns null and isRestaurant is false
-      // even for restaurant accounts — causing retail-path navigation.
-      //
-      // Reading from `profile` directly avoids this race entirely.
-      if (!mounted) return;
-      final prefs = await SharedPreferences.getInstance();
-      final savedRole = prefs.getString('device_role');
-      final isRestaurant = profile?.businessType?.isRestaurant ?? false;
-
-      if (savedRole == null && isRestaurant) {
-        // Restaurant, first time on this device → let user pick role
-        if (mounted) Navigator.pushReplacementNamed(context, '/role-select');
-      } else {
-        // Retail first launch: silently assign 'pos' so boot services work
-        if (savedRole == null) {
-          await prefs.setString('device_role', DeviceRole.pos.name);
-          ref.read(deviceRoleProvider.notifier).state = DeviceRole.pos;
-        }
-        if (mounted) Navigator.pushReplacementNamed(context, '/pos');
-      }
     } catch (e) {
-      if (mounted) setState(() => _error = _friendlyError(e.toString()));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      // login() throws if credentials are wrong or network fails.
+      // Show the error and reset the loading state so user can retry.
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(e.toString());
+          _isLoading = false;
+        });
+      }
     }
+    // Note: we do NOT call setState(_isLoading = false) on success.
+    // The screen will be replaced by /pos or /role-select, so there's
+    // no point resetting state — it would cause a brief flash.
   }
 
   @override
@@ -181,7 +169,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : null,
                   ),
 
-                  // Error banner
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -201,7 +188,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 28),
 
                   AppButton(
-                    label: 'Sign In',
+                    label: _isLoading ? 'Signing in…' : 'Sign In',
                     onPressed: _isLoading ? null : _submit,
                   ),
                   const SizedBox(height: 20),

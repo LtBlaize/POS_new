@@ -276,7 +276,7 @@ class _RolePermissionsCard extends ConsumerWidget {
                       title: Text(label,
                           style: const TextStyle(fontSize: 13)),
                       value: enabled,
-                      activeColor: color,
+                      activeThumbColor: color,
                       onChanged: (_) => ref
                           .read(rolePermissionsProvider.notifier)
                           .toggle(roleKey, tab),
@@ -494,7 +494,7 @@ class _StaffDialogState extends State<_StaffDialog> {
                       fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<StaffRole>(
-                value: _role,
+                initialValue: _role,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10)),

@@ -41,8 +41,10 @@ class CategoryBar extends ConsumerWidget {
             label: 'All',
             icon: Icons.apps_rounded,
             isSelected: selected == null,
-            onTap: () =>
-                ref.read(selectedCategoryProvider.notifier).state = null,
+            onTap: () {
+      ref.read(selectedCategoryProvider.notifier).state = null;
+      ref.read(posSearchQueryProvider.notifier).state = '';
+    },
           ),
           const SizedBox(width: 8),
           ...categories.map((cat) => Padding(
@@ -51,8 +53,10 @@ class CategoryBar extends ConsumerWidget {
                   label: cat,
                   icon: _iconFor(cat),
                   isSelected: selected == cat,
-                  onTap: () =>
-                      ref.read(selectedCategoryProvider.notifier).state = cat,
+                  onTap: () {
+                    ref.read(selectedCategoryProvider.notifier).state = cat;
+                    ref.read(posSearchQueryProvider.notifier).state = '';
+                  },
                 ),
               )),
         ],
@@ -60,6 +64,7 @@ class CategoryBar extends ConsumerWidget {
     );
   }
 }
+
 
 class _CategoryChip extends StatelessWidget {
   final String label;
