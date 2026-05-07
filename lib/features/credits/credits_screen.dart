@@ -297,7 +297,7 @@ class _CustomerListPanel extends StatelessWidget {
                     padding:
                         const EdgeInsets.fromLTRB(12, 0, 12, 12),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const SizedBox(height: 4),
                     itemBuilder: (_, i) {
                       final c = filtered[i];
@@ -488,7 +488,7 @@ class _CustomerDetail extends ConsumerWidget {
                       padding:
                           const EdgeInsets.fromLTRB(28, 0, 28, 24),
                       itemCount: txs.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(height: 6),
                       itemBuilder: (_, i) =>
                           _TxTile(tx: txs[i]),

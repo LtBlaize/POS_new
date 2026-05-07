@@ -418,7 +418,7 @@ class InventoryScreen extends ConsumerWidget {
                   )
                 : ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => layout == InventoryLayout.phone
+                    separatorBuilder: (_, _) => layout == InventoryLayout.phone
                         ? const SizedBox.shrink()
                         : const Divider(height: 1, indent: 24, endIndent: 24),
                     itemBuilder: (context, index) => InventoryRow(
