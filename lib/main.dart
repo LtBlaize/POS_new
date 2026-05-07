@@ -38,24 +38,32 @@ Future<void> main() async {
   await Supabase.initialize(
     url: 'https://qsdbufdixhyqlbygrncp.supabase.co',
     anonKey: 'sb_publishable_IMKcLGls9al71UvjElf_Kw_iC0N4Dqu',
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+      autoRefreshToken: true,
+    ),
   );
 
-// ✅ ADD THIS: If we have a session but the user no longer exists in DB,
-// sign out silently to clear the stale token.
-final existingSession = Supabase.instance.client.auth.currentSession;
-if (existingSession != null) {
-  try {
-    // Try to get the user — throws if account was deleted
-    final user = await Supabase.instance.client.auth.getUser();
-    if (user.user == null) {
-      debugPrint('[Boot] Stale session — no user found, signing out');
+  // FIX 1: Only sign out on real auth errors (deleted account, revoked token).
+  // Previously this caught ALL exceptions including network timeouts, which
+  // caused the app to sign out users whenever the device was offline at boot.
+  final existingSession = Supabase.instance.client.auth.currentSession;
+  if (existingSession != null) {
+    try {
+      final user = await Supabase.instance.client.auth.getUser();
+      if (user.user == null) {
+        debugPrint('[Boot] Stale session — no user found, signing out');
+        await Supabase.instance.client.auth.signOut();
+      }
+    } on AuthException catch (e) {
+      // Only sign out for real auth errors (deleted account, revoked token)
+      debugPrint('[Boot] Auth error ($e) — signing out');
       await Supabase.instance.client.auth.signOut();
+    } catch (e) {
+      // Network timeout, no internet, etc. — KEEP the session, do NOT sign out
+      debugPrint('[Boot] Network error during session check ($e) — keeping session');
     }
-  } catch (e) {
-    debugPrint('[Boot] Stale session error ($e) — signing out');
-    await Supabase.instance.client.auth.signOut();
   }
-}
 
   final prefs     = await SharedPreferences.getInstance();
   final container = ProviderContainer();
@@ -129,41 +137,30 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
-    // ── Reactive auth listener ─────────────────────────────────────────────
-    //
-    // Single source of truth for all auth-driven navigation.
-    //
-    // REGISTRATION GUARD:
-    //   During the two-step registration flow, signUp() in step 1 creates
-    //   a Supabase session immediately — before the profile row exists in DB.
-    //   This listener would fire, try to load the profile (gets null), and
-    //   navigate to /pos where featureManager is null → stuck on loading.
-    //
-    //   The guard: if pendingUserIdProvider is still set, the user is on
-    //   BusinessTypeScreen completing step 2. Skip navigation here entirely.
-    //   BusinessTypeScreen.completeRegistration() handles its own navigation
-    //   after the profile row is written and pendingUserIdProvider is cleared.
-    //
-    // INTERACTION WITH pos_screen._logout():
-    //
-    //   pos_screen does an "optimistic logout":
-    //     1. Clear local state (cart, activeStaff, appLocked)     — sync
-    //     2. Navigator.pushNamedAndRemoveUntil('/login')           — sync, instant
-    //     3. authService.logout() fires in background             — async, ~1-3s
-    //
-    //   When step 3 completes, Supabase fires signedOut →
-    //   authStateProvider emits null → this listener also tries to
-    //   pushNamedAndRemoveUntil('/login').
-    //
-    //   We guard against this double-navigation with _isNavigating.
-    //   On the signedOut branch we also check if the navigator is
-    //   already showing /login to avoid a redundant push.
-    //
     bool isNavigating = false;
+
+    // FIX 2: Skip the very first auth event emitted on app start.
+    //
+    // authStateProvider always fires an initialSession event immediately when
+    // the app launches. The old code treated this as a real sign-in transition
+    // and tried to navigate — but at this point the navigator may not be ready,
+    // or the initial route is already correct, causing a loop back to /login.
+    //
+    // By skipping the first event, we let the initialRoute (set from the
+    // session check in main()) handle the first screen. The listener only acts
+    // on REAL transitions after that (user logs in, logs out, etc.).
+    bool _initialEventSkipped = false;
 
     ref.listen<AsyncValue<User?>>(
       authStateProvider,
       (previous, next) async {
+        // Skip the first emission — it's the initialSession, not a transition
+        if (!_initialEventSkipped) {
+          _initialEventSkipped = true;
+          debugPrint('[Auth] Skipping initial session event');
+          return;
+        }
+
         final previousUser = previous?.asData?.value;
         final currentUser  = next.asData?.value;
 
@@ -183,12 +180,6 @@ class MyApp extends ConsumerWidget {
         try {
           if (currentUser == null) {
             // ── Signed out ─────────────────────────────────────────────────
-            //
-            // Check if we are already on /login before pushing again.
-            // This is the key guard for the pos_screen optimistic logout:
-            // pos_screen already pushed /login synchronously, so by the
-            // time this listener fires (after the async signOut completes),
-            // the top route is already /login — skip the redundant push.
             final isAlreadyOnLogin = nav.canPop() == false &&
                 ModalRoute.of(nav.context)?.settings.name == '/login';
 
@@ -203,12 +194,6 @@ class MyApp extends ConsumerWidget {
             // ── Signed in ──────────────────────────────────────────────────
             debugPrint('[Auth] Signed in: ${currentUser.id} → checking registration state');
 
-            // ✅ REGISTRATION GUARD: If pendingUserIdProvider is still set,
-            // the user just completed step 1 of registration and is currently
-            // on BusinessTypeScreen filling out step 2. The profile row does
-            // not exist yet in the DB, so profileProvider will return null
-            // and featureManager will never resolve. Skip navigation entirely
-            // and let BusinessTypeScreen handle it after completeRegistration().
             final isPendingRegistration = ref.read(pendingUserIdProvider) != null;
             if (isPendingRegistration) {
               debugPrint('[Auth] Mid-registration — skipping navigation, waiting for completeRegistration()');
@@ -241,8 +226,6 @@ class MyApp extends ConsumerWidget {
                 nav.pushNamedAndRemoveUntil('/pos', (_) => false);
               }
             } catch (e) {
-              // Profile fetch failed — go to /pos anyway.
-              // _PendingPosScreen will retry once featureManager resolves.
               debugPrint('[Auth] Profile load error: $e — falling back to /pos');
               nav.pushNamedAndRemoveUntil('/pos', (_) => false);
             }
