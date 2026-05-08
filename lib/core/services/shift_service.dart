@@ -1,6 +1,7 @@
 // lib/core/services/shift_service.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -20,6 +21,30 @@ class ShiftService {
 
   const ShiftService(this._db, this._supabase);
 
+  // ── Device ID ──────────────────────────────────────────────────────────────
+  //
+  // Each physical device gets a stable UUID stored in SharedPreferences.
+  // This is the key fix: shifts are now scoped by (business_id, staff_id,
+  // device_id) so two devices using the same staff account (same staff_id)
+  // get completely independent shifts — no more shared/crossed shift rows.
+  //
+  // The device_id is generated once on first launch and never changes,
+  // so the same device always resumes its own open shift correctly.
+
+  static String? _cachedDeviceId;
+
+  Future<String> _getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('device_id');
+    if (id == null) {
+      id = const Uuid().v4();
+      await prefs.setString('device_id', id);
+    }
+    _cachedDeviceId = id;
+    return id;
+  }
+
   // ── Open Shift ─────────────────────────────────────────────────────────────
 
   Future<CashierShift> openShift({
@@ -28,12 +53,12 @@ class ShiftService {
     required String staffName,
     required double openingCash,
   }) async {
-    final existing =
-        await getOpenShift(businessId: businessId, staffId: staffId);
+    final deviceId = await _getDeviceId();
+    final existing = await getOpenShift(
+        businessId: businessId, staffId: staffId, deviceId: deviceId);
     if (existing != null) return existing;
 
     final id = const Uuid().v4();
-    // FIX: always use UTC so timestamps match Supabase-stored order created_at
     final now = DateTime.now().toUtc();
 
     final payload = {
@@ -41,6 +66,7 @@ class ShiftService {
       'business_id': businessId,
       'staff_id': staffId,
       'staff_name': staffName,
+      'device_id': deviceId,   // ← NEW: stored so queries can filter by device
       'opening_cash': openingCash,
       'opened_at': now.toIso8601String(),
       'status': 'open',
@@ -76,34 +102,76 @@ class ShiftService {
   Future<CashierShift?> getOpenShift({
     required String businessId,
     required String staffId,
+    String? deviceId,   // ← optional so existing callers don't break
   }) async {
+    // Resolve device ID — always use this device's ID when not specified
+    final resolvedDeviceId = deviceId ?? await _getDeviceId();
+
     try {
-      final rows = await _supabase
+      // Query scoped to this device: same staff on a different device gets
+      // a different shift row because device_id won't match.
+      var query = _supabase
           .from('cashier_shifts')
           .select()
           .eq('business_id', businessId)
           .eq('staff_id', staffId)
-          .eq('status', 'open')
-          .order('opened_at', ascending: false)
-          .limit(1);
-      if (rows.isNotEmpty) {
-        final shift = _shiftFromMap(rows.first);
-        final d = await _db.db;
-        await d.insert('cashier_shifts', _shiftToRow(shift),
-            conflictAlgorithm: ConflictAlgorithm.replace);
-        return shift;
+          .eq('status', 'open');
+
+      // Only filter by device_id if the column exists (graceful fallback
+      // for deployments that haven't run the migration yet).
+      // Once you add device_id to your cashier_shifts table in Supabase,
+      // this filter will take effect automatically.
+      try {
+        final rows = await query
+            .eq('device_id', resolvedDeviceId)
+            .order('opened_at', ascending: false)
+            .limit(1);
+
+        if (rows.isNotEmpty) {
+          final shift = _shiftFromMap(rows.first);
+          final d = await _db.db;
+          await d.insert('cashier_shifts', _shiftToRow(shift),
+              conflictAlgorithm: ConflictAlgorithm.replace);
+          return shift;
+        }
+        return null;
+      } catch (_) {
+        // device_id column doesn't exist yet — fall back to old behaviour
+        final rows = await query
+            .order('opened_at', ascending: false)
+            .limit(1);
+        if (rows.isNotEmpty) {
+          final shift = _shiftFromMap(rows.first);
+          final d = await _db.db;
+          await d.insert('cashier_shifts', _shiftToRow(shift),
+              conflictAlgorithm: ConflictAlgorithm.replace);
+          return shift;
+        }
+        return null;
       }
     } catch (_) {}
 
+    // Offline fallback: local DB also filters by device_id
     final d = await _db.db;
     final rows = await d.query(
       'cashier_shifts',
-      where: 'business_id = ? AND staff_id = ? AND status = ?',
-      whereArgs: [businessId, staffId, 'open'],
+      where: 'business_id = ? AND staff_id = ? AND status = ? AND device_id = ?',
+      whereArgs: [businessId, staffId, 'open', resolvedDeviceId],
       orderBy: 'opened_at DESC',
       limit: 1,
     );
-    if (rows.isEmpty) return null;
+    if (rows.isEmpty) {
+      // Fallback without device_id for older local rows
+      final fallback = await d.query(
+        'cashier_shifts',
+        where: 'business_id = ? AND staff_id = ? AND status = ?',
+        whereArgs: [businessId, staffId, 'open'],
+        orderBy: 'opened_at DESC',
+        limit: 1,
+      );
+      if (fallback.isEmpty) return null;
+      return _shiftFromMap(fallback.first);
+    }
     return _shiftFromMap(rows.first);
   }
 
@@ -121,10 +189,10 @@ class ShiftService {
       businessId: shift.businessId,
       staffId: shift.staffId,
       from: shift.openedAt,
-      to: DateTime.now().toUtc(),   // ← FIX: UTC
+      to: DateTime.now().toUtc(),
     );
 
-    final now = DateTime.now().toUtc();   // ← FIX: UTC
+    final now = DateTime.now().toUtc();
     final updates = {
       'status': 'closed',
       'closed_at': now.toIso8601String(),
@@ -161,14 +229,14 @@ class ShiftService {
     );
   }
 
-  // ── Live totals preview (used by currentShiftProvider) ────────────────────
+  // ── Live totals preview ────────────────────────────────────────────────────
 
   Future<CashierShift> withLiveTotals(CashierShift shift) async {
     final summary = await _computeShiftSummary(
       businessId: shift.businessId,
       staffId: shift.staffId,
       from: shift.openedAt,
-      to: DateTime.now().toUtc(),   // ← FIX: UTC
+      to: DateTime.now().toUtc(),
     );
     return shift.copyWith(
       totalSales: summary['total_sales'],
@@ -217,8 +285,6 @@ class ShiftService {
     }
 
     try {
-      // FIX: use toUtc() on from/to so the ISO string has 'Z' suffix,
-      // matching how Supabase stores order created_at timestamps.
       final orders = await _supabase
           .from('orders')
           .select('total_amount, payment_method, status, paid_at')
@@ -324,7 +390,6 @@ class ShiftService {
         staffId: r['staff_id'] as String,
         staffName: r['staff_name'] as String,
         openingCash: (r['opening_cash'] as num).toDouble(),
-        // FIX: parse as UTC so duration calculation is correct
         openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
         status:
             r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
@@ -349,9 +414,9 @@ class ShiftService {
         'staff_id': s.staffId,
         'staff_name': s.staffName,
         'opening_cash': s.openingCash,
-        'opened_at': s.openedAt.toUtc().toIso8601String(),  // ← FIX: UTC
+        'opened_at': s.openedAt.toUtc().toIso8601String(),
         'status': s.status == ShiftStatus.open ? 'open' : 'closed',
-        'closed_at': s.closedAt?.toUtc().toIso8601String(), // ← FIX: UTC
+        'closed_at': s.closedAt?.toUtc().toIso8601String(),
         'actual_cash_count': s.actualCashCount,
         'notes': s.notes,
         'total_sales': s.totalSales,

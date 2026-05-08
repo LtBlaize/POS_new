@@ -1,21 +1,132 @@
 // lib/features/kitchen/kitchen_screen.dart
 //
-// Kitchen display — reads from kitchenStateProvider (LAN) instead of
-// Supabase. Works fully offline as long as both devices share a WiFi network.
+// Kitchen display — owners see orders directly from Supabase.
+// Dedicated kitchen devices (DeviceRole.kitchen) use the LAN stream.
+// Falls back to Supabase polling when LAN is disconnected.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/order.dart';
+import '../../core/models/cart_item.dart';
+import '../../core/models/product.dart';
 import '../../core/providers/lan_orders_notifier.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
-
 import '../../core/services/lan_config_service.dart';
 import '../../core/services/lan_client_service.dart';
+import '../../../main.dart' show deviceRoleProvider, DeviceRole;
+
+// ── Supabase kitchen orders provider ──────────────────────────────────────────
+//
+// Used by owner role and as fallback when LAN is disconnected.
+// Polls every 10 seconds and also exposes a manual refresh.
+
+final _kitchenOrdersFromDbProvider =
+    AsyncNotifierProvider<_KitchenDbNotifier, List<Order>>(
+        _KitchenDbNotifier.new);
+
+class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
+  Timer? _pollTimer;
+
+  @override
+  Future<List<Order>> build() async {
+    // Cancel any previous timer when provider rebuilds
+    _pollTimer?.cancel();
+    // Start polling every 10 seconds.
+    // AsyncNotifier does not have a `mounted` getter — we use onDispose
+    // to cancel the timer instead, which is the correct Riverpod pattern.
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidateSelf();
+    });
+    ref.onDispose(() {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+    });
+    return _fetch();
+  }
+
+  Future<List<Order>> _fetch() async {
+    final businessId = ref.read(businessProvider)?.id;
+    if (businessId == null || businessId.isEmpty) return [];
+
+    final client = Supabase.instance.client;
+    try {
+      // Supabase returns PostgrestList (a List<dynamic> subtype).
+      // Cast each element individually to avoid the List<dynamic> → List<Order> error.
+      final rows = await client
+          .from('orders')
+          .select('*, order_items(*, products(*))')
+          .eq('business_id', businessId)
+          .inFilter('status', ['pending', 'preparing', 'ready'])
+          .order('created_at', ascending: true);
+
+      return rows
+          .map((row) => _parseDbOrder(row))
+          .toList();
+    } catch (e) {
+      debugPrint('[Kitchen] Supabase fetch error: $e');
+      return state.value ?? [];
+    }
+  }
+
+  Future<void> advanceStatus(String orderId, OrderStatus next) async {
+    // Optimistic update
+    final updated = (state.value ?? []).map((o) {
+      return o.id == orderId ? o.copyWith(status: next) : o;
+    }).toList();
+    state = AsyncData(updated);
+
+    try {
+      await Supabase.instance.client
+          .from('orders')
+          .update({
+            'status': next.value,
+            if (next == OrderStatus.completed) 'paid_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', orderId);
+    } catch (e) {
+      debugPrint('[Kitchen] Status update error: $e');
+      // Revert on failure
+      ref.invalidateSelf();
+    }
+  }
+
+  Order _parseDbOrder(Map<String, dynamic> m) {
+    final rawItems = m['order_items'] as List? ?? [];
+    final items = rawItems.map((i) {
+      final map = i as Map<String, dynamic>;
+      final product = map['products'] as Map<String, dynamic>? ?? {};
+      return CartItem(
+        product: Product(
+          id: product['id'] as String? ?? '',
+          businessId: product['business_id'] as String? ?? '',
+          name: product['name'] as String? ?? map['product_name'] as String? ?? '',
+          price: (product['price'] as num?)?.toDouble() ?? 0.0,
+        ),
+        quantity: map['quantity'] as int? ?? 1,
+      );
+    }).toList();
+
+    return Order(
+      id: m['id'] as String,
+      businessId: m['business_id'] as String? ?? '',
+      orderNumber: m['order_number'] as int? ?? 0,
+      tableId: m['table_id'] as String?,
+      status: OrderStatusX.fromString(m['status'] as String),
+      createdAt: DateTime.parse(m['created_at'] as String),
+      subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
+      totalAmount: (m['total_amount'] as num?)?.toDouble() ?? 0.0,
+      items: items,
+    );
+  }
+}
+
+// ── KitchenScreen ─────────────────────────────────────────────────────────────
 
 class KitchenScreen extends ConsumerStatefulWidget {
   const KitchenScreen({super.key});
@@ -26,11 +137,20 @@ class KitchenScreen extends ConsumerStatefulWidget {
 
 class _KitchenScreenState extends ConsumerState<KitchenScreen>
     with WidgetsBindingObserver {
+
+  // Whether this screen is using LAN mode (kitchen device) or DB mode (owner)
+  bool get _isOwnerMode {
+    final role = ref.read(deviceRoleProvider);
+    return role != DeviceRole.kitchen;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _connect());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isOwnerMode) _connect();
+    });
   }
 
   @override
@@ -41,7 +161,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _connect();
+    if (state == AppLifecycleState.resumed && !_isOwnerMode) _connect();
   }
 
   void _connect() {
@@ -50,8 +170,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'No POS IP configured. Go to Settings → LAN Connection.'),
+            content: Text('No POS IP configured. Go to Settings → LAN Connection.'),
             duration: Duration(seconds: 5),
           ),
         );
@@ -65,24 +184,89 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
 
   @override
   Widget build(BuildContext context) {
-    final kitchenState = ref.watch(kitchenStateProvider);
-    final orders = kitchenState.orders;
+    // ── Owner / POS device: read directly from Supabase ───────────────────
+    if (_isOwnerMode) {
+      return _DbKitchenView();
+    }
 
-    final pending =
-        orders.where((o) => o.status == OrderStatus.pending).toList();
-    final preparing =
-        orders.where((o) => o.status == OrderStatus.preparing).toList();
-    final ready =
-        orders.where((o) => o.status == OrderStatus.ready).toList();
+    // ── Kitchen device: use LAN stream, fall back to Supabase if offline ──
+    final kitchenState = ref.watch(kitchenStateProvider);
+    final isOffline = kitchenState.connection == LanConnectionState.disconnected;
+
+    // If LAN is disconnected, fall back to DB view automatically
+    if (isOffline && kitchenState.orders.isEmpty) {
+      return _DbKitchenView(showLanBanner: true);
+    }
+
+    return _KitchenBody(
+      orders: kitchenState.orders,
+      connection: kitchenState.connection,
+      onAdvanceStatus: (orderId, next) =>
+          ref.read(kitchenStateProvider.notifier).advanceStatus(orderId, next),
+    );
+  }
+}
+
+// ── DB-backed kitchen view (owner mode + LAN fallback) ────────────────────────
+
+class _DbKitchenView extends ConsumerWidget {
+  final bool showLanBanner;
+  const _DbKitchenView({this.showLanBanner = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ordersAsync = ref.watch(_kitchenOrdersFromDbProvider);
+
+    return ordersAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        body: Center(child: Text('Error loading orders: $e')),
+      ),
+      data: (orders) => _KitchenBody(
+        orders: orders,
+        // Owner always shows as "connected" since they read from DB directly
+        connection: showLanBanner
+            ? LanConnectionState.disconnected
+            : LanConnectionState.connected,
+        isDbMode: true,
+        onAdvanceStatus: (orderId, next) =>
+            ref.read(_kitchenOrdersFromDbProvider.notifier).advanceStatus(orderId, next),
+      ),
+    );
+  }
+}
+
+// ── Shared kitchen body ────────────────────────────────────────────────────────
+
+class _KitchenBody extends StatelessWidget {
+  final List<Order> orders;
+  final LanConnectionState connection;
+  final bool isDbMode;
+  final Future<void> Function(String orderId, OrderStatus next) onAdvanceStatus;
+
+  const _KitchenBody({
+    required this.orders,
+    required this.connection,
+    required this.onAdvanceStatus,
+    this.isDbMode = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pending   = orders.where((o) => o.status == OrderStatus.pending).toList();
+    final preparing = orders.where((o) => o.status == OrderStatus.preparing).toList();
+    final ready     = orders.where((o) => o.status == OrderStatus.ready).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
-          // ── Connection banner ──────────────────────────────────────────
-          _ConnectionBanner(state: kitchenState.connection),
+          // Show LAN banner only for kitchen devices that are offline
+          if (!isDbMode) _ConnectionBanner(state: connection),
 
-          // ── Header ────────────────────────────────────────────────────
+          // Header
           Container(
             color: Colors.black87,
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
@@ -98,45 +282,46 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                   ),
                 ),
                 const Spacer(),
-                _LanIndicator(state: kitchenState.connection),
+                // Show DB mode indicator for owner
+                if (isDbMode)
+                  _DbModeIndicator()
+                else
+                  _LanIndicator(state: connection),
                 const SizedBox(width: 16),
-                _KitchenStat(
-                    label: 'Pending',
-                    count: pending.length,
-                    color: AppColors.warning),
+                _KitchenStat(label: 'Pending',   count: pending.length,   color: AppColors.warning),
                 const SizedBox(width: 12),
-                _KitchenStat(
-                    label: 'Preparing',
-                    count: preparing.length,
-                    color: AppColors.info),
+                _KitchenStat(label: 'Preparing', count: preparing.length, color: AppColors.info),
                 const SizedBox(width: 12),
-                _KitchenStat(
-                    label: 'Ready',
-                    count: ready.length,
-                    color: AppColors.success),
+                _KitchenStat(label: 'Ready',     count: ready.length,     color: AppColors.success),
               ],
             ),
           ),
 
-          // ── Columns ───────────────────────────────────────────────────
+          // Columns
           Expanded(
             child: orders.isEmpty
-                ? _EmptyKitchen(state: kitchenState.connection)
+                ? _EmptyKitchen(isDbMode: isDbMode)
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _KitchenColumn(
-                          title: 'Pending',
-                          color: AppColors.warning,
-                          orders: pending),
+                        title: 'Pending',
+                        color: AppColors.warning,
+                        orders: pending,
+                        onAdvanceStatus: onAdvanceStatus,
+                      ),
                       _KitchenColumn(
-                          title: 'Preparing',
-                          color: AppColors.info,
-                          orders: preparing),
+                        title: 'Preparing',
+                        color: AppColors.info,
+                        orders: preparing,
+                        onAdvanceStatus: onAdvanceStatus,
+                      ),
                       _KitchenColumn(
-                          title: 'Ready',
-                          color: AppColors.success,
-                          orders: ready),
+                        title: 'Ready',
+                        color: AppColors.success,
+                        orders: ready,
+                        onAdvanceStatus: onAdvanceStatus,
+                      ),
                     ],
                   ),
           ),
@@ -156,8 +341,7 @@ class _ConnectionBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (text, color) = switch (state) {
       LanConnectionState.disconnected =>
-        ('Not connected to POS — check that both devices are on the same WiFi',
-            Colors.red.shade700),
+        ('Not connected to POS — showing orders from server instead', Colors.orange.shade700),
       LanConnectionState.connecting =>
         ('Connecting to POS...', Colors.orange.shade700),
       LanConnectionState.polling =>
@@ -189,6 +373,30 @@ class _ConnectionBanner extends StatelessWidget {
   }
 }
 
+// ── DB mode indicator ─────────────────────────────────────────────────────────
+
+class _DbModeIndicator extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8, height: 8,
+          decoration: const BoxDecoration(
+              color: AppColors.success, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        const Text('Live',
+            style: TextStyle(
+                color: AppColors.success,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
 // ── LAN indicator dot ──────────────────────────────────────────────────────────
 
 class _LanIndicator extends StatelessWidget {
@@ -199,13 +407,13 @@ class _LanIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (state) {
       LanConnectionState.connected => AppColors.success,
-      LanConnectionState.polling => AppColors.warning,
-      _ => Colors.red,
+      LanConnectionState.polling   => AppColors.warning,
+      _                            => Colors.red,
     };
     final label = switch (state) {
-      LanConnectionState.connected => 'LAN live',
-      LanConnectionState.polling => 'Polling',
-      LanConnectionState.connecting => 'Connecting',
+      LanConnectionState.connected    => 'LAN live',
+      LanConnectionState.polling      => 'Polling',
+      LanConnectionState.connecting   => 'Connecting',
       LanConnectionState.disconnected => 'Offline',
     };
 
@@ -213,8 +421,7 @@ class _LanIndicator extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: 8, height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -229,35 +436,30 @@ class _LanIndicator extends StatelessWidget {
 // ── Empty state ────────────────────────────────────────────────────────────────
 
 class _EmptyKitchen extends StatelessWidget {
-  final LanConnectionState state;
-  const _EmptyKitchen({required this.state});
+  final bool isDbMode;
+  const _EmptyKitchen({this.isDbMode = false});
 
   @override
   Widget build(BuildContext context) {
-    final isOffline = state == LanConnectionState.disconnected;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isOffline ? Icons.wifi_off_outlined : Icons.kitchen_outlined,
+            Icons.kitchen_outlined,
             size: 48,
             color: AppColors.textSecondary.withOpacity(0.25),
           ),
           const SizedBox(height: 12),
-          Text(
-            isOffline ? 'Cannot reach POS' : 'No active orders',
-            style: const TextStyle(
-                color: AppColors.textSecondary, fontSize: 15),
+          const Text(
+            'No active orders',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
           ),
-          if (isOffline) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'Make sure both devices are on the same WiFi',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ],
+          const SizedBox(height: 6),
+          Text(
+            isDbMode ? 'Refreshes every 10 seconds' : 'Waiting for orders from POS',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -270,11 +472,13 @@ class _KitchenColumn extends StatelessWidget {
   final String title;
   final Color color;
   final List<Order> orders;
+  final Future<void> Function(String, OrderStatus) onAdvanceStatus;
 
   const _KitchenColumn({
     required this.title,
     required this.color,
     required this.orders,
+    required this.onAdvanceStatus,
   });
 
   @override
@@ -289,10 +493,8 @@ class _KitchenColumn extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // Column header
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.08),
                 borderRadius:
@@ -302,10 +504,8 @@ class _KitchenColumn extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 8,
-                    height: 8,
-                    decoration:
-                        BoxDecoration(color: color, shape: BoxShape.circle),
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 8),
                   Text(title,
@@ -323,24 +523,21 @@ class _KitchenColumn extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Order cards
             Expanded(
               child: orders.isEmpty
                   ? Center(
                       child: Text('No orders',
                           style: TextStyle(
                               fontSize: 12,
-                              color:
-                                  AppColors.textSecondary.withOpacity(0.4))))
+                              color: AppColors.textSecondary.withOpacity(0.4))))
                   : ListView.separated(
                       padding: const EdgeInsets.all(10),
                       itemCount: orders.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _KitchenOrderCard(
-                        key: ValueKey(
-                            '${orders[i].id}-${orders[i].status}'),
+                        key: ValueKey('${orders[i].id}-${orders[i].status}'),
                         order: orders[i],
+                        onAdvanceStatus: onAdvanceStatus,
                       ),
                     ),
             ),
@@ -355,7 +552,13 @@ class _KitchenColumn extends StatelessWidget {
 
 class _KitchenOrderCard extends ConsumerStatefulWidget {
   final Order order;
-  const _KitchenOrderCard({super.key, required this.order});
+  final Future<void> Function(String, OrderStatus) onAdvanceStatus;
+
+  const _KitchenOrderCard({
+    super.key,
+    required this.order,
+    required this.onAdvanceStatus,
+  });
 
   @override
   ConsumerState<_KitchenOrderCard> createState() => _KitchenOrderCardState();
@@ -368,8 +571,6 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
   @override
   void initState() {
     super.initState();
-    // Tick every minute so the age chip and red border stay current
-    // even when no new orders arrive.
     _ageTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -383,23 +584,20 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
 
   Future<void> _advance() async {
     final next = switch (widget.order.status) {
-      OrderStatus.pending => OrderStatus.preparing,
+      OrderStatus.pending   => OrderStatus.preparing,
       OrderStatus.preparing => OrderStatus.ready,
-      OrderStatus.ready => OrderStatus.completed,
-      _ => null,
+      OrderStatus.ready     => OrderStatus.completed,
+      _                     => null,
     };
     if (next == null) return;
 
     setState(() => _loading = true);
     try {
-      await ref
-          .read(kitchenStateProvider.notifier)
-          .advanceStatus(widget.order.id, next);
+      await widget.onAdvanceStatus(widget.order.id, next);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -407,15 +605,11 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     }
   }
 
-  /// Resolves the human-readable table number from the tableId UUID.
-  /// Falls back to a shortened UUID if not found in local provider.
   String? _resolveTableLabel() {
     final tableId = widget.order.tableId;
     if (tableId == null || tableId.isEmpty) return null;
-    final tableNumber =
-        ref.read(tableProvider).tableNameForUuid(tableId);
+    final tableNumber = ref.read(tableProvider).tableNameForUuid(tableId);
     if (tableNumber != null) return 'Table $tableNumber';
-    // Fallback: show last 6 chars of UUID so it's at least short
     return 'Table …${tableId.substring(tableId.length - 6)}';
   }
 
@@ -424,10 +618,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     final order = widget.order;
 
     final (buttonLabel, buttonColor) = switch (order.status) {
-      OrderStatus.pending => ('Start Preparing', AppColors.warning),
-      OrderStatus.preparing => ('Mark Ready', AppColors.info),
-      OrderStatus.ready => ('Mark Served', AppColors.success),
-      _ => ('', Colors.transparent),
+      OrderStatus.pending   => ('Start Preparing', AppColors.warning),
+      OrderStatus.preparing => ('Mark Ready',      AppColors.info),
+      OrderStatus.ready     => ('Mark Served',     AppColors.success),
+      _                     => ('',                Colors.transparent),
     };
 
     final age = DateTime.now().difference(order.createdAt);
@@ -447,7 +641,6 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             children: [
               Text(
@@ -458,17 +651,13 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                     color: AppColors.textPrimary),
               ),
               const Spacer(),
-              // Age chip
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: isOld ? Colors.red.shade50 : AppColors.surface,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                      color: isOld
-                          ? Colors.red.shade200
-                          : AppColors.divider),
+                      color: isOld ? Colors.red.shade200 : AppColors.divider),
                 ),
                 child: Text(
                   _formatAge(age),
@@ -485,24 +674,20 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
 
           if (tableLabel != null) ...[
             const SizedBox(height: 2),
-            Text(
-              tableLabel,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary),
-            ),
+            Text(tableLabel,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
           ],
 
           const SizedBox(height: 8),
 
-          // Items
           if (order.items.isNotEmpty)
             ...order.items.map((item) => Padding(
                   padding: const EdgeInsets.only(bottom: 3),
                   child: Row(
                     children: [
                       Container(
-                        width: 20,
-                        height: 20,
+                        width: 20, height: 20,
                         decoration: BoxDecoration(
                           color: AppColors.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(5),
@@ -519,24 +704,20 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                       ),
                       const SizedBox(width: 7),
                       Expanded(
-                        child: Text(
-                          item.product.name,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textPrimary),
-                        ),
+                        child: Text(item.product.name,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textPrimary)),
                       ),
                     ],
                   ),
                 ))
           else
             const Text('Loading items...',
-                style: TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
 
           const SizedBox(height: 10),
 
-          // Action button
           if (buttonLabel.isNotEmpty)
             SizedBox(
               width: double.infinity,
@@ -558,8 +739,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                       ),
                       child: Text(buttonLabel,
                           style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
+                              fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
             ),
         ],
@@ -599,8 +779,7 @@ class _KitchenStat extends StatelessWidget {
                   color: color, fontWeight: FontWeight.w800, fontSize: 14)),
           const SizedBox(width: 5),
           Text(label,
-              style:
-                  TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
+              style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
         ],
       ),
     );
