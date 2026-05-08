@@ -101,32 +101,31 @@ class AppRouter {
       _route(POSScreen(featureManager: fm));
 }
 
-class _PendingPosScreen extends ConsumerWidget {
+class _PendingPosScreen extends ConsumerStatefulWidget {
   const _PendingPosScreen();
+  @override
+  ConsumerState<_PendingPosScreen> createState() => _PendingPosScreenState();
+}
+
+class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
+  bool _navigated = false; // ← fires exactly once
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final featureManager = ref.watch(featureManagerProvider);
 
-    if (featureManager != null) {
+    if (featureManager != null && !_navigated) {
+      _navigated = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/pos',
-            (_) => false,
-          );
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
         }
       });
     }
 
     return const Scaffold(
       backgroundColor: Color(0xFF0F1117),
-      body: Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFF6C63FF),
-        ),
-      ),
+      body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
     );
   }
 }

@@ -99,6 +99,9 @@ class SyncQueueService {
         }
       }
 
+      // Purge entries that have exhausted all retries
+      await _purgeDeadEntries();
+
       if (synced > 0) {
         _ref.read(syncCompleteProvider.notifier).state = DateTime.now();
         debugPrint('[SyncQueue] Synced $synced item(s) successfully');
@@ -107,6 +110,18 @@ class SyncQueueService {
       _syncInProgress = false;
       _ref.read(isSyncingProvider.notifier).state = false;
       await _refreshCount();
+    }
+  }
+
+  Future<void> _purgeDeadEntries() async {
+    final d = await _local.db;
+    final deleted = await d.delete(
+      'sync_queue',
+      where: 'retries >= ?',
+      whereArgs: [kMaxRetries],
+    );
+    if (deleted > 0) {
+      debugPrint('[SyncQueue] Purged $deleted dead entries');
     }
   }
 
@@ -138,7 +153,7 @@ class SyncQueueService {
           'payment_method': payload['payment_method'],
           'amount_tendered': payload['amount_tendered'],
           'change_amount': payload['change_amount'],
-          'reference_number': payload['reference_number'], // ← ADDED
+          'reference_number': payload['reference_number'],
           'paid_at': payload['paid_at'],
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
@@ -158,6 +173,21 @@ class SyncQueueService {
         }
 
       case 'adjust_stock':
+        // Check if this adjustment was already logged (idempotency)
+        final existingLog = await _client
+            .from('inventory_logs')
+            .select('id')
+            .eq('product_id', recordId)
+            .eq('action', payload['action'] as String)
+            .eq('notes', payload['notes'] ?? '')
+            .gte('created_at', payload['performed_at'] ?? '')
+            .maybeSingle();
+
+        if (existingLog != null) {
+          debugPrint('[SyncQueue] adjust_stock already applied, skipping');
+          break;
+        }
+
         final row = await _client
             .from('products')
             .select('stock_quantity')
@@ -166,10 +196,12 @@ class SyncQueueService {
         final currentStock = row['stock_quantity'] as int;
         final delta = payload['quantity_change'] as int;
         final newStock = currentStock + delta;
+
         await _client.from('products').update({
           'stock_quantity': newStock,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
+
         await _client.from('inventory_logs').insert({
           'business_id': payload['business_id'],
           'product_id': recordId,
@@ -179,6 +211,7 @@ class SyncQueueService {
           'quantity_after': newStock,
           'performed_by': payload['performed_by'],
           'notes': payload['notes'],
+          'performed_at': payload['performed_at'],
         });
 
       case 'add_staff':

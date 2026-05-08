@@ -221,6 +221,9 @@ class OrderService {
     await _deductInventory(businessId, items);
     await _local.upsertOrders([order]);
 
+    _ref.invalidate(productListProvider);
+  
+    await _local.upsertOrders([order]);
     return order;
   }
 
@@ -239,7 +242,7 @@ class OrderService {
 
     final offlineId = const Uuid().v4();
     final now = DateTime.now();
-    final localOrderNumber = now.millisecondsSinceEpoch % 100000;
+    final localOrderNumber = now.millisecondsSinceEpoch;
 
     final order = Order(
       id: offlineId,

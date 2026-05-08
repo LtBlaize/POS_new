@@ -22,7 +22,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
 
 // ── Database schema version ───────────────────────────────────────────────────
 
-const _kDbVersion = 4; // ← bumped from 3 to 4
+const _kDbVersion = 5; // ← bumped from 4 to 5
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -215,6 +215,7 @@ class LocalDbService {
         business_id TEXT NOT NULL,
         staff_id TEXT NOT NULL,
         staff_name TEXT NOT NULL,
+        'device_id TEXT,'
         opening_cash REAL NOT NULL DEFAULT 0,
         opened_at TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'open',
@@ -292,14 +293,19 @@ class LocalDbService {
         'ALTER TABLE orders ADD COLUMN reference_number TEXT',
       );
     }
+    if (oldVersion < 5) {
+  await db.execute(
+    'ALTER TABLE cashier_shifts ADD COLUMN device_id TEXT',
+  );
+}
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRODUCTS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  Future<void> upsertProducts(List<Product> products) async {
-    final d = await db;
+  Future<void> upsertProducts(  List<Product> products) => _write((d) async {
+    
     final batch = d.batch();
     final now = DateTime.now().toIso8601String();
     for (final p in products) {
@@ -326,8 +332,7 @@ class LocalDbService {
       );
     }
     await batch.commit(noResult: true);
-  }
-
+ });
   Future<List<Product>> getProducts(String businessId) async {
     final d = await db;
     final rows = await d.query(
@@ -413,11 +418,12 @@ class LocalDbService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      for (final item in order.items) {
+      for (int i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
         await txn.insert(
           'order_items',
           {
-            'id': '${order.id}_${item.product.id}',
+            'id': '${order.id}_${item.product.id}_$i',
             'order_id': order.id,
             'product_id': item.product.id,
             'product_name': item.product.name,
@@ -430,9 +436,16 @@ class LocalDbService {
       }
     });
   }
+  Future<void> purgeDeadQueueEntries(int maxRetries) async {
+  final d = await db;
+  await d.delete(
+    'sync_queue',
+    where: 'retries >= ?',
+    whereArgs: [maxRetries],
+  );
+}
 
-  Future<void> upsertOrders(List<Order> orders) async {
-    final d = await db;
+  Future<void> upsertOrders(List<Order> orders) => _write((d) async {    final d = await db;
     final now = DateTime.now().toIso8601String();
     await d.transaction((txn) async {
       for (final order in orders) {
@@ -468,11 +481,12 @@ class LocalDbService {
           where: 'order_id = ?',
           whereArgs: [order.id],
         );
-        for (final item in order.items) {
+        for (int i = 0; i < order.items.length; i++) {
+          final item = order.items[i];
           await txn.insert(
             'order_items',
             {
-              'id': '${order.id}_${item.product.id}',
+              'id': '${order.id}_${item.product.id}_$i',
               'order_id': order.id,
               'product_id': item.product.id,
               'product_name': item.product.name,
@@ -485,7 +499,7 @@ class LocalDbService {
         }
       }
     });
-  }
+  });
 
   /// Update payment fields on an existing local order row.
   /// Called by OrderService.processPayment so the local cache
@@ -598,7 +612,7 @@ class LocalDbService {
   // STAFF
   // ─────────────────────────────────────────────────────────────────────────────
 
-  Future<void> upsertStaff(List<StaffMember> members) async {
+  Future<void> upsertStaff(List<StaffMember> members) => _write((d) async {
     final d = await db;
     final batch = d.batch();
     final now = DateTime.now().toIso8601String();
@@ -618,7 +632,7 @@ class LocalDbService {
       );
     }
     await batch.commit(noResult: true);
-  }
+  });
 
   Future<List<StaffMember>> getStaff(String businessId) async {
     final d = await db;

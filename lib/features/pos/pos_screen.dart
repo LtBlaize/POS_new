@@ -548,22 +548,20 @@ class _AdaptiveSidebar extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    final authService = ref.read(authServiceProvider);
-    final cart        = ref.read(cartProvider.notifier);
-    final activeStaff = ref.read(activeStaffProvider.notifier);
-    final appLocked   = ref.read(appLockedProvider.notifier);
+    try {
+      await ref.read(authServiceProvider).logout();
+    } catch (e) {
+      debugPrint('[Logout] signOut error (continuing): $e');
+    }
 
-    cart.clear();
-    activeStaff.logout();
-    appLocked.state = true;
+    // Then clear local state
+    ref.read(cartProvider.notifier).clear();
+    ref.read(activeStaffProvider.notifier).logout();
+    ref.read(appLockedProvider.notifier).state = true;
 
     if (context.mounted) {
       Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     }
-
-    authService.logout().catchError((e) {
-      debugPrint('[Logout] Supabase signOut error (ignored): $e');
-    });
   }
 
   void _showCloseShift(BuildContext context, WidgetRef ref) {

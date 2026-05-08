@@ -13,6 +13,7 @@ import '../../features/tables/table_provider.dart';
 import '../../features/settings/settings_provider.dart';
 import 'reciept_service.dart';
 import 'thermal_print_service.dart';
+import '../services/sync_queue_service.dart'; 
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -161,16 +162,40 @@ class CheckoutService {
         discountAmount: discountAmount,
       );
 
-      if (hasKitchen && _isOnline) {
-        try {
-          final client = _ref.read(supabaseClientProvider);
-          await client.from('kitchen_tickets').insert({
-            'order_id': order.id,
-            'business_id': profile.businessId,
-            'status': 'queued',
-          });
-        } catch (e) {
-          debugPrint('[Checkout] Kitchen ticket failed (non-fatal): $e');
+      if (hasKitchen) {
+        if (_isOnline) {
+          try {
+            final client = _ref.read(supabaseClientProvider);
+            await client.from('kitchen_tickets').insert({
+              'order_id': order.id,
+              'business_id': profile.businessId,
+              'status': 'queued',
+            });
+          } catch (e) {
+            debugPrint('[Checkout] Kitchen ticket online failed, queuing: $e');
+            // fall through to queue
+            await _ref.read(syncQueueServiceProvider).enqueue(
+              operation: 'insert_kitchen_ticket',
+              tableName: 'kitchen_tickets',
+              recordId: order.id,
+              payload: {
+                'order_id': order.id,
+                'business_id': profile.businessId,
+                'status': 'queued',
+              },
+            );
+          }
+        } else {
+          await _ref.read(syncQueueServiceProvider).enqueue(
+            operation: 'insert_kitchen_ticket',
+            tableName: 'kitchen_tickets',
+            recordId: order.id,
+            payload: {
+              'order_id': order.id,
+              'business_id': profile.businessId,
+              'status': 'queued',
+            },
+          );
         }
       }
 
@@ -253,7 +278,7 @@ class CheckoutService {
     );
 
     // ✅ NEW: Auto open cash drawer
-    if (isRestaurant && paymentMethod == PaymentMethod.cash) {
+    if (paymentMethod == PaymentMethod.cash) {
       try {
         await ThermalPrintService.openCashDrawer();
       } catch (e) {

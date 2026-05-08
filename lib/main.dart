@@ -1,6 +1,6 @@
 // lib/main.dart
 import 'dart:io';
-
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,10 +34,11 @@ Future<void> main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  await dotenv.load(fileName: 'assets/.env');
 
   await Supabase.initialize(
-    url: 'https://qsdbufdixhyqlbygrncp.supabase.co',
-    anonKey: 'sb_publishable_IMKcLGls9al71UvjElf_Kw_iC0N4Dqu',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       autoRefreshToken: true,
@@ -129,37 +130,27 @@ Future<void> main() async {
 
 // ── Root app ───────────────────────────────────────────────────────────────────
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   final String initialRoute;
   const MyApp({super.key, required this.initialRoute});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  bool _initialEventSkipped = false;
+  bool _isNavigating = false;
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
 
-    bool isNavigating = false;
-
-    // FIX 2: Skip the very first auth event emitted on app start.
-    //
-    // authStateProvider always fires an initialSession event immediately when
-    // the app launches. The old code treated this as a real sign-in transition
-    // and tried to navigate — but at this point the navigator may not be ready,
-    // or the initial route is already correct, causing a loop back to /login.
-    //
-    // By skipping the first event, we let the initialRoute (set from the
-    // session check in main()) handle the first screen. The listener only acts
-    // on REAL transitions after that (user logs in, logs out, etc.).
-    bool _initialEventSkipped = false;
-
-    ref.listen<AsyncValue<User?>>(
-      authStateProvider,
-      (previous, next) async {
-        // Skip the first emission — it's the initialSession, not a transition
-        if (!_initialEventSkipped) {
-          _initialEventSkipped = true;
-          debugPrint('[Auth] Skipping initial session event');
-          return;
-        }
+    ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) async {
+      if (!_initialEventSkipped) {
+        _initialEventSkipped = true;
+        return;
+      }
 
         final previousUser = previous?.asData?.value;
         final currentUser  = next.asData?.value;
@@ -168,12 +159,12 @@ class MyApp extends ConsumerWidget {
         if (previousUser?.id == currentUser?.id) return;
 
         // Guard: only one navigation in flight at a time
-        if (isNavigating) return;
-        isNavigating = true;
+        if (_isNavigating) return;
+        _isNavigating = true; // FIX: was 'isNavigating' (missing underscore)
 
         final nav = router.navigatorKey.currentState;
         if (nav == null) {
-          isNavigating = false;
+          _isNavigating = false;
           return;
         }
 
@@ -231,7 +222,7 @@ class MyApp extends ConsumerWidget {
             }
           }
         } finally {
-          isNavigating = false;
+          _isNavigating = false; // FIX: was 'isNavigating' (missing underscore)
         }
       },
     );
@@ -269,7 +260,7 @@ class MyApp extends ConsumerWidget {
         fontFamily: 'Inter',
       ),
       navigatorKey: router.navigatorKey,
-      initialRoute: initialRoute,
+      initialRoute: widget.initialRoute, // FIX: was 'initialRoute', must be 'widget.initialRoute'
       onGenerateRoute: router.onGenerateRoute,
     );
   }

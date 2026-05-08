@@ -381,7 +381,7 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
 
   return DailyReport(
     totalRevenue: totalRevenue,
-    totalOrders: orders.length,
+    totalOrders: completed,             // ← only paid orders
     avgOrderValue: completed > 0 ? totalRevenue / completed : 0,
     revenueByPayment: byPayment,
     topProducts: topProducts.take(5).toList(),
@@ -415,24 +415,27 @@ Future<(int, int)> _localOrderCounts(
   DateTime from,
   DateTime to,
 ) async {
-  final db = await local.db;
-  final orders = await db.query(
-    'orders',
-    columns: ['id'],
-    where:
-        'business_id = ? AND cashier_id = ? AND status = ? AND created_at >= ? AND created_at <= ?',
-    whereArgs: [
-      businessId, staffId, 'completed',
-      from.toIso8601String(), to.toIso8601String(),
-    ],
-  );
-  if (orders.isEmpty) return (0, 0);
-  final ids = orders.map((o) => "'${o['id']}'").join(',');
-  final items = await db.rawQuery(
-    'SELECT SUM(quantity) as total FROM order_items WHERE order_id IN ($ids)',
-  );
-  return (orders.length, (items.first['total'] as num?)?.toInt() ?? 0);
-}
+    final db = await local.db;
+    final orders = await db.query(
+      'orders',
+      columns: ['id'],
+      where: 'business_id = ? AND cashier_id = ? AND status = ? '
+            'AND created_at >= ? AND created_at <= ?',
+      whereArgs: [businessId, staffId, 'completed',
+                  from.toIso8601String(), to.toIso8601String()],
+    );
+    if (orders.isEmpty) return (0, 0);
+
+    // Parameterized IN clause — no string interpolation
+    final ids = orders.map((o) => o['id'] as String).toList();
+    final placeholders = List.filled(ids.length, '?').join(',');
+    final items = await db.rawQuery(
+      'SELECT SUM(quantity) as total FROM order_items '
+      'WHERE order_id IN ($placeholders)',
+      ids, // passed as args, not interpolated
+    );
+    return (orders.length, (items.first['total'] as num?)?.toInt() ?? 0);
+  }
 
 /// Public so shift widgets can call it directly if needed.
 CashierShift shiftFromRow(Map<String, dynamic> r) => CashierShift(

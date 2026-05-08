@@ -8,6 +8,7 @@ environment:
   sdk: ^3.7.0
 
 dependencies:
+
   flutter:
     sdk: flutter
 
@@ -51,6 +52,7 @@ dependencies:
   pdf: ^3.10.8             # Build the thermal receipt PDF
   esc_pos_utils_plus: ^2.0.1  # ESC/POS commands for cash drawer pulse
   
+  flutter_dotenv: ^5.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -65,6 +67,8 @@ flutter_icons:
   adaptive_icon_background: "#142434"
 
 flutter:
+  assets:
+    - assets/.env
   uses-material-design: true
   # fonts:
   #   - family: Inter
