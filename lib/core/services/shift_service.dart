@@ -22,14 +22,6 @@ class ShiftService {
   const ShiftService(this._db, this._supabase);
 
   // ── Device ID ──────────────────────────────────────────────────────────────
-  //
-  // Each physical device gets a stable UUID stored in SharedPreferences.
-  // This is the key fix: shifts are now scoped by (business_id, staff_id,
-  // device_id) so two devices using the same staff account (same staff_id)
-  // get completely independent shifts — no more shared/crossed shift rows.
-  //
-  // The device_id is generated once on first launch and never changes,
-  // so the same device always resumes its own open shift correctly.
 
   static String? _cachedDeviceId;
 
@@ -66,7 +58,7 @@ class ShiftService {
       'business_id': businessId,
       'staff_id': staffId,
       'staff_name': staffName,
-      'device_id': deviceId,   // ← NEW: stored so queries can filter by device
+      'device_id': deviceId,
       'opening_cash': openingCash,
       'opened_at': now.toIso8601String(),
       'status': 'open',
@@ -75,6 +67,7 @@ class ShiftService {
       'gcash_sales': 0.0,
       'other_sales': 0.0,
       'credit_given': 0.0,
+      'credits_paid': 0.0,
       'expenses': 0.0,
     };
 
@@ -102,14 +95,11 @@ class ShiftService {
   Future<CashierShift?> getOpenShift({
     required String businessId,
     required String staffId,
-    String? deviceId,   // ← optional so existing callers don't break
+    String? deviceId,
   }) async {
-    // Resolve device ID — always use this device's ID when not specified
     final resolvedDeviceId = deviceId ?? await _getDeviceId();
 
     try {
-      // Query scoped to this device: same staff on a different device gets
-      // a different shift row because device_id won't match.
       var query = _supabase
           .from('cashier_shifts')
           .select()
@@ -117,51 +107,33 @@ class ShiftService {
           .eq('staff_id', staffId)
           .eq('status', 'open');
 
-      // Only filter by device_id if the column exists (graceful fallback
-      // for deployments that haven't run the migration yet).
-      // Once you add device_id to your cashier_shifts table in Supabase,
-      // this filter will take effect automatically.
-      try {
-        final rows = await query
-            .eq('device_id', resolvedDeviceId)
-            .order('opened_at', ascending: false)
-            .limit(1);
-
-        if (rows.isNotEmpty) {
-          final shift = _shiftFromMap(rows.first);
-          final d = await _db.db;
-          await d.insert('cashier_shifts', _shiftToRow(shift),
-              conflictAlgorithm: ConflictAlgorithm.replace);
-          return shift;
-        }
-        return null;
-      } catch (_) {
-        // device_id column doesn't exist yet — fall back to old behaviour
-        final rows = await query
-            .order('opened_at', ascending: false)
-            .limit(1);
-        if (rows.isNotEmpty) {
-          final shift = _shiftFromMap(rows.first);
-          final d = await _db.db;
-          await d.insert('cashier_shifts', _shiftToRow(shift),
-              conflictAlgorithm: ConflictAlgorithm.replace);
-          return shift;
-        }
-        return null;
+      // Search any device — so Device B joins Device A's open shift
+      // instead of prompting to open a new one.
+      final rows = await query
+          .order('opened_at', ascending: false)
+          .limit(1);
+      if (rows.isNotEmpty) {
+        final shift = _shiftFromMap(rows.first);
+        final d = await _db.db;
+        await d.insert('cashier_shifts', _shiftToRow(shift),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+        return shift;
       }
+      return null;
+      
     } catch (_) {}
 
-    // Offline fallback: local DB also filters by device_id
+    // Offline fallback
     final d = await _db.db;
     final rows = await d.query(
       'cashier_shifts',
-      where: 'business_id = ? AND staff_id = ? AND status = ? AND device_id = ?',
+      where:
+          'business_id = ? AND staff_id = ? AND status = ? AND device_id = ?',
       whereArgs: [businessId, staffId, 'open', resolvedDeviceId],
       orderBy: 'opened_at DESC',
       limit: 1,
     );
     if (rows.isEmpty) {
-      // Fallback without device_id for older local rows
       final fallback = await d.query(
         'cashier_shifts',
         where: 'business_id = ? AND staff_id = ? AND status = ?',
@@ -203,6 +175,7 @@ class ShiftService {
       'gcash_sales': summary['gcash_sales'],
       'other_sales': summary['other_sales'],
       'credit_given': summary['credit_given'],
+      'credits_paid': summary['credits_paid'],
     };
 
     try {
@@ -226,6 +199,7 @@ class ShiftService {
       gcashSales: summary['gcash_sales']!,
       otherSales: summary['other_sales']!,
       creditGiven: summary['credit_given']!,
+      creditsPaid: summary['credits_paid']!,
     );
   }
 
@@ -244,6 +218,7 @@ class ShiftService {
       gcashSales: summary['gcash_sales'],
       otherSales: summary['other_sales'],
       creditGiven: summary['credit_given'],
+      creditsPaid: summary['credits_paid'],
     );
   }
 
@@ -260,6 +235,7 @@ class ShiftService {
     double gcashSales = 0;
     double otherSales = 0;
     double creditGiven = 0;
+    double creditsPaid = 0;
 
     void tally(Map<String, dynamic> o) {
       final status = o['status'] as String? ?? '';
@@ -285,6 +261,7 @@ class ShiftService {
     }
 
     try {
+      // ── Tally paid orders ──────────────────────────────────────────────────
       final orders = await _supabase
           .from('orders')
           .select('total_amount, payment_method, status, paid_at')
@@ -297,6 +274,7 @@ class ShiftService {
         tally(o);
       }
 
+      // ── Tally credit given ─────────────────────────────────────────────────
       try {
         final credits = await _supabase
             .from('credit_transactions')
@@ -310,8 +288,25 @@ class ShiftService {
           creditGiven += (c['amount'] as num).toDouble();
         }
       } catch (_) {}
+
+      // ── Tally credits paid (payments collected on existing utang) ──────────
+      try {
+        final payments = await _supabase
+            .from('credit_transactions')
+            .select('amount')
+            .eq('business_id', businessId)
+            .eq('type', 'payment')
+            .gte('created_at', from.toUtc().toIso8601String())
+            .lte('created_at', to.toUtc().toIso8601String());
+
+        for (final p in payments) {
+          creditsPaid += (p['amount'] as num).toDouble();
+        }
+      } catch (_) {}
     } catch (_) {
+      // ── Full offline fallback ──────────────────────────────────────────────
       final d = await _db.db;
+
       final rows = await d.rawQuery('''
         SELECT total_amount, payment_method, status, paid_at FROM orders
         WHERE business_id = ? AND cashier_id = ?
@@ -322,10 +317,39 @@ class ShiftService {
         from.toUtc().toIso8601String(),
         to.toUtc().toIso8601String(),
       ]);
-
       for (final o in rows) {
         tally(o);
       }
+
+      // Credit given — offline
+      try {
+        final creditRows = await d.rawQuery('''
+          SELECT amount FROM credit_transactions
+          WHERE type = 'credit'
+            AND created_at >= ? AND created_at <= ?
+        ''', [
+          from.toUtc().toIso8601String(),
+          to.toUtc().toIso8601String(),
+        ]);
+        for (final c in creditRows) {
+          creditGiven += (c['amount'] as num).toDouble();
+        }
+      } catch (_) {}
+
+      // Credits paid — offline
+      try {
+        final paymentRows = await d.rawQuery('''
+          SELECT amount FROM credit_transactions
+          WHERE type = 'payment'
+            AND created_at >= ? AND created_at <= ?
+        ''', [
+          from.toUtc().toIso8601String(),
+          to.toUtc().toIso8601String(),
+        ]);
+        for (final p in paymentRows) {
+          creditsPaid += (p['amount'] as num).toDouble();
+        }
+      } catch (_) {}
     }
 
     return {
@@ -334,6 +358,7 @@ class ShiftService {
       'gcash_sales': gcashSales,
       'other_sales': otherSales,
       'credit_given': creditGiven,
+      'credits_paid': creditsPaid,
     };
   }
 
@@ -405,6 +430,7 @@ class ShiftService {
         gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
         otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
         creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
+        creditsPaid: (r['credits_paid'] as num? ?? 0).toDouble(),
         expenses: (r['expenses'] as num? ?? 0).toDouble(),
       );
 
@@ -424,6 +450,7 @@ class ShiftService {
         'gcash_sales': s.gcashSales,
         'other_sales': s.otherSales,
         'credit_given': s.creditGiven,
+        'credits_paid': s.creditsPaid,
         'expenses': s.expenses,
       };
 }

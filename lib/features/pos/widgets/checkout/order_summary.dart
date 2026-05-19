@@ -1,15 +1,23 @@
 // lib/features/pos/widgets/checkout/order_summary.dart
 import 'package:flutter/material.dart';
 import 'checkout_theme.dart';
+import '../../../../core/models/cart_item.dart';
 
+// REPLACE
 class OrderSummaryCard extends StatelessWidget {
   final List items;
   final double subtotal;
+  final double itemsTotal;
+  final double orderDiscountValue;
+  final String? orderDiscountLabel;
 
   const OrderSummaryCard({
     super.key,
     required this.items,
     required this.subtotal,
+    this.itemsTotal = 0,
+    this.orderDiscountValue = 0,
+    this.orderDiscountLabel,
   });
 
   @override
@@ -49,19 +57,48 @@ class OrderSummaryCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      // REPLACE
                       Expanded(
-                        child: Text(
-                          item.product.name,
-                          style: const TextStyle(
-                              fontSize: 13, color: CheckoutTheme.textHigh),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.product.name,
+                              style: const TextStyle(
+                                  fontSize: 13, color: CheckoutTheme.textHigh),
+                            ),
+                            if (item.discountAmount > 0)
+                              Text(
+                                item.discountType == DiscountType.percentage
+                                    ? '-${item.discountAmount.toStringAsFixed(0)}%'
+                                    : '-₱${item.discountValue.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    color: CheckoutTheme.rose,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                          ],
                         ),
                       ),
-                      Text(
-                        '₱${item.total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: CheckoutTheme.textHigh),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (item.discountAmount > 0)
+                            Text(
+                              '₱${item.rawTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: CheckoutTheme.textLow,
+                                  decoration: TextDecoration.lineThrough),
+                            ),
+                          Text(
+                            '₱${item.total.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: CheckoutTheme.textHigh),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -74,25 +111,52 @@ class OrderSummaryCard extends StatelessWidget {
             height: 1,
             color: CheckoutTheme.border,
           ),
+          // REPLACE
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-            child: Row(
+            child: Column(
               children: [
-                const Text(
-                  'Total',
-                  style: TextStyle(
-                      color: CheckoutTheme.textMid,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                Text(
-                  '₱${subtotal.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      color: CheckoutTheme.mint,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5),
+                if (orderDiscountValue > 0) ...[
+                  Row(
+                    children: [
+                      Text(
+                        orderDiscountLabel ?? 'Order Discount',
+                        style: const TextStyle(
+                            color: CheckoutTheme.rose,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '-₱${orderDiscountValue.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            color: CheckoutTheme.rose,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                Row(
+                  children: [
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                          color: CheckoutTheme.textMid,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '₱${subtotal.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: CheckoutTheme.mint,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5),
+                    ),
+                  ],
                 ),
               ],
             ),

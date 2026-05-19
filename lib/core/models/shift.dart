@@ -21,8 +21,9 @@ class CashierShift {
   final double cashSales;
   final double gcashSales;
   final double otherSales;
-  final double creditGiven; // utang added during shift
-  final double expenses;    // placeholder, full tab later
+  final double creditGiven;   // utang added during shift
+  final double creditsPaid;   // credit payments collected during shift
+  final double expenses;      // placeholder, full tab later
 
   const CashierShift({
     required this.id,
@@ -40,11 +41,13 @@ class CashierShift {
     this.gcashSales = 0,
     this.otherSales = 0,
     this.creditGiven = 0,
+    this.creditsPaid = 0,
     this.expenses = 0,
   });
 
-  // Expected cash = opening float + cash sales - expenses
-  double get expectedCash => openingCash + cashSales - expenses;
+  // Expected cash = opening float + cash sales + credits paid - expenses
+  double get expectedCash =>
+      openingCash + cashSales + creditsPaid - expenses;
 
   // Over/short = actual - expected (negative = short, positive = over)
   double get overShort =>
@@ -63,6 +66,7 @@ class CashierShift {
     double? gcashSales,
     double? otherSales,
     double? creditGiven,
+    double? creditsPaid,
     double? expenses,
   }) =>
       CashierShift(
@@ -81,6 +85,7 @@ class CashierShift {
         gcashSales: gcashSales ?? this.gcashSales,
         otherSales: otherSales ?? this.otherSales,
         creditGiven: creditGiven ?? this.creditGiven,
+        creditsPaid: creditsPaid ?? this.creditsPaid,
         expenses: expenses ?? this.expenses,
       );
 }

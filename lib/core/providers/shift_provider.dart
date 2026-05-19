@@ -32,8 +32,10 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   }
 
   Future<void> openShift({required double openingCash}) async {
-    final profile = ref.read(profileProvider).value!;
-    final staff = ref.read(activeStaffProvider)!;
+    final profile = await ref.read(profileProvider.future);
+    if (profile == null) return;
+    final staff = ref.read(activeStaffProvider);
+    if (staff == null) return;
     final businessId = profile.businessId!;
 
     state = const AsyncLoading();

@@ -5,6 +5,8 @@ import '../../../shared/widgets/app_colors.dart';
 import '../inventory_service.dart';
 import '../../../core/providers/product_provider.dart';
 import '../../../core/models/product.dart';
+import '../../../core/providers/staff_provider.dart'; // ← added
+import '../../../core/models/staff.dart';             // ← added
 
 class AddProductDialog extends ConsumerStatefulWidget {
 final Product? product;
@@ -32,35 +34,39 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   bool _trackInventory = false;
   bool _saving = false;
   bool _addingNewCategory = false;
+  int _originalStock = 0; // ← added: used to block non-owners from reducing stock on edit
 
   // Categories loaded from DB
   List<Map<String, dynamic>> _categories = [];
   bool _categoriesLoading = true;
+
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red),
     );
   }
- @override
-void initState() {
-  super.initState();
-  _loadCategories();
-  
-  // Pre-fill if editing
-  final p = widget.product;
-  if (p != null) {
-    _nameController.text       = p.name;
-    _priceController.text      = p.price.toStringAsFixed(2);
-    _descController.text       = p.description ?? '';
-    _barcodeController.text    = p.barcode ?? '';
-    _skuController.text        = p.sku ?? '';
-    _stockController.text      = '${p.stockQuantity}';
-    _imageUrlController.text   = p.imageUrl ?? '';
-    _trackInventory            = p.trackInventory;
-    _selectedCategoryId        = p.categoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+
+    // Pre-fill if editing
+    final p = widget.product;
+    if (p != null) {
+      _nameController.text     = p.name;
+      _priceController.text    = p.price.toStringAsFixed(2);
+      _descController.text     = p.description ?? '';
+      _barcodeController.text  = p.barcode ?? '';
+      _skuController.text      = p.sku ?? '';
+      _stockController.text    = '${p.stockQuantity}';
+      _imageUrlController.text = p.imageUrl ?? '';
+      _trackInventory          = p.trackInventory;
+      _selectedCategoryId      = p.categoryId;
+      _originalStock           = p.stockQuantity; // ← added
+    }
   }
-}
 
   // ── Load categories for this business ──────────────────────────────────────
 
@@ -119,60 +125,76 @@ void initState() {
   // ── Save product ───────────────────────────────────────────────────────────
 
   Future<void> _save() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  final profile = ref.read(profileProvider).asData?.value;
-  if (profile?.businessId == null) {
-    _showError('No business profile found.');
-    return;
-  }
-
-  setState(() => _saving = true);
-
-  try {
-    final client = ref.read(supabaseClientProvider);
-    final data = {
-      'category_id':     _selectedCategoryId,
-      'name':            _nameController.text.trim(),
-      'description':     _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-      'price':           double.parse(_priceController.text),
-      'image_url':       _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
-      'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
-      'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
-      'track_inventory': _trackInventory,
-      'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
-    };
-
-    if (widget.product == null) {
-      // ── Insert ──────────────────────────────────────────────────────
-      await client.from('products').insert({
-        ...data,
-        'business_id': profile!.businessId,
-        'is_available': true,
-        'is_active':    true,
-      });
-    } else {
-      // ── Update ──────────────────────────────────────────────────────
-      await client
-          .from('products')
-          .update(data)
-          .eq('id', widget.product!.id);
+    final profile = ref.read(profileProvider).asData?.value;
+    if (profile?.businessId == null) {
+      _showError('No business profile found.');
+      return;
     }
 
-    await ref.read(inventoryProvider.notifier).refresh();
-    ref.invalidate(productListProvider);
+    // ← added: block non-owners from reducing stock when editing
+    if (widget.product != null && _trackInventory) {
+      final staff = ref.read(activeStaffProvider);
+      final isOwner = staff?.role == StaffRole.owner;
+      final newStock = int.tryParse(_stockController.text) ?? 0;
+      if (!isOwner && newStock < _originalStock) {
+        _showError('Cannot reduce stock below $_originalStock');
+        return;
+      }
+    }
 
-    if (mounted) Navigator.of(context).pop();
-  } catch (e) {
-    setState(() => _saving = false);
-    _showError('Failed to save product: $e');
+    setState(() => _saving = true);
+
+    try {
+      final client = ref.read(supabaseClientProvider);
+      final data = {
+        'category_id':     _selectedCategoryId,
+        'name':            _nameController.text.trim(),
+        'description':     _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+        'price':           double.parse(_priceController.text),
+        'image_url':       _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
+        'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
+        'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+        'track_inventory': _trackInventory,
+        'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
+      };
+
+      if (widget.product == null) {
+        // ── Insert ──────────────────────────────────────────────────────
+        await client.from('products').insert({
+          ...data,
+          'business_id': profile!.businessId,
+          'is_available': true,
+          'is_active':    true,
+        });
+      } else {
+        // ── Update ──────────────────────────────────────────────────────
+        await client
+            .from('products')
+            .update(data)
+            .eq('id', widget.product!.id);
+      }
+
+      await ref.read(inventoryProvider.notifier).refresh();
+      ref.invalidate(productListProvider);
+
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      setState(() => _saving = false);
+      _showError('Failed to save product: $e');
+    }
   }
-}
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    // ← added: resolve role once for the whole form
+    final staff = ref.read(activeStaffProvider);
+    final isOwner = staff?.role == StaffRole.owner;
+    final isEdit = widget.product != null;
+
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -191,11 +213,11 @@ void initState() {
               ),
               child: Row(
                 children: [
-                  Icon(widget.product == null ? Icons.add_box_outlined : Icons.edit_outlined,
-    color: Colors.white, size: 20),
-const SizedBox(width: 10),
-Text(widget.product == null ? 'Add Product' : 'Edit Product',
-    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  Icon(isEdit ? Icons.edit_outlined : Icons.add_box_outlined,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(isEdit ? 'Edit Product' : 'Add Product',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -333,19 +355,33 @@ Text(widget.product == null ? 'Add Product' : 'Edit Product',
                       // Stock quantity — only visible when tracking
                       if (_trackInventory) ...[
                         const SizedBox(height: 14),
-                        _label('Initial Stock Quantity'),
+                        // ← changed: label differs for add vs edit
+                        _label(isEdit ? 'Stock Quantity' : 'Initial Stock Quantity'),
                         _field(
                           controller: _stockController,
                           hint: '0',
                           keyboardType: TextInputType.number,
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) return null;
-                            if (int.tryParse(v) == null) {
-                              return 'Enter a whole number';
+                            final parsed = int.tryParse(v);
+                            if (parsed == null) return 'Enter a whole number';
+                            // ← added: inline validator for non-owners on edit
+                            if (isEdit && !isOwner && parsed < _originalStock) {
+                              return 'Cannot go below $_originalStock';
                             }
                             return null;
                           },
                         ),
+                        // ← added: hint shown to non-owners when editing
+                        if (isEdit && !isOwner) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Minimum: $_originalStock (cannot reduce stock)',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary),
+                          ),
+                        ],
                       ],
 
                       const SizedBox(height: 24),
@@ -364,10 +400,10 @@ Text(widget.product == null ? 'Add Product' : 'Edit Product',
                                 borderRadius: BorderRadius.circular(12)),
                           ),
                           child: Text(
-                          widget.product == null ? 'Save Product' : 'Update Product',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            isEdit ? 'Update Product' : 'Save Product',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
                         ),
-                      ),
                       ),
                     ],
                   ),
@@ -570,6 +606,7 @@ class _NewCategoryField extends StatelessWidget {
     );
   }
 }
+
 // ── Track inventory toggle ────────────────────────────────────────────────────
 
 class _TrackInventoryToggle extends StatelessWidget {

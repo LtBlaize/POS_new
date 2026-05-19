@@ -20,6 +20,7 @@ import '../../shared/widgets/app_colors.dart';
 import '../../core/services/lan_config_service.dart';
 import '../../core/services/lan_client_service.dart';
 import '../../../main.dart' show deviceRoleProvider, DeviceRole;
+import '../../config/business_config.dart';
 
 // ── Supabase kitchen orders provider ──────────────────────────────────────────
 //
@@ -141,7 +142,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
   // Whether this screen is using LAN mode (kitchen device) or DB mode (owner)
   bool get _isOwnerMode {
     final role = ref.read(deviceRoleProvider);
-    return role != DeviceRole.kitchen;
+    if (role == DeviceRole.kitchen) return false;
+    // Single-device mode: POS and kitchen run on the same device
+    final kitchenMode = ref.read(businessConfigProvider)?.kitchenMode ?? 'single_device';
+    return kitchenMode == 'single_device' || role == DeviceRole.pos;
   }
 
   @override

@@ -93,7 +93,8 @@ class _CartPanelState extends ConsumerState<CartPanel> {
     final items = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final hasKitchen = widget.featureManager.hasFeature('kitchen');
-    final total = items.fold(0.0, (sum, i) => sum + i.total);
+    ref.watch(cartProvider); // ensure rebuild on discount change
+    final total = ref.read(cartProvider.notifier).grandTotal;
 
     return Container(
       width: 340,
@@ -244,6 +245,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
             ),
             child: Column(
               children: [
+                // REPLACE
                 Row(
                   children: [
                     const Text('Subtotal',
@@ -251,10 +253,12 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                             fontSize: 13,
                             color: AppColors.textSecondary)),
                     const Spacer(),
-                    Text('₱${total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary)),
+                    Text(
+                      '₱${ref.read(cartProvider.notifier).itemsTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),

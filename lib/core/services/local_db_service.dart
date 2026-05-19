@@ -21,8 +21,21 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
 });
 
 // ── Database schema version ───────────────────────────────────────────────────
-
-const _kDbVersion = 5; // ← bumped from 4 to 5
+//
+// v1 — base tables: products, orders, order_items, staff_members,
+//       sync_queue, reports_cache, credit_customers, credit_transactions
+// v2 — added credit_customers + credit_transactions
+// v3 — added cashier_shifts
+// v4 — added reference_number column to orders
+// v5 — added device_id column to cashier_shifts
+// v6 — added void_order_items table
+// v7 — added business_id column to credit_transactions
+//      WHY: the column was missing from the original schema, so offline
+//      shift summaries couldn't filter credits by business, and any insert
+//      that included business_id (offline payment path) would crash with
+//      "table has no column named business_id". The ALTER TABLE in _onUpgrade
+//      adds it safely to existing installs without wiping data.
+const _kDbVersion = 7;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -194,10 +207,12 @@ class LocalDbService {
       )
     ''');
 
+    // v7: business_id included from the start on fresh installs
     batch.execute('''
       CREATE TABLE credit_transactions (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
+        business_id TEXT NOT NULL DEFAULT '',
         type TEXT NOT NULL,
         amount REAL NOT NULL,
         note TEXT,
@@ -215,7 +230,7 @@ class LocalDbService {
         business_id TEXT NOT NULL,
         staff_id TEXT NOT NULL,
         staff_name TEXT NOT NULL,
-        'device_id TEXT,'
+        device_id TEXT,
         opening_cash REAL NOT NULL DEFAULT 0,
         opened_at TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'open',
@@ -227,11 +242,30 @@ class LocalDbService {
         gcash_sales REAL NOT NULL DEFAULT 0,
         other_sales REAL NOT NULL DEFAULT 0,
         credit_given REAL NOT NULL DEFAULT 0,
+        credits_paid REAL NOT NULL DEFAULT 0,
         expenses REAL NOT NULL DEFAULT 0
       )
     ''');
 
-    // ── v4: reference_number already included in orders DDL above ─────────────
+    // ── v6 tables ─────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE void_order_items (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        unit_price REAL NOT NULL,
+        quantity INTEGER NOT NULL,
+        subtotal REAL NOT NULL,
+        reason TEXT NOT NULL,
+        voided_by_staff_id TEXT NOT NULL,
+        voided_by_staff_name TEXT NOT NULL,
+        voided_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (order_id) REFERENCES orders(id)
+      )
+    ''');
 
     await batch.commit(noResult: true);
   }
@@ -253,6 +287,7 @@ class LocalDbService {
         CREATE TABLE IF NOT EXISTS credit_transactions (
           id TEXT PRIMARY KEY,
           customer_id TEXT NOT NULL,
+          business_id TEXT NOT NULL DEFAULT '',
           type TEXT NOT NULL,
           amount REAL NOT NULL,
           note TEXT,
@@ -281,58 +316,103 @@ class LocalDbService {
           gcash_sales REAL NOT NULL DEFAULT 0,
           other_sales REAL NOT NULL DEFAULT 0,
           credit_given REAL NOT NULL DEFAULT 0,
+          credits_paid REAL NOT NULL DEFAULT 0,
           expenses REAL NOT NULL DEFAULT 0
         )
       ''');
     }
 
     if (oldVersion < 4) {
-      // Add reference_number column to existing orders table
-      // SQLite ALTER TABLE only supports ADD COLUMN
       await db.execute(
         'ALTER TABLE orders ADD COLUMN reference_number TEXT',
       );
     }
+
     if (oldVersion < 5) {
-  await db.execute(
-    'ALTER TABLE cashier_shifts ADD COLUMN device_id TEXT',
-  );
-}
+      await db.execute(
+        'ALTER TABLE cashier_shifts ADD COLUMN device_id TEXT',
+      );
+    }
+
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS void_order_items (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          product_id TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          unit_price REAL NOT NULL,
+          quantity INTEGER NOT NULL,
+          subtotal REAL NOT NULL,
+          reason TEXT NOT NULL,
+          voided_by_staff_id TEXT NOT NULL,
+          voided_by_staff_name TEXT NOT NULL,
+          voided_at TEXT NOT NULL,
+          synced INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (order_id) REFERENCES orders(id)
+        )
+      ''');
+    }
+
+    if (oldVersion < 7) {
+      // Add business_id to credit_transactions.
+      // Wrapped in try/catch because fresh installs that ran _onCreate
+      // at v7 already have this column — ALTER TABLE would throw.
+      try {
+        await db.execute(
+          'ALTER TABLE credit_transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ""',
+        );
+      } catch (e) {
+        debugPrint(
+            '[LocalDb] v7 migration: business_id already exists, skipping ($e)');
+      }
+
+      // Add credits_paid to cashier_shifts if missing (was absent in v3 DDL
+      // on some installs).
+      try {
+        await db.execute(
+          'ALTER TABLE cashier_shifts ADD COLUMN credits_paid REAL NOT NULL DEFAULT 0',
+        );
+      } catch (e) {
+        debugPrint(
+            '[LocalDb] v7 migration: credits_paid already exists, skipping ($e)');
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRODUCTS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  Future<void> upsertProducts(  List<Product> products) => _write((d) async {
-    
-    final batch = d.batch();
-    final now = DateTime.now().toIso8601String();
-    for (final p in products) {
-      batch.insert(
-        'products',
-        {
-          'id': p.id,
-          'business_id': p.businessId,
-          'category_id': p.categoryId,
-          'name': p.name,
-          'description': p.description,
-          'price': p.price,
-          'image_url': p.imageUrl,
-          'barcode': p.barcode,
-          'sku': p.sku,
-          'track_inventory': p.trackInventory ? 1 : 0,
-          'stock_quantity': p.stockQuantity,
-          'is_available': p.isAvailable ? 1 : 0,
-          'is_active': p.isActive ? 1 : 0,
-          'category_name': p.category,
-          'synced_at': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
- });
+  Future<void> upsertProducts(List<Product> products) => _write((d) async {
+        final batch = d.batch();
+        final now = DateTime.now().toIso8601String();
+        for (final p in products) {
+          batch.insert(
+            'products',
+            {
+              'id': p.id,
+              'business_id': p.businessId,
+              'category_id': p.categoryId,
+              'name': p.name,
+              'description': p.description,
+              'price': p.price,
+              'image_url': p.imageUrl,
+              'barcode': p.barcode,
+              'sku': p.sku,
+              'track_inventory': p.trackInventory ? 1 : 0,
+              'stock_quantity': p.stockQuantity,
+              'is_available': p.isAvailable ? 1 : 0,
+              'is_active': p.isActive ? 1 : 0,
+              'category_name': p.category,
+              'synced_at': now,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+      });
+
   Future<List<Product>> getProducts(String businessId) async {
     final d = await db;
     final rows = await d.query(
@@ -350,22 +430,23 @@ class LocalDbService {
       'products',
       {
         'stock_quantity': newStock,
-        // ✅ Keep local cache in sync with availability
         'is_available': newStock > 0 ? 1 : 0,
       },
       where: 'id = ?',
       whereArgs: [productId],
     );
   }
-  Future<void> updateProductAvailability(String productId, bool isAvailable) async {
-  final d = await db;
-  await d.update(
-    'products',
-    {'is_available': isAvailable ? 1 : 0},
-    where: 'id = ?',
-    whereArgs: [productId],
-  );
-}
+
+  Future<void> updateProductAvailability(
+      String productId, bool isAvailable) async {
+    final d = await db;
+    await d.update(
+      'products',
+      {'is_available': isAvailable ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  }
 
   Product _productFromRow(Map<String, dynamic> row) => Product(
         id: row['id'] as String,
@@ -408,7 +489,7 @@ class LocalDbService {
           'payment_method': order.paymentMethod?.value,
           'amount_tendered': order.amountTendered,
           'change_amount': order.changeAmount,
-          'reference_number': order.referenceNumber, // ← NEW
+          'reference_number': order.referenceNumber,
           'notes': order.notes,
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
@@ -436,80 +517,78 @@ class LocalDbService {
       }
     });
   }
+
   Future<void> purgeDeadQueueEntries(int maxRetries) async {
-  final d = await db;
-  await d.delete(
-    'sync_queue',
-    where: 'retries >= ?',
-    whereArgs: [maxRetries],
-  );
-}
+    final d = await db;
+    await d.delete(
+      'sync_queue',
+      where: 'retries >= ?',
+      whereArgs: [maxRetries],
+    );
+  }
 
-  Future<void> upsertOrders(List<Order> orders) => _write((d) async {    final d = await db;
-    final now = DateTime.now().toIso8601String();
-    await d.transaction((txn) async {
-      for (final order in orders) {
-        await txn.insert(
-          'orders',
-          {
-            'id': order.id,
-            'business_id': order.businessId,
-            'table_id': order.tableId,
-            'cashier_id': order.cashierId,
-            'order_number': order.orderNumber,
-            'order_type': order.orderType.value,
-            'status': order.status.value,
-            'subtotal': order.subtotal,
-            'tax_amount': order.taxAmount,
-            'discount_amount': order.discountAmount,
-            'total_amount': order.totalAmount,
-            'payment_method': order.paymentMethod?.value,
-            'amount_tendered': order.amountTendered,
-            'change_amount': order.changeAmount,
-            'reference_number': order.referenceNumber, // ← NEW
-            'notes': order.notes,
-            'paid_at': order.paidAt?.toIso8601String(),
-            'created_at': order.createdAt.toIso8601String(),
-            'is_offline': 0,
-            'synced_at': now,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+  Future<void> upsertOrders(List<Order> orders) => _write((d) async {
+        final now = DateTime.now().toIso8601String();
+        await d.transaction((txn) async {
+          for (final order in orders) {
+            await txn.insert(
+              'orders',
+              {
+                'id': order.id,
+                'business_id': order.businessId,
+                'table_id': order.tableId,
+                'cashier_id': order.cashierId,
+                'order_number': order.orderNumber,
+                'order_type': order.orderType.value,
+                'status': order.status.value,
+                'subtotal': order.subtotal,
+                'tax_amount': order.taxAmount,
+                'discount_amount': order.discountAmount,
+                'total_amount': order.totalAmount,
+                'payment_method': order.paymentMethod?.value,
+                'amount_tendered': order.amountTendered,
+                'change_amount': order.changeAmount,
+                'reference_number': order.referenceNumber,
+                'notes': order.notes,
+                'paid_at': order.paidAt?.toIso8601String(),
+                'created_at': order.createdAt.toIso8601String(),
+                'is_offline': 0,
+                'synced_at': now,
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
 
-        await txn.delete(
-          'order_items',
-          where: 'order_id = ?',
-          whereArgs: [order.id],
-        );
-        for (int i = 0; i < order.items.length; i++) {
-          final item = order.items[i];
-          await txn.insert(
-            'order_items',
-            {
-              'id': '${order.id}_${item.product.id}_$i',
-              'order_id': order.id,
-              'product_id': item.product.id,
-              'product_name': item.product.name,
-              'unit_price': item.product.price,
-              'quantity': item.quantity,
-              'subtotal': item.total,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-        }
-      }
-    });
-  });
+            await txn.delete(
+              'order_items',
+              where: 'order_id = ?',
+              whereArgs: [order.id],
+            );
+            for (int i = 0; i < order.items.length; i++) {
+              final item = order.items[i];
+              await txn.insert(
+                'order_items',
+                {
+                  'id': '${order.id}_${item.product.id}_$i',
+                  'order_id': order.id,
+                  'product_id': item.product.id,
+                  'product_name': item.product.name,
+                  'unit_price': item.product.price,
+                  'quantity': item.quantity,
+                  'subtotal': item.total,
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          }
+        });
+      });
 
-  /// Update payment fields on an existing local order row.
-  /// Called by OrderService.processPayment so the local cache
-  /// stays consistent even when Supabase is unreachable.
   Future<void> updateOrderPayment({
     required String orderId,
     required PaymentMethod method,
     required double amountTendered,
     required double changeAmount,
-    String? referenceNumber, // ← NEW
+    String? referenceNumber,
   }) =>
       _write((d) async {
         await d.update(
@@ -518,7 +597,7 @@ class LocalDbService {
             'payment_method': method.value,
             'amount_tendered': amountTendered,
             'change_amount': changeAmount,
-            'reference_number': referenceNumber, // ← NEW
+            'reference_number': referenceNumber,
             'paid_at': DateTime.now().toIso8601String(),
           },
           where: 'id = ?',
@@ -599,7 +678,7 @@ class LocalDbService {
             : null,
         amountTendered: (row['amount_tendered'] as num?)?.toDouble(),
         changeAmount: (row['change_amount'] as num?)?.toDouble(),
-        referenceNumber: row['reference_number'] as String?, // ← NEW
+        referenceNumber: row['reference_number'] as String?,
         notes: row['notes'] as String?,
         paidAt: row['paid_at'] != null
             ? DateTime.parse(row['paid_at'] as String)
@@ -609,30 +688,207 @@ class LocalDbService {
       );
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // VOID ITEMS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> voidOrderItem({
+    required String voidId,
+    required String orderId,
+    required String productId,
+    required String productName,
+    required double unitPrice,
+    required int quantity,
+    required double subtotal,
+    required String reason,
+    required String voidedByStaffId,
+    required String voidedByStaffName,
+  }) =>
+      _write((d) async {
+        final now = DateTime.now().toIso8601String();
+
+        await d.transaction((txn) async {
+          await txn.insert(
+            'void_order_items',
+            {
+              'id': voidId,
+              'order_id': orderId,
+              'product_id': productId,
+              'product_name': productName,
+              'unit_price': unitPrice,
+              'quantity': quantity,
+              'subtotal': subtotal,
+              'reason': reason,
+              'voided_by_staff_id': voidedByStaffId,
+              'voided_by_staff_name': voidedByStaffName,
+              'voided_at': now,
+              'synced': 0,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+
+          await txn.delete(
+            'order_items',
+            where: 'order_id = ? AND product_id = ?',
+            whereArgs: [orderId, productId],
+          );
+
+          final remaining = await txn.query(
+            'order_items',
+            where: 'order_id = ?',
+            whereArgs: [orderId],
+          );
+
+          if (remaining.isEmpty) {
+            await txn.update(
+              'orders',
+              {'status': 'cancelled'},
+              where: 'id = ?',
+              whereArgs: [orderId],
+            );
+          } else {
+            final newSubtotal = remaining.fold<double>(
+              0,
+              (s, r) => s + (r['subtotal'] as num).toDouble(),
+            );
+
+            final orderRows = await txn.query(
+              'orders',
+              where: 'id = ?',
+              whereArgs: [orderId],
+            );
+            final existingTax =
+                (orderRows.first['tax_amount'] as num).toDouble();
+            final existingDiscount =
+                (orderRows.first['discount_amount'] as num).toDouble();
+            final oldSubtotal =
+                (orderRows.first['subtotal'] as num).toDouble();
+
+            final taxRate =
+                oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
+            final newTax = newSubtotal * taxRate;
+            final newDiscount =
+                existingDiscount.clamp(0.0, newSubtotal);
+            final newTotal = newSubtotal + newTax - newDiscount;
+
+            await txn.update(
+              'orders',
+              {
+                'subtotal': newSubtotal,
+                'tax_amount': newTax,
+                'discount_amount': newDiscount,
+                'total_amount': newTotal,
+              },
+              where: 'id = ?',
+              whereArgs: [orderId],
+            );
+          }
+        });
+      });
+
+  Future<List<Map<String, dynamic>>> getVoidedItemsForOrder(
+      String orderId) async {
+    final d = await db;
+    return d.query(
+      'void_order_items',
+      where: 'order_id = ?',
+      whereArgs: [orderId],
+      orderBy: 'voided_at DESC',
+    );
+  }
+
+  Future<void> markVoidSynced(String voidId) =>
+      _write((d) async {
+        await d.update(
+          'void_order_items',
+          {'synced': 1},
+          where: 'id = ?',
+          whereArgs: [voidId],
+        );
+      });
+
+  Future<List<Map<String, dynamic>>> getUnsyncedVoids() async {
+    final d = await db;
+    return d.query(
+      'void_order_items',
+      where: 'synced = 0',
+      orderBy: 'voided_at ASC',
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CREDIT TRANSACTIONS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Inserts a credit or payment transaction into the local SQLite cache.
+  /// Used by both the online mirror path and the offline fast path.
+  Future<void> insertCreditTransaction({
+    required String id,
+    required String customerId,
+    required String businessId,
+    required String type, // 'credit' or 'payment'
+    required double amount,
+    String? note,
+    String? orderId,
+    required String createdAt,
+  }) =>
+      _write((d) async {
+        await d.insert(
+          'credit_transactions',
+          {
+            'id': id,
+            'customer_id': customerId,
+            'business_id': businessId,
+            'type': type,
+            'amount': amount,
+            'note': note,
+            'order_id': orderId,
+            'created_at': createdAt,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      });
+
+  /// Adjusts a customer's total_owed by [delta].
+  /// Pass a negative delta to reduce (payment), positive to increase (credit).
+  /// Clamps to 0 so it never goes negative.
+  Future<void> updateCreditCustomerOwed({
+    required String customerId,
+    required double delta,
+  }) =>
+      _write((d) async {
+        await d.rawUpdate(
+          'UPDATE credit_customers '
+          'SET total_owed = MAX(0, total_owed + ?), '
+          '    updated_at = ? '
+          'WHERE id = ?',
+          [delta, DateTime.now().toIso8601String(), customerId],
+        );
+      });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // STAFF
   // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> upsertStaff(List<StaffMember> members) => _write((d) async {
-    final d = await db;
-    final batch = d.batch();
-    final now = DateTime.now().toIso8601String();
-    for (final m in members) {
-      batch.insert(
-        'staff_members',
-        {
-          'id': m.id,
-          'business_id': m.businessId,
-          'name': m.name,
-          'role': m.role.value,
-          'pin_hash': m.pinHash,
-          'is_active': m.isActive ? 1 : 0,
-          'synced_at': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
-  });
+        final batch = d.batch();
+        final now = DateTime.now().toIso8601String();
+        for (final m in members) {
+          batch.insert(
+            'staff_members',
+            {
+              'id': m.id,
+              'business_id': m.businessId,
+              'name': m.name,
+              'role': m.role.value,
+              'pin_hash': m.pinHash,
+              'is_active': m.isActive ? 1 : 0,
+              'synced_at': now,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+      });
 
   Future<List<StaffMember>> getStaff(String businessId) async {
     final d = await db;
@@ -770,7 +1026,6 @@ class LocalDbService {
         .subtract(const Duration(days: 30))
         .toIso8601String();
 
-    // Delete orphaned order_items first to avoid dangling rows
     await d.rawDelete('''
       DELETE FROM order_items
       WHERE order_id IN (
@@ -781,14 +1036,12 @@ class LocalDbService {
       )
     ''', [businessId, cutoff]);
 
-    // Then delete the orders themselves
     await d.delete(
       'orders',
       where: 'business_id = ? AND created_at < ? AND is_offline = 0',
       whereArgs: [businessId, cutoff],
     );
 
-    // Also prune stale report cache beyond 90 days (less critical, keep longer)
     await d.delete(
       'reports_cache',
       where: 'business_id = ? AND date < ?',
@@ -797,7 +1050,7 @@ class LocalDbService {
         DateTime.now()
             .subtract(const Duration(days: 90))
             .toIso8601String()
-            .substring(0, 10), // date only: 'YYYY-MM-DD'
+            .substring(0, 10),
       ],
     );
 

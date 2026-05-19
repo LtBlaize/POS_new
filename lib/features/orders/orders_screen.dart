@@ -1,12 +1,18 @@
+// lib/features/orders/orders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/order.dart';
+import '../../core/models/staff.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/providers/cart_provider.dart';
-import '../../core/models/order.dart';
-import '../../shared/widgets/app_colors.dart';
+import '../../core/providers/staff_provider.dart';
 import '../../core/services/feature_manager.dart';
+import '../../features/auth/auth_provider.dart';
+import '../../features/pos/dialogs/checkout_dialog.dart';
 import '../../features/tables/table_provider.dart';
-import '../pos/dialogs/checkout_dialog.dart';
+import '../../shared/widgets/app_colors.dart';
+import 'widgets/void_item_dialog.dart';
+import '../../core/models/cart_item.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
@@ -43,7 +49,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         title: const Text('Orders'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
-        // On very narrow screens, shrink the title slightly
         titleTextStyle: TextStyle(
           fontSize: isNarrow ? 16 : 20,
           fontWeight: FontWeight.w700,
@@ -66,32 +71,27 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         ),
       ),
       body: ordersAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () =>
+            const Center(child: CircularProgressIndicator()),
         error: (e, _) {
-          final cached = ref.read(ordersStreamProvider).asData?.value ?? [];
+          final cached =
+              ref.read(ordersStreamProvider).asData?.value ?? [];
           if (cached.isNotEmpty) {
-            final active = _filterActive(cached);
-            final completed = _filterCompleted(cached);
-            return TabBarView(
-              controller: _tabs,
-              children: [
-                _OrderList(orders: cached, featureManager: widget.featureManager),
-                _OrderList(orders: active, featureManager: widget.featureManager),
-                _OrderList(orders: completed, featureManager: widget.featureManager),
-              ],
-            );
+            return _buildTabViews(cached);
           }
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.cloud_off_outlined, size: 48, color: Colors.grey),
+                const Icon(Icons.cloud_off_outlined,
+                    size: 48, color: Colors.grey),
                 const SizedBox(height: 12),
                 const Text('Offline — no cached orders yet',
                     style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
-                  onPressed: () => ref.invalidate(ordersStreamProvider),
+                  onPressed: () =>
+                      ref.invalidate(ordersStreamProvider),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
@@ -99,19 +99,21 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
             ),
           );
         },
-        data: (orders) {
-          final active = _filterActive(orders);
-          final completed = _filterCompleted(orders);
-          return TabBarView(
-            controller: _tabs,
-            children: [
-              _OrderList(orders: orders, featureManager: widget.featureManager),
-              _OrderList(orders: active, featureManager: widget.featureManager),
-              _OrderList(orders: completed, featureManager: widget.featureManager),
-            ],
-          );
-        },
+        data: (orders) => _buildTabViews(orders),
       ),
+    );
+  }
+
+  Widget _buildTabViews(List<Order> orders) {
+    final active = _filterActive(orders);
+    final completed = _filterCompleted(orders);
+    return TabBarView(
+      controller: _tabs,
+      children: [
+        _OrderList(orders: orders, featureManager: widget.featureManager),
+        _OrderList(orders: active, featureManager: widget.featureManager),
+        _OrderList(orders: completed, featureManager: widget.featureManager),
+      ],
     );
   }
 
@@ -148,7 +150,6 @@ class _OrderList extends StatelessWidget {
 
     final width = MediaQuery.sizeOf(context).width;
 
-    // Wide screens (≥ 900): 2-column grid
     if (width >= 900) {
       return GridView.builder(
         padding: const EdgeInsets.all(16),
@@ -156,7 +157,7 @@ class _OrderList extends StatelessWidget {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 1.6,
+          childAspectRatio: 1.4,
         ),
         itemCount: orders.length,
         itemBuilder: (_, i) => _OrderCard(
@@ -167,11 +168,10 @@ class _OrderList extends StatelessWidget {
       );
     }
 
-    // Narrow: single column list
     return ListView.separated(
       padding: EdgeInsets.all(width < 600 ? 12 : 16),
       itemCount: orders.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _OrderCard(
         key: ValueKey('${orders[i].id}-${orders[i].status}'),
         order: orders[i],
@@ -189,7 +189,8 @@ class _OrderCard extends ConsumerWidget {
   const _OrderCard(
       {super.key, required this.order, required this.featureManager});
 
-  Color _accentColor(OrderStatus s, {bool isPaid = false}) => switch (s) {
+  Color _accentColor(OrderStatus s, {bool isPaid = false}) =>
+      switch (s) {
         OrderStatus.pending => const Color(0xFFF59E0B),
         OrderStatus.preparing => const Color(0xFF3B82F6),
         OrderStatus.ready => const Color(0xFF10B981),
@@ -198,8 +199,10 @@ class _OrderCard extends ConsumerWidget {
         OrderStatus.cancelled => const Color(0xFF9CA3AF),
       };
 
-  String _statusLabel(OrderStatus s, {bool isPaid = false}) => switch (s) {
-        OrderStatus.pending => isPaid ? 'Paid · In Queue' : 'Unpaid · Pending',
+  String _statusLabel(OrderStatus s, {bool isPaid = false}) =>
+      switch (s) {
+        OrderStatus.pending =>
+          isPaid ? 'Paid · In Queue' : 'Unpaid · Pending',
         OrderStatus.preparing => 'Preparing',
         OrderStatus.ready => 'Ready to serve',
         OrderStatus.completed =>
@@ -207,11 +210,28 @@ class _OrderCard extends ConsumerWidget {
         OrderStatus.cancelled => 'Cancelled',
       };
 
+  /// Void is only shown for active (unpaid, non-cancelled) orders.
+  bool get _canVoid =>
+      order.status != OrderStatus.cancelled &&
+      order.status != OrderStatus.completed;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accent = _accentColor(order.status, isPaid: order.paidAt != null);
+    final accent =
+        _accentColor(order.status, isPaid: order.paidAt != null);
     final isPaid = order.paidAt != null;
     final isNarrow = MediaQuery.sizeOf(context).width < 600;
+
+    // Determine if current staff can void (manager / owner only)
+    final activeStaff = ref.watch(activeStaffProvider);
+    final canVoid = _canVoid &&
+        activeStaff != null &&
+        (activeStaff.role == StaffRole.owner ||
+            activeStaff.role == StaffRole.manager);
+
+    // Fetch businessId for void service call
+    final profile = ref.watch(profileProvider).asData?.value;
+    final businessId = profile?.businessId ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -230,13 +250,13 @@ class _OrderCard extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Colored accent bar
+            // Accent bar
             Container(
               width: 5,
               decoration: BoxDecoration(
                 color: accent,
-                borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(12)),
+                borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(12)),
               ),
             ),
 
@@ -246,7 +266,7 @@ class _OrderCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header row — wraps on narrow screens
+                    // Header
                     Wrap(
                       alignment: WrapAlignment.spaceBetween,
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -266,8 +286,8 @@ class _OrderCard extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: accent.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border:
-                                Border.all(color: accent.withOpacity(0.3)),
+                            border: Border.all(
+                                color: accent.withOpacity(0.3)),
                           ),
                           child: Text(
                             _statusLabel(order.status,
@@ -285,15 +305,17 @@ class _OrderCard extends ConsumerWidget {
                     Text(
                       _formatTime(order.createdAt),
                       style: const TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary),
+                          fontSize: 11,
+                          color: AppColors.textSecondary),
                     ),
 
                     const SizedBox(height: 10),
 
-                    // Items
+                    // Items — with void button when allowed
                     if (order.items.isNotEmpty) ...[
                       ...order.items.map((item) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 3),
                             child: Row(
                               children: [
                                 Container(
@@ -301,7 +323,8 @@ class _OrderCard extends ConsumerWidget {
                                   height: 20,
                                   decoration: BoxDecoration(
                                     color: accent.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(5),
+                                    borderRadius:
+                                        BorderRadius.circular(5),
                                   ),
                                   child: Center(
                                     child: Text(
@@ -329,6 +352,15 @@ class _OrderCard extends ConsumerWidget {
                                       fontSize: 12,
                                       color: AppColors.textSecondary),
                                 ),
+                                // ── Void button ───────────────────
+                                if (canVoid) ...[
+                                  const SizedBox(width: 6),
+                                  _VoidItemButton(
+                                    orderId: order.id,
+                                    businessId: businessId,
+                                    item: item,
+                                  ),
+                                ],
                               ],
                             ),
                           )),
@@ -353,10 +385,12 @@ class _OrderCard extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.check_circle,
-                                  size: 13, color: Color(0xFF6B7280)),
+                                  size: 13,
+                                  color: Color(0xFF6B7280)),
                               const SizedBox(width: 4),
                               Text(
-                                order.paymentMethod!.value.toUpperCase(),
+                                order.paymentMethod!.value
+                                    .toUpperCase(),
                                 style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -429,7 +463,74 @@ class _OrderCard extends ConsumerWidget {
   }
 }
 
-// ── Pay Now button ────────────────────────────────────────────────────────────
+// ── Void item button ──────────────────────────────────────────────────────────
+
+class _VoidItemButton extends ConsumerWidget {
+  final String orderId;
+  final String businessId;
+  final CartItem item;
+
+  const _VoidItemButton({
+    required this.orderId,
+    required this.businessId,
+    required this.item,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () async {
+        final result = await showVoidItemDialog(
+          context: context,
+          ref: ref,
+          orderId: orderId,
+          businessId: businessId,
+          item: item,
+        );
+
+        if (result != null && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(children: [
+                const Icon(Icons.check_circle_outline,
+                    color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${item.product.name} voided — '
+                    '${result.record.reason}',
+                  ),
+                ),
+              ]),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      },
+      child: Tooltip(
+        message: 'Void this item',
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: AppColors.danger.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(7),
+            border:
+                Border.all(color: AppColors.danger.withOpacity(0.25)),
+          ),
+          child: Icon(Icons.remove_circle_outline,
+              size: 14, color: AppColors.danger),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Pay Now button (unchanged from original) ──────────────────────────────────
 
 class _PayNowButton extends ConsumerStatefulWidget {
   final Order order;
@@ -444,9 +545,7 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
   bool _loading = false;
 
   Future<void> _openCheckout() async {
-    debugPrint('🔍 Opening checkout for order: ${widget.order.id}');
     setState(() => _loading = true);
-
     try {
       Order order = widget.order;
       if (order.items.isEmpty) {
@@ -488,7 +587,8 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
+              content: Text('Error: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -508,7 +608,8 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
     return GestureDetector(
       onTap: _openCheckout,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xFF10B981),
           borderRadius: BorderRadius.circular(8),

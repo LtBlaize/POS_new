@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../settings_provider.dart';
+import '../../../config/business_config.dart';
+import 'kitchen_settings_section.dart';
 import '../../../core/models/business.dart';
 import '../../../shared/widgets/app_colors.dart';
+
 
 class GeneralSettingsSection extends ConsumerStatefulWidget {
   final Business business;
@@ -123,6 +125,8 @@ class _GeneralSettingsSectionState
                 onChanged: (v) =>
                     _save(config.copyWith(enableKitchenDisplay: v)),
               ),
+              if (config.enableKitchenDisplay)
+                KitchenModeSelector(config: config),
               _SwitchRow(
                 label: 'Enable table management',
                 sublabel: 'Show table selector in POS',

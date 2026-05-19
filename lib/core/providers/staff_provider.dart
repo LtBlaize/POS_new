@@ -7,6 +7,9 @@ import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 // ── Staff list ────────────────────────────────────────────────────────────────
 
@@ -214,6 +217,8 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
 // ── Active staff session ──────────────────────────────────────────────────────
 
+// ── Active staff session ──────────────────────────────────────────────────────
+
 final activeStaffProvider =
     StateNotifierProvider<ActiveStaffNotifier, StaffMember?>(
         (ref) => ActiveStaffNotifier());
@@ -223,6 +228,117 @@ class ActiveStaffNotifier extends StateNotifier<StaffMember?> {
 
   void login(StaffMember staff) => state = staff;
   void logout() => state = null;
+}
+
+// ── Staff session conflict detection ─────────────────────────────────────────
+//
+// When a staff PIN is entered, we upsert a row in staff_sessions with
+// this device's ID. Any other device watching the same staff_id will
+// see the device_id change and lock itself.
+
+final staffSessionServiceProvider = Provider<StaffSessionService>((ref) {
+  return StaffSessionService(
+    client: ref.watch(supabaseClientProvider),
+  );
+});
+
+class StaffSessionService {
+  final SupabaseClient _client;
+  Timer? _pollTimer;
+
+  StaffSessionService({
+    required SupabaseClient client,
+  })  : _client = client;
+  
+
+  /// Call this immediately after a successful PIN unlock.
+  /// Upserts this device as the active session for [staff].
+  /// Any other device polling will see the device_id change and lock.
+  Future<void> claimSession({
+    required String businessId,
+    required String staffId,
+  }) async {
+    final deviceId = await _getDeviceId();
+    try {
+      await _client.from('staff_sessions').upsert(
+        {
+          'business_id': businessId,
+          'staff_id': staffId,
+          'device_id': deviceId,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'staff_id', // unique index — replaces other device's row
+      );
+    } catch (e) {
+      debugPrint('[Session] claimSession error (ignored offline): $e');
+    }
+  }
+
+  /// Starts polling every 5 seconds.
+  /// Calls [onKicked] if another device has claimed this staff's session.
+  void startWatching({
+    required String staffId,
+    required VoidCallback onKicked,
+  }) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      await _checkSession(staffId: staffId, onKicked: onKicked);
+    });
+  }
+
+  void stopWatching() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _checkSession({
+    required String staffId,
+    required VoidCallback onKicked,
+  }) async {
+    final deviceId = await _getDeviceId();
+    try {
+      final rows = await _client
+          .from('staff_sessions')
+          .select('device_id')
+          .eq('staff_id', staffId)
+          .limit(1);
+      if (rows.isNotEmpty) {
+        final activeDevice = rows.first['device_id'] as String?;
+        if (activeDevice != null && activeDevice != deviceId) {
+          onKicked();
+        }
+      }
+    } catch (e) {
+      debugPrint('[Session] poll error (ignored): $e');
+    }
+  }
+
+  /// Remove this device's session row on logout/lock.
+  Future<void> clearSession(String staffId) async {
+    final deviceId = await _getDeviceId();
+    try {
+      await _client
+          .from('staff_sessions')
+          .delete()
+          .eq('staff_id', staffId)
+          .eq('device_id', deviceId);
+    } catch (_) {}
+  }
+
+  static String? _cachedDeviceId;
+  Future<String> _getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('device_id');
+    if (id == null) {
+      id = const Uuid().v4();
+      await prefs.setString('device_id', id);
+    }
+    _cachedDeviceId = id;
+    return id;
+  }
+
+  void dispose() => stopWatching();
 }
 
 // ── Offline PIN verification helper ──────────────────────────────────────────

@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../models/void_record.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
@@ -52,7 +53,6 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
       .asyncMap((rows) async {
         if (rows.isEmpty) return <Order>[];
 
-        // FIX: fetch all order items in one query instead of N+1
         final orderIds = rows.map((r) => r['id'] as String).toList();
 
         final allItemRows = await client
@@ -61,7 +61,6 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                 '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
             .inFilter('order_id', orderIds);
 
-        // Group items by order_id
         final itemsByOrder = <String, List<CartItem>>{};
         for (final item in allItemRows as List) {
           final orderId = item['order_id'] as String;
@@ -222,8 +221,7 @@ class OrderService {
     await _local.upsertOrders([order]);
 
     _ref.invalidate(productListProvider);
-  
-    await _local.upsertOrders([order]);
+
     return order;
   }
 
@@ -375,6 +373,173 @@ class OrderService {
       recordId: orderId,
       payload: payload,
     );
+  }
+
+  // ── Void a single item from an existing order ───────────────────────────────
+
+  /// Voids [quantity] units of [productId] from [orderId].
+  ///
+  /// - Removes the order_item row locally and recalculates totals atomically.
+  /// - Reverses inventory for tracked products.
+  /// - If the order has no items left, status becomes [OrderStatus.cancelled].
+  /// - Persists a [VoidRecord] locally and syncs to Supabase when online,
+  ///   or enqueues for later sync when offline.
+  Future<VoidRecord> voidOrderItem({
+    required String orderId,
+    required String productId,
+    required String productName,
+    required double unitPrice,
+    required int quantity,
+    required String reason,
+    required String voidedByStaffId,
+    required String voidedByStaffName,
+    required String businessId,
+    bool trackInventory = false,
+    int currentStock = 0,
+  }) async {
+    final voidId = const Uuid().v4();
+    final subtotal = unitPrice * quantity;
+    final now = DateTime.now();
+
+    // 1. Persist locally — atomic transaction: insert void, delete item,
+    //    recalculate order totals (or cancel if last item).
+    await _local.voidOrderItem(
+      voidId: voidId,
+      orderId: orderId,
+      productId: productId,
+      productName: productName,
+      unitPrice: unitPrice,
+      quantity: quantity,
+      subtotal: subtotal,
+      reason: reason,
+      voidedByStaffId: voidedByStaffId,
+      voidedByStaffName: voidedByStaffName,
+    );
+
+    // 2. Reverse inventory if the product tracks stock.
+    if (trackInventory) {
+      try {
+        final inventoryService = _ref.read(inventoryServiceProvider);
+        await inventoryService.adjustStock(
+          businessId: businessId,
+          productId: productId,
+          quantityChange: quantity, // positive = restoring stock
+          quantityBefore: currentStock,
+          action: 'void',
+        );
+        _ref.invalidate(productListProvider);
+      } catch (e) {
+        debugPrint(
+            '[OrderService] Inventory reversal error (non-fatal): $e');
+      }
+    }
+
+    final voidRecord = VoidRecord(
+      id: voidId,
+      orderId: orderId,
+      productId: productId,
+      productName: productName,
+      unitPrice: unitPrice,
+      quantity: quantity,
+      subtotal: subtotal,
+      reason: reason,
+      voidedByStaffId: voidedByStaffId,
+      voidedByStaffName: voidedByStaffName,
+      voidedAt: now,
+    );
+
+    // 3. Sync to Supabase when online.
+    if (_isOnline) {
+      try {
+        // Insert the void record
+        await _client
+            .from('void_order_items')
+            .insert(voidRecord.toMap());
+
+        // Remove item from Supabase order_items
+        await _client
+            .from('order_items')
+            .delete()
+            .eq('order_id', orderId)
+            .eq('product_id', productId);
+
+        // Fetch remaining items to decide order fate
+        final remaining = await _client
+            .from('order_items')
+            .select('subtotal')
+            .eq('order_id', orderId);
+
+        if ((remaining as List).isEmpty) {
+          // No items left — cancel in Supabase
+          await _client.from('orders').update({
+            'status': OrderStatus.cancelled.value,
+            'updated_at': now.toIso8601String(),
+          }).eq('id', orderId);
+        } else {
+          // Recalculate totals in Supabase
+          final newSubtotal = remaining.fold<double>(
+            0,
+            (s, r) => s + (r['subtotal'] as num).toDouble(),
+          );
+
+          final orderRow = await _client
+              .from('orders')
+              .select('tax_amount, discount_amount, subtotal')
+              .eq('id', orderId)
+              .single();
+
+          final oldSubtotal =
+              (orderRow['subtotal'] as num).toDouble();
+          final existingTax =
+              (orderRow['tax_amount'] as num).toDouble();
+          final existingDiscount =
+              (orderRow['discount_amount'] as num).toDouble();
+
+          final taxRate =
+              oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
+          final newTax = newSubtotal * taxRate;
+          final newDiscount =
+              existingDiscount.clamp(0.0, newSubtotal);
+          final newTotal = newSubtotal + newTax - newDiscount;
+
+          await _client.from('orders').update({
+            'subtotal': newSubtotal,
+            'tax_amount': newTax,
+            'discount_amount': newDiscount,
+            'total_amount': newTotal,
+            'updated_at': now.toIso8601String(),
+          }).eq('id', orderId);
+        }
+
+        // Mark local void record as synced
+        await _local.markVoidSynced(voidId);
+
+        debugPrint(
+            '[OrderService] voidOrderItem synced to Supabase: $voidId');
+        return voidRecord;
+      } catch (e) {
+        debugPrint(
+            '[OrderService] voidOrderItem online failed, queuing: $e');
+        // Fall through to enqueue below
+      }
+    }
+
+    // 4. Offline (or online-failed) — enqueue for later sync.
+    await _syncQueue.enqueue(
+      operation: 'void_order_item',
+      tableName: 'void_order_items',
+      recordId: voidId,
+      payload: {
+        ...voidRecord.toMap(),
+        'track_inventory': trackInventory,
+        'current_stock': currentStock,
+        'business_id': businessId,
+      },
+    );
+
+    debugPrint(
+        '[OrderService] voidOrderItem queued for sync: $voidId');
+    return voidRecord;
   }
 
   // ── Fetch single order ──────────────────────────────────────────────────────

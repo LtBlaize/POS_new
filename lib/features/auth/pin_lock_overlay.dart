@@ -10,6 +10,7 @@ import '../../core/providers/staff_provider.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/open_shift_screen.dart';
 import '../../core/providers/role_permissions_provider.dart';
+import '../../features/auth/auth_provider.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ class PinLockOverlay extends ConsumerStatefulWidget {
 class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   StaffMember? _selectedStaff;
   bool _showShiftGate = false;
+  bool _wasKicked = false;
   Timer? _inactivityTimer;
 
   @override
@@ -80,7 +82,36 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   }
 
   Future<void> _handleUnlock() async {
+    final staff = _selectedStaff;
     setState(() => _selectedStaff = null);
+
+    // Claim session — kicks any other device watching this staff
+    final businessId = ref.read(businessProvider)?.id ?? '';
+    if (staff != null && businessId.isNotEmpty) {
+      await ref.read(staffSessionServiceProvider).claimSession(
+            businessId: businessId,
+            staffId: staff.id,
+          );
+      // Start watching — if another device claims later, lock this device
+      ref.read(staffSessionServiceProvider).startWatching(
+        staffId: staff.id,
+        onKicked: () {
+          if (mounted) {
+            setState(() => _wasKicked = true);
+            ref.read(staffSessionServiceProvider).stopWatching();
+            ref.read(activeStaffProvider.notifier).logout();
+            // Show kicked message briefly then lock
+            Future.delayed(const Duration(seconds: 3), () {
+              if (mounted) {
+                setState(() => _wasKicked = false);
+                ref.read(appLockedProvider.notifier).state = true;
+              }
+            });
+          }
+        },
+      );
+    }
+
     final shift = await ref.read(currentShiftProvider.future);
     if (!mounted) return;
     if (shift == null) {
@@ -114,7 +145,36 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
               ),
             ),
 
-          if (isLocked && !_showShiftGate)
+          if (_wasKicked)
+            Material(
+              color: const Color(0xFF0B0E1A),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.devices_other,
+                        color: Color(0xFFE94560), size: 48),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Account opened on another device',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This device will lock in a moment...',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          if (isLocked && !_showShiftGate && !_wasKicked)
             _PinScreen(
               selectedStaff: _selectedStaff,
               onStaffSelected: (s) => setState(() => _selectedStaff = s),

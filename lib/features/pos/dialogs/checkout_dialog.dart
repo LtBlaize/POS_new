@@ -9,6 +9,7 @@ import '../../../core/services/checkout_service.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../credits/widgets/add_credit_dialog.dart';
 import '../../tables/table_provider.dart';
+import '../../auth/auth_provider.dart';
 import '../widgets/checkout/action_buttons.dart';
 import '../widgets/checkout/checkout_theme.dart';
 import '../widgets/checkout/numpad.dart';
@@ -18,6 +19,8 @@ import '../widgets/checkout/reference_number_panel.dart';
 import '../widgets/receipt/kitchen_sent_view.dart';
 import '../widgets/receipt/restaurant_receipt_view.dart';
 import '../widgets/receipt/retail_receipt_view.dart';
+import '../../../core/models/cart_item.dart';
+import '../../settings/settings_provider.dart';
 
 // ── Payment method selector ───────────────────────────────────────────────────
 
@@ -76,10 +79,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   }
 
   double get _subtotal {
-    final items = ref.watch(cartProvider);
-    return items.fold(0.0, (s, i) => s + i.total);
+    ref.watch(cartProvider); // watch state to trigger rebuild
+    return ref.read(cartProvider.notifier).grandTotal;
   }
-
   double get _tendered =>
       double.tryParse(_tenderedController.text.replaceAll(',', '')) ?? 0;
 
@@ -113,7 +115,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             change: _change,
             subtotal: _subtotal,
             items: items,
-            discountAmount: 0,
+            discountAmount: ref.read(cartProvider.notifier).orderDiscountValue,
             referenceNumber: _refController.text.trim().isEmpty
                 ? null
                 : _refController.text.trim(),
@@ -359,9 +361,22 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      OrderSummaryCard(items: items, subtotal: widget.subtotal),
+                      OrderSummaryCard(
+                        items: items,
+                        subtotal: widget.subtotal,
+                        itemsTotal: ref.read(cartProvider.notifier).itemsTotal,
+                        orderDiscountValue: ref.read(cartProvider.notifier).orderDiscountValue,
+                        orderDiscountLabel: ref.read(cartProvider.notifier).orderDiscountType ==
+                                DiscountType.percentage
+                            ? 'Discount (${ref.read(cartProvider.notifier).orderDiscountAmount.toStringAsFixed(0)}%)'
+                            : 'Discount',
+                      ),
                       const SizedBox(height: 16),
 
+                      // REPLACE
+                      if (ref.watch(discountsAllowedProvider))
+                        _DiscountButton(isBusy: isBusy),
+                      const SizedBox(height: 16),
                       const CheckoutSectionLabel('Payment Method'),
                       const SizedBox(height: 8),
                       PaymentMethodRow(
@@ -423,21 +438,26 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                 ),
               ),
 
-              ActionBar(
-                isRestaurant: widget.isRestaurant,
-                existingOrderId: widget.existingOrderId,
-                isCash: isCash,
-                tendered: widget.tendered,
-                canConfirm: widget.canConfirm,
-                placing: widget.placing,
-                sendingToKitchen: widget.sendingToKitchen,
-                isBusy: isBusy,
-                onConfirm: widget.onConfirm,
-                onSendToKitchen: widget.onSendToKitchen,
-                method: method,
-                // Print Bill
-                currentOrder: widget.existingOrder,
-                tableNumber: selectedTable,
+              Consumer(
+                builder: (context, ref, _) {
+                  final profile = ref.watch(profileProvider);
+                  final businessName = profile.asData?.value?.business?.name ?? '';                  return ActionBar(
+                    isRestaurant: widget.isRestaurant,
+                    existingOrderId: widget.existingOrderId,
+                    isCash: isCash,
+                    tendered: widget.tendered,
+                    canConfirm: widget.canConfirm,
+                    placing: widget.placing,
+                    sendingToKitchen: widget.sendingToKitchen,
+                    isBusy: isBusy,
+                    onConfirm: widget.onConfirm,
+                    onSendToKitchen: widget.onSendToKitchen,
+                    method: method,
+                    currentOrder: widget.existingOrder,
+                    tableNumber: selectedTable,
+                    businessName: businessName,
+                  );
+                },
               ),
             ],
           ),
@@ -595,7 +615,7 @@ class _UtangButton extends ConsumerWidget {
                   tendered: 0,
                   change: 0,
                   subtotal: subtotal,
-                  discountAmount: 0,
+                  discountAmount: ref.read(cartProvider.notifier).orderDiscountValue,
                   items: ref.read(cartProvider),
                 );
 
@@ -657,6 +677,315 @@ class _UtangButton extends ConsumerWidget {
                     fontSize: 13,
                     fontWeight: FontWeight.w700)),
           ],
+        ),
+      ),
+    );
+  }
+}
+// ADD at end of file (before final closing brace)
+
+class _DiscountButton extends ConsumerStatefulWidget {
+  final bool isBusy;
+  const _DiscountButton({required this.isBusy});
+
+  @override
+  ConsumerState<_DiscountButton> createState() => _DiscountButtonState();
+}
+
+class _DiscountButtonState extends ConsumerState<_DiscountButton> {
+  void _showDiscountSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _DiscountSheet(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.watch(cartProvider); // watch state to trigger rebuilds
+    final notifier = ref.read(cartProvider.notifier);
+    final hasDiscount = notifier.orderDiscountAmount > 0;
+
+    return GestureDetector(
+      onTap: widget.isBusy ? null : _showDiscountSheet,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+        decoration: BoxDecoration(
+          color: hasDiscount
+              ? CheckoutTheme.rose.withOpacity(0.08)
+              : CheckoutTheme.elevated,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hasDiscount
+                ? CheckoutTheme.rose.withOpacity(0.4)
+                : CheckoutTheme.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.local_offer_outlined,
+                size: 15,
+                color:
+                    hasDiscount ? CheckoutTheme.rose : CheckoutTheme.textMid),
+            const SizedBox(width: 8),
+            Text(
+              hasDiscount
+                  ? notifier.orderDiscountType == DiscountType.percentage
+                      ? 'Discount: ${notifier.orderDiscountAmount.toStringAsFixed(0)}% off'
+                      : 'Discount: ₱${notifier.orderDiscountAmount.toStringAsFixed(2)} off'
+                  : 'Add Discount',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: hasDiscount
+                      ? CheckoutTheme.rose
+                      : CheckoutTheme.textMid),
+            ),
+            const Spacer(),
+            if (hasDiscount)
+              GestureDetector(
+                onTap: () => ref
+                    .read(cartProvider.notifier)
+                    .applyOrderDiscount(0, DiscountType.fixed),
+                child: const Icon(Icons.close,
+                    size: 15, color: CheckoutTheme.rose),
+              )
+            else
+              const Icon(Icons.chevron_right,
+                  size: 16, color: CheckoutTheme.textLow),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Discount sheet ────────────────────────────────────────────────────────────
+
+class _DiscountSheet extends ConsumerStatefulWidget {
+  const _DiscountSheet();
+
+  @override
+  ConsumerState<_DiscountSheet> createState() => _DiscountSheetState();
+}
+
+class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
+  DiscountType _type = DiscountType.percentage;
+  final _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final notifier = ref.read(cartProvider.notifier);
+    if (notifier.orderDiscountAmount > 0) {
+      _type = notifier.orderDiscountType;
+      _controller.text =
+          notifier.orderDiscountAmount.toStringAsFixed(
+              notifier.orderDiscountType == DiscountType.percentage ? 0 : 2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _apply() {
+    final value = double.tryParse(_controller.text) ?? 0;
+    ref.read(cartProvider.notifier).applyOrderDiscount(value, _type);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPercent = _type == DiscountType.percentage;
+
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: CheckoutTheme.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border(top: BorderSide(color: CheckoutTheme.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: CheckoutTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Add Discount',
+                style: TextStyle(
+                    color: CheckoutTheme.textHigh,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+
+            // Type toggle
+            Row(
+              children: [
+                _TypeChip(
+                  label: '% Percentage',
+                  selected: isPercent,
+                  onTap: () => setState(() => _type = DiscountType.percentage),
+                ),
+                const SizedBox(width: 10),
+                _TypeChip(
+                  label: '₱ Fixed Amount',
+                  selected: !isPercent,
+                  onTap: () => setState(() => _type = DiscountType.fixed),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Quick presets
+            if (isPercent) ...[
+              Row(
+                children: [5, 10, 15, 20].map((pct) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () =>
+                          setState(() => _controller.text = '$pct'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: CheckoutTheme.elevated,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: CheckoutTheme.border),
+                        ),
+                        child: Text('$pct%',
+                            style: const TextStyle(
+                                color: CheckoutTheme.textMid,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Input
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(
+                  color: CheckoutTheme.textHigh, fontSize: 18),
+              decoration: InputDecoration(
+                prefixText: isPercent ? null : '₱ ',
+                suffixText: isPercent ? '%' : null,
+                prefixStyle: const TextStyle(
+                    color: CheckoutTheme.textMid, fontSize: 18),
+                suffixStyle: const TextStyle(
+                    color: CheckoutTheme.textMid, fontSize: 18),
+                hintText: isPercent ? '0' : '0.00',
+                hintStyle: const TextStyle(color: CheckoutTheme.textLow),
+                filled: true,
+                fillColor: CheckoutTheme.card,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: CheckoutTheme.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: CheckoutTheme.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: CheckoutTheme.mint, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Apply
+            GestureDetector(
+              onTap: _apply,
+              child: Container(
+                width: double.infinity,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: CheckoutTheme.mint,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: const Text('Apply Discount',
+                    style: TextStyle(
+                        color: CheckoutTheme.bg,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TypeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? CheckoutTheme.mint.withOpacity(0.12)
+              : CheckoutTheme.card,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? CheckoutTheme.mintBorder
+                : CheckoutTheme.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? CheckoutTheme.mint
+                  : CheckoutTheme.textMid),
         ),
       ),
     );

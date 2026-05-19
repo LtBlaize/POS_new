@@ -1,113 +1,8 @@
+// lib/features/settings/settings_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../auth/auth_provider.dart';
-
-// ── BusinessConfig model ──────────────────────────────────────────────────────
-class BusinessConfig {
-  final String id;
-  final double taxRate;
-  final String? receiptFooter;
-  final bool allowDiscounts;
-  final bool requireTableOnOrder;
-  final bool enableKitchenDisplay;
-  final bool enableTableManagement;
-  final int numTables;
-  final bool enableBarcodeScanner;
-  final bool enableInventoryAlerts;
-  final int lowStockThreshold;
-
-  const BusinessConfig({
-    required this.id,
-    this.taxRate = 0.0,
-    this.receiptFooter,
-    this.allowDiscounts = true,
-    this.requireTableOnOrder = false,
-    this.enableKitchenDisplay = false,
-    this.enableTableManagement = false,
-    this.numTables = 0,
-    this.enableBarcodeScanner = false,
-    this.enableInventoryAlerts = false,
-    this.lowStockThreshold = 5,
-  });
-
-  factory BusinessConfig.fromMap(Map<String, dynamic> m) => BusinessConfig(
-        id: m['id'] as String,
-        taxRate: (m['tax_rate'] as num?)?.toDouble() ?? 0.0,
-        receiptFooter: m['receipt_footer'] as String?,
-        allowDiscounts: m['allow_discounts'] as bool? ?? true,
-        requireTableOnOrder: m['require_table_on_order'] as bool? ?? false,
-        enableKitchenDisplay: m['enable_kitchen_display'] as bool? ?? false,
-        enableTableManagement:
-            m['enable_table_management'] as bool? ?? false,
-        numTables: m['num_tables'] as int? ?? 0,
-        enableBarcodeScanner: m['enable_barcode_scanner'] as bool? ?? false,
-        enableInventoryAlerts:
-            m['enable_inventory_alerts'] as bool? ?? false,
-        lowStockThreshold: m['low_stock_threshold'] as int? ?? 5,
-      );
-
-  Map<String, dynamic> toMap() => {
-        'tax_rate': taxRate,
-        'receipt_footer': receiptFooter,
-        'allow_discounts': allowDiscounts,
-        'require_table_on_order': requireTableOnOrder,
-        'enable_kitchen_display': enableKitchenDisplay,
-        'enable_table_management': enableTableManagement,
-        'num_tables': numTables,
-        'enable_barcode_scanner': enableBarcodeScanner,
-        'enable_inventory_alerts': enableInventoryAlerts,
-        'low_stock_threshold': lowStockThreshold,
-      };
-
-  BusinessConfig copyWith({
-    double? taxRate,
-    String? receiptFooter,
-    bool? allowDiscounts,
-    bool? requireTableOnOrder,
-    bool? enableKitchenDisplay,
-    bool? enableTableManagement,
-    int? numTables,
-    bool? enableBarcodeScanner,
-    bool? enableInventoryAlerts,
-    int? lowStockThreshold,
-  }) =>
-      BusinessConfig(
-        id: id,
-        taxRate: taxRate ?? this.taxRate,
-        receiptFooter: receiptFooter ?? this.receiptFooter,
-        allowDiscounts: allowDiscounts ?? this.allowDiscounts,
-        requireTableOnOrder: requireTableOnOrder ?? this.requireTableOnOrder,
-        enableKitchenDisplay:
-            enableKitchenDisplay ?? this.enableKitchenDisplay,
-        enableTableManagement:
-            enableTableManagement ?? this.enableTableManagement,
-        numTables: numTables ?? this.numTables,
-        enableBarcodeScanner:
-            enableBarcodeScanner ?? this.enableBarcodeScanner,
-        enableInventoryAlerts:
-            enableInventoryAlerts ?? this.enableInventoryAlerts,
-        lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
-      );
-}
-
-// ── Room model ────────────────────────────────────────────────────────────────
-class RoomEntry {
-  final String id;
-  final String name;
-  final int sortOrder;
-
-  const RoomEntry({
-    required this.id,
-    required this.name,
-    required this.sortOrder,
-  });
-
-  factory RoomEntry.fromMap(Map<String, dynamic> m) => RoomEntry(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        sortOrder: m['sort_order'] as int? ?? 0,
-      );
-}
+import '../../config/business_config.dart';
+import '../../features/auth/auth_provider.dart';
 
 // ── Settings state ────────────────────────────────────────────────────────────
 class SettingsState {
@@ -159,7 +54,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     if (_businessId == null) return;
     state = state.copyWith(isLoading: true);
     try {
-      // Load config and rooms in parallel
       final results = await Future.wait([
         _client
             .from('business_configs')
@@ -203,45 +97,43 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
   // ── Table CRUD ──────────────────────────────────────────────────────────────
   Future<void> addTables(int count, String? roomId) async {
-  if (_businessId == null) return;
-  try {
-    final existing = await _client
-        .from('restaurant_tables')
-        .select('table_number')
-        .eq('business_id', _businessId)
-        .eq('is_active', true);
+    if (_businessId == null) return;
+    try {
+      final existing = await _client
+          .from('restaurant_tables')
+          .select('table_number')
+          .eq('business_id', _businessId)
+          .eq('is_active', true);
 
-    // Collect ALL existing numbers (active ones)
-    final existingNumbers = (existing as List)
-        .map((row) => int.tryParse(row['table_number'].toString()) ?? 0)
-        .toSet();
+      final existingNumbers = (existing as List)
+          .map((row) => int.tryParse(row['table_number'].toString()) ?? 0)
+          .toSet();
 
-    // Find next N numbers not already taken
-    final toInsert = <int>[];
-    int candidate = 1;
-    while (toInsert.length < count) {
-      if (!existingNumbers.contains(candidate)) {
-        toInsert.add(candidate);
+      final toInsert = <int>[];
+      int candidate = 1;
+      while (toInsert.length < count) {
+        if (!existingNumbers.contains(candidate)) {
+          toInsert.add(candidate);
+        }
+        candidate++;
       }
-      candidate++;
-    }
 
-   await _client.from('restaurant_tables').insert(
-      toInsert.map((n) {
-        final row = <String, dynamic>{
-          'business_id': _businessId,
-          'table_number': n.toString(),
-          'is_active': true,
-          'is_occupied': false,
-        };
-        if (roomId != null) row['room_id'] = roomId;
-        return row;
-      }).toList(),
-    );
-  } catch (e) {
-    state = state.copyWith(error: e.toString());
+      await _client.from('restaurant_tables').insert(
+        toInsert.map((n) {
+          final row = <String, dynamic>{
+            'business_id': _businessId,
+            'table_number': n.toString(),
+            'is_active': true,
+            'is_occupied': false,
+          };
+          if (roomId != null) row['room_id'] = roomId;
+          return row;
+        }).toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
-}
 
   Future<void> deleteTable(String tableUuid) async {
     try {
@@ -295,4 +187,9 @@ final settingsProvider =
 // Convenience — just the config
 final businessConfigProvider = Provider<BusinessConfig?>((ref) {
   return ref.watch(settingsProvider).config;
+});
+
+// Convenience — discounts allowed
+final discountsAllowedProvider = Provider<bool>((ref) {
+  return ref.watch(businessConfigProvider)?.allowDiscounts ?? true;
 });

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../settings_provider.dart';
+import '../../../config/business_config.dart';
 import '../../../shared/widgets/app_colors.dart';
 
 class RoomSettingsSection extends ConsumerStatefulWidget {

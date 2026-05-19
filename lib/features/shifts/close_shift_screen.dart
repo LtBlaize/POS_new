@@ -467,15 +467,27 @@ class _SalesSummaryCard extends StatelessWidget {
           ),
          
 
-          if (shift.creditGiven > 0) ...[
+          // REPLACE
+          if (shift.creditGiven > 0 || shift.creditsPaid > 0) ...[
             const _Divider(),
-            _SummaryRow(
-              label: 'Utang / Credit Given',
-              icon: Icons.receipt_long_outlined,
-              value: shift.creditGiven,
-              color: const Color(0xFFE94560),
-              prefix: '+',
-            ),
+            if (shift.creditGiven > 0)
+              _SummaryRow(
+                label: 'Utang Given',
+                icon: Icons.receipt_long_outlined,
+                value: shift.creditGiven,
+                color: const Color(0xFFE94560),
+                prefix: '+',
+              ),
+            if (shift.creditsPaid > 0) ...[
+              const SizedBox(height: 8),
+              _SummaryRow(
+                label: 'Utang Collected',
+                icon: Icons.payments_outlined,
+                value: shift.creditsPaid,
+                color: const Color(0xFF10B981),
+                prefix: '+',
+              ),
+            ],
           ],
         ],
       ),
@@ -808,10 +820,13 @@ class _ShiftReceiptView extends StatelessWidget {
                         color: const Color(0xFF3B82F6)),
                     _ReceiptRow('  Card / Other', shift.otherSales,
                         color: const Color(0xFF8B5CF6)),
+                    // REPLACE
                     if (shift.creditGiven > 0)
-                      _ReceiptRow(
-                          '  Utang / Credit', shift.creditGiven,
+                      _ReceiptRow('  Utang Given', shift.creditGiven,
                           color: _accent, prefix: '+'),
+                    if (shift.creditsPaid > 0)
+                      _ReceiptRow('  Utang Collected', shift.creditsPaid,
+                          color: _green, prefix: '+'),
 
                     const SizedBox(height: 16),
                     _ReceiptDivider(),

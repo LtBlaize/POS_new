@@ -51,18 +51,13 @@ Future<void> main() async {
   final existingSession = Supabase.instance.client.auth.currentSession;
   if (existingSession != null) {
     try {
-      final user = await Supabase.instance.client.auth.getUser();
-      if (user.user == null) {
-        debugPrint('[Boot] Stale session — no user found, signing out');
-        await Supabase.instance.client.auth.signOut();
-      }
+      await Supabase.instance.client.auth.refreshSession();
+      debugPrint('[Boot] Session refreshed successfully');
     } on AuthException catch (e) {
-      // Only sign out for real auth errors (deleted account, revoked token)
       debugPrint('[Boot] Auth error ($e) — signing out');
       await Supabase.instance.client.auth.signOut();
     } catch (e) {
-      // Network timeout, no internet, etc. — KEEP the session, do NOT sign out
-      debugPrint('[Boot] Network error during session check ($e) — keeping session');
+      debugPrint('[Boot] Network error during refresh ($e) — keeping session');
     }
   }
 

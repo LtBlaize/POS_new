@@ -8,7 +8,9 @@ import '../inventory_service.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../../inventory/widgets/add_product_dialog.dart';
 import 'inventory_shared.dart';
-import'../../../shared/widgets/marquee_text.dart';
+import '../../../shared/widgets/marquee_text.dart';
+import '../../../core/providers/staff_provider.dart';
+import '../../../core/models/staff.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TABLE HEADER (tablet / desktop only)
@@ -78,24 +80,39 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
   }
 
   void _showSetDialog() {
-    final controller =
-        TextEditingController(text: '${widget.entry.stock}');
+    final staff = ref.read(activeStaffProvider);
+    final isOwner = staff?.role == StaffRole.owner;
+    final currentStock = widget.entry.stock;
+    final controller = TextEditingController(text: '$currentStock');
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Set stock — ${widget.entry.product.name}',
             style: const TextStyle(fontSize: 16)),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: 'Quantity',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
-            prefixIcon: const Icon(Icons.inventory_2_outlined),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Quantity',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                prefixIcon: const Icon(Icons.inventory_2_outlined),
+                helperText: isOwner
+                    ? null
+                    : 'Minimum: $currentStock (cannot reduce stock)',
+                helperStyle: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 11),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -110,7 +127,18 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
                     borderRadius: BorderRadius.circular(8))),
             onPressed: () {
               final v = int.tryParse(controller.text);
-              if (v != null) _set(v);
+              if (v == null) return;
+              if (!isOwner && v < currentStock) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text('Cannot reduce stock below $currentStock'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+                return;
+              }
+              _set(v);
               Navigator.pop(ctx);
             },
             child: const Text('Save'),
@@ -130,6 +158,9 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
 
   @override
   Widget build(BuildContext context) {
+    final staff = ref.watch(activeStaffProvider);
+    final isOwner = staff?.role == StaffRole.owner;
+
     return widget.layout == InventoryLayout.phone
         ? _PhoneCard(
             entry: widget.entry,
@@ -137,6 +168,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
             onAdjust: _adjust,
             onSet: _showSetDialog,
             onEdit: _showEditDialog,
+            isOwner: isOwner,
           )
         : _TableRow(
             entry: widget.entry,
@@ -144,6 +176,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
             onAdjust: _adjust,
             onSet: _showSetDialog,
             onEdit: _showEditDialog,
+            isOwner: isOwner,
           );
   }
 }
@@ -155,6 +188,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
 class _PhoneCard extends StatelessWidget {
   final InventoryEntry entry;
   final bool adjusting;
+  final bool isOwner;
   final ValueChanged<int> onAdjust;
   final VoidCallback onSet;
   final VoidCallback onEdit;
@@ -162,6 +196,7 @@ class _PhoneCard extends StatelessWidget {
   const _PhoneCard({
     required this.entry,
     required this.adjusting,
+    required this.isOwner,
     required this.onAdjust,
     required this.onSet,
     required this.onEdit,
@@ -183,7 +218,8 @@ class _PhoneCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isLow ? AppColors.danger.withOpacity(0.25) : AppColors.divider,
+          color:
+              isLow ? AppColors.danger.withOpacity(0.25) : AppColors.divider,
         ),
         boxShadow: [
           BoxShadow(
@@ -221,8 +257,7 @@ class _PhoneCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             fontFamily: 'monospace',
-                            color:
-                                AppColors.textSecondary.withOpacity(0.7),
+                            color: AppColors.textSecondary.withOpacity(0.7),
                           ),
                         ),
                       ],
@@ -273,8 +308,7 @@ class _PhoneCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: stockColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: stockColor.withOpacity(0.3)),
+                    border: Border.all(color: stockColor.withOpacity(0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -301,10 +335,10 @@ class _PhoneCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
 
-                // Stepper
+                // Minus — owner only
                 StepperButton(
                   icon: Icons.remove,
-                  onTap: adjusting ? null : () => onAdjust(-1),
+                  onTap: (isOwner && !adjusting) ? () => onAdjust(-1) : null,
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
@@ -314,8 +348,7 @@ class _PhoneCard extends StatelessWidget {
                           child: SizedBox(
                             width: 16,
                             height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
                       : Text(
@@ -331,6 +364,8 @@ class _PhoneCard extends StatelessWidget {
                         ),
                 ),
                 const SizedBox(width: 8),
+
+                // Plus — all roles
                 StepperButton(
                   icon: Icons.add,
                   onTap: adjusting ? null : () => onAdjust(1),
@@ -339,7 +374,7 @@ class _PhoneCard extends StatelessWidget {
 
                 const Spacer(),
 
-                // Actions
+                // Set — all roles (min enforced inside dialog)
                 TextButton(
                   onPressed: onSet,
                   style: TextButton.styleFrom(
@@ -353,6 +388,8 @@ class _PhoneCard extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600)),
                 ),
+
+                // Edit — all roles (min enforced inside dialog)
                 TextButton(
                   onPressed: onEdit,
                   style: TextButton.styleFrom(
@@ -382,6 +419,7 @@ class _PhoneCard extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   final InventoryEntry entry;
   final bool adjusting;
+  final bool isOwner;
   final ValueChanged<int> onAdjust;
   final VoidCallback onSet;
   final VoidCallback onEdit;
@@ -389,6 +427,7 @@ class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.entry,
     required this.adjusting,
+    required this.isOwner,
     required this.onAdjust,
     required this.onSet,
     required this.onEdit,
@@ -415,28 +454,28 @@ class _TableRow extends StatelessWidget {
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                          color: AppColors.danger,
-                          shape: BoxShape.circle),
+                          color: AppColors.danger, shape: BoxShape.circle),
                     ),
                   ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    MarqueeText(
-                      text: entry.product.name,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary),
-                    ),
+                      MarqueeText(
+                        text: entry.product.name,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary),
+                      ),
                       if (entry.product.barcode != null)
                         MarqueeText(
                           text: entry.product.barcode!,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary),
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color:
+                                  AppColors.textSecondary.withOpacity(0.7)),
                         ),
                     ],
                   ),
@@ -457,13 +496,12 @@ class _TableRow extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: AppColors.divider,
                     borderRadius: BorderRadius.circular(6)),
-                child: // after
-                MarqueeText(
+                child: MarqueeText(
                   text: entry.product.category,
                   style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary),
                 ),
               ),
             ),
@@ -486,9 +524,10 @@ class _TableRow extends StatelessWidget {
             flex: 3,
             child: Row(
               children: [
+                // Minus — owner only
                 StepperButton(
                   icon: Icons.remove,
-                  onTap: adjusting ? null : () => onAdjust(-1),
+                  onTap: (isOwner && !adjusting) ? () => onAdjust(-1) : null,
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
@@ -497,8 +536,7 @@ class _TableRow extends StatelessWidget {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child:
-                              CircularProgressIndicator(strokeWidth: 2))
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : Text(
                           '${entry.stock}',
                           textAlign: TextAlign.center,
@@ -512,6 +550,8 @@ class _TableRow extends StatelessWidget {
                         ),
                 ),
                 const SizedBox(width: 10),
+
+                // Plus — all roles
                 StepperButton(
                   icon: Icons.add,
                   onTap: adjusting ? null : () => onAdjust(1),
@@ -521,7 +561,7 @@ class _TableRow extends StatelessWidget {
             ),
           ),
 
-          // Actions
+          // Set — all roles (min enforced inside dialog)
           SizedBox(
             width: 72,
             child: TextButton(
@@ -534,10 +574,12 @@ class _TableRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text('Set',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600)),
+                  style:
+                      TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ),
           ),
+
+          // Edit — all roles (min enforced inside dialog)
           SizedBox(
             width: 72,
             child: TextButton(
@@ -550,8 +592,8 @@ class _TableRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text('Edit',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600)),
+                  style:
+                      TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

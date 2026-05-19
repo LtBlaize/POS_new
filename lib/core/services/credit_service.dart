@@ -1,8 +1,11 @@
 // lib/core/services/credit_service.dart
 
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/credit.dart';
 import 'local_db_service.dart';
 
@@ -18,6 +21,19 @@ class CreditService {
   final SupabaseClient _supabase;
 
   const CreditService(this._db, this._supabase);
+
+  String _uuid() => const Uuid().v4();
+
+  // ── Online check ───────────────────────────────────────────────────────────
+
+  Future<bool> _checkOnline() async {
+    try {
+      await _supabase.from('credit_transactions').select('id').limit(1);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ── Customers ──────────────────────────────────────────────────────────────
 
@@ -137,7 +153,7 @@ class CreditService {
           'business_id': businessId,
           'type': 'credit',
           'amount': amount,
-          'amount_remaining': amount, // starts fully unpaid
+          'amount_remaining': amount,
           'is_settled': false,
           'note': note,
           'order_id': orderId,
@@ -156,6 +172,7 @@ class CreditService {
       await txn.insert('credit_transactions', {
         'id': txRow['id'],
         'customer_id': customerId,
+        'business_id': businessId,
         'type': 'credit',
         'amount': amount,
         'note': note,
@@ -169,26 +186,87 @@ class CreditService {
     });
   }
 
-  /// Record payment — FIFO: applies against oldest unpaid utang first
+  /// Record payment — FIFO online, simple offline with sync queue.
   Future<PaymentResult> recordPayment({
     required String customerId,
     required String businessId,
     required double amount,
     String? note,
   }) async {
-    // 1. Fetch all unsettled credit transactions, oldest first
+    final now = DateTime.now();
+    // Pre-generate ID so both online and offline paths use the same one,
+    // making the sync queue replay idempotent via upsert.
+    final paymentTxId = _uuid();
+
+    // ── Offline fast path ───────────────────────────────────────────────────
+    //
+    // Why check online here instead of using isOnlineProvider?
+    // CreditService is a plain class with no Ref — it doesn't have access
+    // to Riverpod providers. A lightweight probe is the cleanest option.
+    final isOnline = await _checkOnline();
+
+    if (!isOnline) {
+      // 1. Save payment locally so the cashier sees it immediately
+      await _db.insertCreditTransaction(
+        id: paymentTxId,
+        customerId: customerId,
+        businessId: businessId,
+        type: 'payment',
+        amount: amount,
+        note: note,
+        createdAt: now.toIso8601String(),
+      );
+
+      // 2. Reduce local total_owed so the UI reflects the payment
+      await _db.updateCreditCustomerOwed(
+        customerId: customerId,
+        delta: -amount,
+      );
+
+      // 3. Queue for sync when back online.
+      //    The replay handler in sync_queue_service.dart will do the full
+      //    FIFO settlement against Supabase when connectivity returns.
+      final d = await _db.db;
+      await d.insert('sync_queue', {
+        'operation': 'record_credit_payment',
+        'table_name': 'credit_transactions',
+        'record_id': paymentTxId,
+        'payload': jsonEncode({
+          'payment_tx_id': paymentTxId,
+          'customer_id': customerId,
+          'business_id': businessId,
+          'amount': amount,
+          'note': note,
+          'created_at': now.toIso8601String(),
+        }),
+        'created_at': now.toIso8601String(),
+        'retries': 0,
+      });
+
+      return PaymentResult(
+        paymentTxId: paymentTxId,
+        settledCredits: [],
+        leftoverCredit: 0,
+      );
+    }
+
+    // ── Online path ─────────────────────────────────────────────────────────
+
+    // 1. Fetch all unsettled credit transactions, oldest first (FIFO)
     final unsettled = await _supabase
         .from('credit_transactions')
         .select()
         .eq('customer_id', customerId)
         .eq('type', 'credit')
         .eq('is_settled', false)
-        .order('created_at', ascending: true); // FIFO
+        .order('created_at', ascending: true);
 
-    // 2. Insert the payment transaction
+    // 2. Insert the payment transaction using the pre-generated ID
+    //    so the offline and online records always share the same UUID.
     final paymentRow = await _supabase
         .from('credit_transactions')
         .insert({
+          'id': paymentTxId,
           'customer_id': customerId,
           'business_id': businessId,
           'type': 'payment',
@@ -200,8 +278,6 @@ class CreditService {
         .select()
         .single();
 
-    final paymentTxId = paymentRow['id'] as String;
-
     // 3. Apply FIFO settlement
     double remaining = amount;
     final settlements = <Map<String, dynamic>>[];
@@ -212,7 +288,8 @@ class CreditService {
 
       final creditTxId = row['id'] as String;
       final amountRemaining = (row['amount_remaining'] as num).toDouble();
-      final applied = remaining >= amountRemaining ? amountRemaining : remaining;
+      final applied =
+          remaining >= amountRemaining ? amountRemaining : remaining;
       final newRemaining = amountRemaining - applied;
       remaining -= applied;
 
@@ -226,7 +303,8 @@ class CreditService {
         'id': creditTxId,
         'amount_remaining': newRemaining,
         'is_settled': newRemaining == 0,
-        'settled_at': newRemaining == 0 ? DateTime.now().toIso8601String() : null,
+        'settled_at':
+            newRemaining == 0 ? DateTime.now().toIso8601String() : null,
       });
     }
 
@@ -259,6 +337,7 @@ class CreditService {
       await txn.insert('credit_transactions', {
         'id': paymentTxId,
         'customer_id': customerId,
+        'business_id': businessId,
         'type': 'payment',
         'amount': amount,
         'note': note,
@@ -277,7 +356,7 @@ class CreditService {
           .where((u) => u['is_settled'] == true)
           .map((u) => u['id'] as String)
           .toList(),
-      leftoverCredit: remaining, // >0 means overpayment (rare)
+      leftoverCredit: remaining,
     );
   }
 
@@ -306,8 +385,10 @@ class CreditService {
   CreditTransaction _txFromMap(Map<String, dynamic> r) => CreditTransaction(
         id: r['id'] as String,
         customerId: r['customer_id'] as String,
-        businessId: r['business_id'] as String,
-        type: r['type'] == 'credit' ? CreditTxType.credit : CreditTxType.payment,
+        businessId: r['business_id'] as String? ?? '',
+        type: r['type'] == 'credit'
+            ? CreditTxType.credit
+            : CreditTxType.payment,
         amount: (r['amount'] as num).toDouble(),
         amountRemaining: r['amount_remaining'] != null
             ? (r['amount_remaining'] as num).toDouble()
@@ -325,8 +406,8 @@ class CreditService {
 /// Result of a payment operation
 class PaymentResult {
   final String paymentTxId;
-  final List<String> settledCredits; // IDs of utang fully paid off
-  final double leftoverCredit;       // overpayment amount (usually 0)
+  final List<String> settledCredits;
+  final double leftoverCredit;
 
   const PaymentResult({
     required this.paymentTxId,
