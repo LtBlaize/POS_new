@@ -10,6 +10,7 @@ import '../../core/services/connectivity_service.dart';
 import '../../shared/widgets/app_colors.dart';
 import 'reports_providers.dart';
 import 'widgets/daily_tab.dart';
+import 'widgets/export_button.dart';   // FIX: was never imported
 import 'widgets/shifts_tab.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,6 +45,10 @@ class ReportsScreen extends ConsumerWidget {
         featureManager.hasFeature('tables');
     final layout = layoutOf(context);
 
+    // Unwrap nullable data to pass into ExportButton
+    final dailyReport = reportAsync.valueOrNull;
+    final shifts = shiftAsync.valueOrNull;
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: Column(
@@ -71,11 +76,15 @@ class ReportsScreen extends ConsumerWidget {
             ),
 
           // ── Header ───────────────────────────────────────────────────────
+          // FIX: pass dailyReport + shifts so ExportButton can be placed
+          // inside the header and receive live data.
           ReportHeader(
             selectedDate: selectedDate,
             isRestaurant: isRestaurant,
             layout: layout,
             activeTab: activeTab,
+            dailyReport: dailyReport,
+            shifts: shifts,
             onTabChanged: (t) =>
                 ref.read(reportTabProvider.notifier).state = t,
             onPrev: () =>
@@ -169,6 +178,9 @@ class ReportHeader extends StatelessWidget {
   final VoidCallback? onNext;
   final VoidCallback onPick;
   final VoidCallback? onToday;
+  // FIX: added so ExportButton can be placed in the header
+  final DailyReport? dailyReport;
+  final List<ShiftEntry>? shifts;
 
   const ReportHeader({
     super.key,
@@ -181,6 +193,8 @@ class ReportHeader extends StatelessWidget {
     required this.onNext,
     required this.onPick,
     required this.onToday,
+    required this.dailyReport,
+    required this.shifts,
   });
 
   @override
@@ -194,7 +208,9 @@ class ReportHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          isPhone ? _phoneTitleRow() : _wideTitleRow(),
+          isPhone
+              ? _phoneTitleRow(selectedDate, isRestaurant, dailyReport, shifts)
+              : _wideTitleRow(selectedDate, isRestaurant, dailyReport, shifts),
           SizedBox(height: isPhone ? 10 : 14),
           isPhone ? _phoneDateRow() : _wideDateRow(),
           SizedBox(height: isPhone ? 10 : 14),
@@ -204,7 +220,14 @@ class ReportHeader extends StatelessWidget {
     );
   }
 
-  Widget _phoneTitleRow() => Row(
+  // FIX: title rows now include the ExportButton on the trailing edge
+  Widget _phoneTitleRow(
+    DateTime date,
+    bool isRestaurant,
+    DailyReport? dailyReport,
+    List<ShiftEntry>? shifts,
+  ) =>
+      Row(
         children: [
           Expanded(
             child: Column(
@@ -227,17 +250,29 @@ class ReportHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _formatDate(selectedDate),
+                  _formatDate(date),
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
                 ),
               ],
             ),
           ),
+          // FIX: ExportButton placed here — was missing entirely before
+          ExportButton(
+            date: date,
+            dailyReport: dailyReport,
+            shifts: shifts,
+          ),
         ],
       );
 
-  Widget _wideTitleRow() => Row(
+  Widget _wideTitleRow(
+    DateTime date,
+    bool isRestaurant,
+    DailyReport? dailyReport,
+    List<ShiftEntry>? shifts,
+  ) =>
+      Row(
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,11 +294,18 @@ class ReportHeader extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                _formatDate(selectedDate),
+                _formatDate(date),
                 style: const TextStyle(
                     fontSize: 13, color: AppColors.textSecondary),
               ),
             ],
+          ),
+          const Spacer(),
+          // FIX: ExportButton placed here — was missing entirely before
+          ExportButton(
+            date: date,
+            dailyReport: dailyReport,
+            shifts: shifts,
           ),
         ],
       );
@@ -459,8 +501,7 @@ class _Tab extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color:
-                    active ? AppColors.primary : AppColors.textSecondary,
+                color: active ? AppColors.primary : AppColors.textSecondary,
               ),
             ),
           ],

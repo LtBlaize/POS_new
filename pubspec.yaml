@@ -26,6 +26,10 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.4.2
   path: ^1.9.0
+  path_provider: ^2.1.0
+  excel: ^4.0.6
+  share_plus: ^10.0.0
+
 
   # ── Offline / local DB ─────────────────────────────────────────────────────
   sqflite: ^2.3.3
@@ -68,6 +72,7 @@ flutter_icons:
 
 flutter:
   assets:
+    - assets/POS_Report_Template.xlsx
     - assets/.env
   uses-material-design: true
   # fonts:
