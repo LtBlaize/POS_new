@@ -19,6 +19,7 @@ final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
 });
 
+
 class CheckoutService {
   final Ref _ref;
   CheckoutService(this._ref);
@@ -161,8 +162,9 @@ class CheckoutService {
         taxRate: taxRate,
         discountAmount: discountAmount,
       );
+      final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 
-      if (hasKitchen) {
+      if (hasKitchen && kitchenItems.isNotEmpty) {
         if (_isOnline) {
           try {
             final client = _ref.read(supabaseClientProvider);

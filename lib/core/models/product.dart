@@ -11,6 +11,7 @@ class Product {
   final bool trackInventory;
   final int stockQuantity;
   final bool isAvailable;
+  final bool sendToKitchen;  
   final bool isActive;
   // Local-only helper (populated from categories join or passed manually)
   final String category;
@@ -29,6 +30,7 @@ class Product {
     this.stockQuantity = 0,
     this.isAvailable = true,
     this.isActive = true,
+    this.sendToKitchen = true, 
     this.category = '',
   });
 
@@ -48,6 +50,7 @@ class Product {
       stockQuantity: map['stock_quantity'] as int? ?? 0,
       isAvailable: map['is_available'] as bool? ?? true,
       isActive: map['is_active'] as bool? ?? true,
+      sendToKitchen: map['send_to_kitchen'] as bool? ?? true,
       category: map['category_name'] as String? ??
               categoryMap?['name'] as String? ?? '',
     );
@@ -66,6 +69,7 @@ class Product {
     'stock_quantity': stockQuantity,
     'is_available': isAvailable,
     'is_active': isActive,
+    'send_to_kitchen': sendToKitchen,
   };
 
   Product copyWith({
@@ -73,6 +77,7 @@ class Product {
     double? price,
     bool? isAvailable,
     int? stockQuantity,
+    bool? sendToKitchen,
   }) => Product(
     id: id,
     businessId: businessId,
@@ -84,6 +89,7 @@ class Product {
     barcode: barcode,
     sku: sku,
     trackInventory: trackInventory,
+    sendToKitchen: sendToKitchen ?? this.sendToKitchen,
     stockQuantity: stockQuantity ?? this.stockQuantity,
     isAvailable: isAvailable ?? this.isAvailable,
     isActive: isActive,

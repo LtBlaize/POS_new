@@ -61,7 +61,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       // Cast each element individually to avoid the List<dynamic> → List<Order> error.
       final rows = await client
           .from('orders')
-          .select('*, order_items(*, products(*))')
+          .select('*, order_items(*, products(id, name, price, business_id, send_to_kitchen))') 
           .eq('business_id', businessId)
           .inFilter('status', ['pending', 'preparing', 'ready'])
           .order('created_at', ascending: true);
@@ -87,7 +87,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           .from('orders')
           .update({
             'status': next.value,
-            if (next == OrderStatus.completed) 'paid_at': DateTime.now().toUtc().toIso8601String(),
+           
           })
           .eq('id', orderId);
     } catch (e) {
@@ -108,10 +108,12 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           businessId: product['business_id'] as String? ?? '',
           name: product['name'] as String? ?? map['product_name'] as String? ?? '',
           price: (product['price'] as num?)?.toDouble() ?? 0.0,
+          sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
         ),
         quantity: map['quantity'] as int? ?? 1,
       );
     }).toList();
+    final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 
     return Order(
       id: m['id'] as String,
@@ -122,7 +124,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       createdAt: DateTime.parse(m['created_at'] as String),
       subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (m['total_amount'] as num?)?.toDouble() ?? 0.0,
-      items: items,
+      items: kitchenItems,  // 
     );
   }
 }

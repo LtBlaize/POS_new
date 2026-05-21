@@ -32,6 +32,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   // State
   String? _selectedCategoryId;
   bool _trackInventory = false;
+  bool _sendToKitchen = true;
   bool _saving = false;
   bool _addingNewCategory = false;
   int _originalStock = 0; // ← added: used to block non-owners from reducing stock on edit
@@ -61,6 +62,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
       _barcodeController.text  = p.barcode ?? '';
       _skuController.text      = p.sku ?? '';
       _stockController.text    = '${p.stockQuantity}';
+      _sendToKitchen           = p.sendToKitchen;
       _imageUrlController.text = p.imageUrl ?? '';
       _trackInventory          = p.trackInventory;
       _selectedCategoryId      = p.categoryId;
@@ -158,6 +160,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
         'track_inventory': _trackInventory,
         'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
+        'send_to_kitchen': _sendToKitchen,
       };
 
       if (widget.product == null) {
@@ -343,6 +346,12 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                         controller: _imageUrlController,
                         hint: 'https://…',
                       ),
+
+                      const SizedBox(height: 10),
+                        _SendToKitchenToggle(
+                          value: _sendToKitchen,
+                          onChanged: (v) => setState(() => _sendToKitchen = v),
+                        ),
                       const SizedBox(height: 14),
 
                       // Track inventory toggle
@@ -351,7 +360,8 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                         onChanged: (v) =>
                             setState(() => _trackInventory = v),
                       ),
-
+                      
+                      
                       // Stock quantity — only visible when tracking
                       if (_trackInventory) ...[
                         const SizedBox(height: 14),
@@ -603,6 +613,58 @@ class _NewCategoryField extends StatelessWidget {
           tooltip: 'Cancel',
         ),
       ],
+    );
+  }
+}
+class _SendToKitchenToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SendToKitchenToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: value
+            ? Colors.orange.withOpacity(0.05)
+            : AppColors.surface,
+        border: Border.all(
+          color: value
+              ? Colors.orange.withOpacity(0.3)
+              : AppColors.divider,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.kitchen_outlined,
+              size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Send to Kitchen',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                Text('This item will appear on the kitchen display',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: Colors.orange,
+          ),
+        ],
+      ),
     );
   }
 }
