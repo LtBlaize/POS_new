@@ -126,6 +126,7 @@ class LanClientService {
       if (msg['type'] == 'order_placed' || msg['type'] == 'order_status_changed') {
         _fetchOrders(businessId);
       }
+      // Parked order events are handled by ParkedOrderNotifier via onEvent
     } catch (e) {
       debugPrint('[LAN] WS parse error: $e');
     }

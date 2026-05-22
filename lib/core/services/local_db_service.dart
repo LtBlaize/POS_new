@@ -35,7 +35,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
 //      that included business_id (offline payment path) would crash with
 //      "table has no column named business_id". The ALTER TABLE in _onUpgrade
 //      adds it safely to existing installs without wiping data.
-const _kDbVersion = 7;
+const _kDbVersion = 9;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -117,6 +117,10 @@ class LocalDbService {
         synced_at TEXT NOT NULL
       )
     ''');
+
+    batch.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
+    );
 
     batch.execute('''
       CREATE TABLE orders (
@@ -267,6 +271,21 @@ class LocalDbService {
       )
     ''');
 
+    // ── v9 tables ─────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE parked_orders (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        items TEXT NOT NULL,
+        order_discount_amount REAL NOT NULL DEFAULT 0,
+        order_discount_type TEXT NOT NULL DEFAULT 'fixed',
+        tip_amount REAL NOT NULL DEFAULT 0,
+        parked_at TEXT NOT NULL
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -354,6 +373,31 @@ class LocalDbService {
       ''');
     }
 
+   if (oldVersion < 9) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS parked_orders (
+          id TEXT PRIMARY KEY,
+          business_id TEXT NOT NULL,
+          label TEXT NOT NULL,
+          items TEXT NOT NULL,
+          order_discount_amount REAL NOT NULL DEFAULT 0,
+          order_discount_type TEXT NOT NULL DEFAULT 'fixed',
+          tip_amount REAL NOT NULL DEFAULT 0,
+          parked_at TEXT NOT NULL
+        )
+      ''');
+    }
+
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
+        );
+      } catch (e) {
+        debugPrint('[LocalDb] v8 migration: barcode index error ($e)');
+      }
+    }
+
     if (oldVersion < 7) {
       // Add business_id to credit_transactions.
       // Wrapped in try/catch because fresh installs that ran _onCreate
@@ -435,6 +479,18 @@ class LocalDbService {
       where: 'id = ?',
       whereArgs: [productId],
     );
+  }
+
+  Future<Product?> findByBarcode(String barcode, String businessId) async {
+    final d = await db;
+    final rows = await d.query(
+      'products',
+      where: 'barcode = ? AND business_id = ? AND is_active = 1',
+      whereArgs: [barcode, businessId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _productFromRow(rows.first);
   }
 
   Future<void> updateProductAvailability(
@@ -1061,4 +1117,30 @@ class LocalDbService {
     await _db?.close();
     _db = null;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PARKED ORDERS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> insertParkedOrder(Map<String, dynamic> map) =>
+      _write((d) async {
+        await d.insert(
+          'parked_orders',
+          map,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      });
+
+  Future<List<Map<String, dynamic>>> getParkedOrders() async {
+    final d = await db;
+    return d.query('parked_orders', orderBy: 'parked_at ASC');
+  }
+
+  Future<void> deleteParkedOrder(String id) => _write((d) async {
+        await d.delete(
+          'parked_orders',
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      });
 }

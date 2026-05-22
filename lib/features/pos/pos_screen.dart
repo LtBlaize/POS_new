@@ -23,6 +23,11 @@ import 'widgets/product/product_grid.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/close_shift_screen.dart';
 import '../../shared/widgets/app_colors.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:collection/collection.dart';
+import '../../core/models/product.dart';
 
 final _activeIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -76,17 +81,21 @@ class POSScreen extends ConsumerWidget {
               screens: screens,
               activeIndex: safeIndex,
               layout: layout,
-              onSelect: (i) =>
-                  ref.read(_activeIndexProvider.notifier).state = i,
+              onSelect: (i) {
+                ref.read(_activeIndexProvider.notifier).state = i;
+                ref.read(posSearchQueryProvider.notifier).state = '';
+              },
             ),
           _Layout.phoneLandscape || _Layout.tabletLandscape => _LandscapeShell(
               featureManager: featureManager,
               screens: screens,
               activeIndex: safeIndex,
               layout: layout,
-              onSelect: (i) =>
-                  ref.read(_activeIndexProvider.notifier).state = i,
-            ),
+                onSelect: (i) {
+                ref.read(_activeIndexProvider.notifier).state = i;
+                ref.read(posSearchQueryProvider.notifier).state = '';
+              },
+          ),
         },
       ),
     );
@@ -266,24 +275,120 @@ class _LandscapeShell extends StatelessWidget {
 
 // ── POS main content ──────────────────────────────────────────────────────────
 
-class _POSMain extends StatelessWidget {
+class _POSMain extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final _Layout layout;
 
   const _POSMain({required this.featureManager, required this.layout});
 
   @override
+  ConsumerState<_POSMain> createState() => _POSMainState();
+}
+
+class _POSMainState extends ConsumerState<_POSMain> {
+  final _barcodeBuffer = StringBuffer();
+  DateTime _lastKeyTime = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    final gap = now.difference(_lastKeyTime).inMilliseconds;
+    _lastKeyTime = now;
+
+    if (gap > 100) _barcodeBuffer.clear();
+
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      final barcode = _barcodeBuffer.toString().trim();
+      _barcodeBuffer.clear();
+      if (barcode.isNotEmpty) _handleBarcode(barcode);
+      return true; // consume — never bleeds into text fields
+    }
+
+    final char = event.character;
+    if (char != null && char.isNotEmpty) {
+      _barcodeBuffer.write(char);
+      return true; // consume scanner chars so they don't type into fields
+    }
+
+    return false;
+  }
+
+  void _handleBarcode(String barcode) {
+    final products = ref.read(productListProvider).asData?.value ?? [];
+    final match = products.firstWhereOrNull(
+      (p) => (p.barcode == barcode || p.sku == barcode) && p.isActive,
+    );
+    _showBarcodeResult(match, barcode);
+  }
+
+  void _showBarcodeResult(Product? match, String barcode) {
+    if (!mounted) return;
+
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No product found for barcode: $barcode'),
+        backgroundColor: AppColors.danger,
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+
+    if (match.trackInventory && match.stockQuantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${match.name} is out of stock.'),
+        backgroundColor: AppColors.danger,
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+
+    ref.read(cartProvider.notifier).addProduct(match);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${match.name} added to cart'),
+      backgroundColor: AppColors.success,
+      duration: const Duration(milliseconds: 800),
+    ));
+  }
+
+  void _openCameraScanner() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BarcodeScannerSheet(
+        onDetect: (barcode) {
+          Navigator.pop(context);
+          _handleBarcode(barcode);
+        },
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isPortrait = layout == _Layout.phonePortrait ||
-        layout == _Layout.tabletPortrait;
+    final isPortrait = widget.layout == _Layout.phonePortrait ||
+        widget.layout == _Layout.tabletPortrait;
 
     final productArea = Column(
       children: [
-        if (layout == _Layout.phonePortrait)
-          const _PhoneSearchBar()
+        if (widget.layout == _Layout.phonePortrait)
+          _PhoneSearchBar(onCameraTap: _openCameraScanner)
         else
-          const TopBar(),
-        if (featureManager.hasFeature('tables')) const TableSelector(),
+          TopBar(onCameraTap: _openCameraScanner),
+        if (widget.featureManager.hasFeature('tables')) const TableSelector(),
         const CategoryBar(),
         const Expanded(child: ProductGrid()),
       ],
@@ -291,27 +396,130 @@ class _POSMain extends StatelessWidget {
 
     if (isPortrait) return productArea;
 
-    final cartWidth = layout == _Layout.phoneLandscape ? 260.0 : 340.0;
+    final cartWidth = widget.layout == _Layout.phoneLandscape ? 260.0 : 340.0;
 
     return Row(
       children: [
         Expanded(child: productArea),
         SizedBox(
           width: cartWidth,
-          child: CartPanel(featureManager: featureManager),
+          child: CartPanel(featureManager: widget.featureManager),
         ),
       ],
     );
   }
 }
 
-// ── Phone search bar ──────────────────────────────────────────────────────────
+// ── Camera scanner sheet ──────────────────────────────────────────────────────
 
-class _PhoneSearchBar extends ConsumerWidget {
-  const _PhoneSearchBar();
+class _BarcodeScannerSheet extends StatefulWidget {
+  final ValueChanged<String> onDetect;
+  const _BarcodeScannerSheet({required this.onDetect});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  State<_BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
+}
+
+class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
+  final _controller = MobileScannerController();
+  bool _handled = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.sizeOf(context).height * 0.55,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 8),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Scan Barcode or QR Code',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(20)),
+              child: MobileScanner(
+                controller: _controller,
+                onDetect: (capture) {
+                  if (_handled) return;
+                  final code = capture.barcodes.firstOrNull?.rawValue;
+                  if (code != null && code.isNotEmpty) {
+                    _handled = true;
+                    widget.onDetect(code);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Phone search bar ──────────────────────────────────────────────────────────
+
+class _PhoneSearchBar extends ConsumerStatefulWidget {
+  final VoidCallback onCameraTap;
+  const _PhoneSearchBar({required this.onCameraTap});
+
+  @override
+  ConsumerState<_PhoneSearchBar> createState() => _PhoneSearchBarState();
+}
+
+class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String v) {
+    setState(() {}); // rebuild to show/hide clear button
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 180), () {
+      ref.read(posSearchQueryProvider.notifier).state = v;
+    });
+  }
+
+  void _clear() {
+    _controller.clear();
+    setState(() {});
+    _debounce?.cancel();
+    ref.read(posSearchQueryProvider.notifier).state = '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
@@ -330,13 +538,12 @@ class _PhoneSearchBar extends ConsumerWidget {
         child: Row(
           children: [
             const SizedBox(width: 10),
-            const Icon(Icons.search,
-                size: 16, color: AppColors.textSecondary),
+            const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
-                onChanged: (v) =>
-                    ref.read(posSearchQueryProvider.notifier).state = v,
+                controller: _controller,
+                onChanged: _onChanged,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search products or scan barcode…',
@@ -349,7 +556,23 @@ class _PhoneSearchBar extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            if (_controller.text.isNotEmpty)
+              GestureDetector(
+                onTap: _clear,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: widget.onCameraTap,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.qr_code_scanner_rounded,
+                      size: 16, color: AppColors.textSecondary),
+                ),
+              ),
           ],
         ),
       ),

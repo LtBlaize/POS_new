@@ -157,6 +157,16 @@ final categoryListProvider = FutureProvider<List<String>>((ref) async {
         .toList();
   }
 });
+bool _fuzzyMatch(String source, String query) {
+  if (source.contains(query)) return true;
+  int si = 0;
+  for (int qi = 0; qi < query.length && si < source.length; qi++) {
+    while (si < source.length && source[si] != query[qi]) si++;
+    if (si >= source.length) return false;
+    si++;
+  }
+  return true;
+}
 
 // ── Selected category ─────────────────────────────────────────────────────────
 
@@ -180,9 +190,10 @@ final filteredProductsProvider = Provider<List<Product>>((ref) {
     if (!isVisible(p)) return false;
     if (category != null && p.category != category) return false;
     if (query.isNotEmpty) {
-      return p.name.toLowerCase().contains(query) ||
+      return _fuzzyMatch(p.name.toLowerCase(), query) ||
           p.category.toLowerCase().contains(query) ||
-          (p.barcode?.toLowerCase().contains(query) ?? false);
+          (p.barcode?.toLowerCase().contains(query) ?? false) ||
+          (p.sku?.toLowerCase().contains(query) ?? false);
     }
     return true;
   }).toList();

@@ -17,9 +17,23 @@ class ProductGrid extends ConsumerWidget {
       data: (_) {
         final products = ref.watch(filteredProductsProvider);
         if (products.isEmpty) {
-          return const Center(
-            child: Text('No products in this category.',
-                style: TextStyle(color: Colors.grey)),
+          final query = ref.watch(posSearchQueryProvider);
+          final category = ref.watch(selectedCategoryProvider);
+          final allProducts = ref.watch(productListProvider).asData?.value ?? [];
+
+          final String message;
+          if (query.isNotEmpty) {
+            message = 'No products match "$query".';
+          } else if (category != null) {
+            message = 'No products in "$category".';
+          } else if (allProducts.isEmpty) {
+            message = 'No products yet. Add some in Inventory.';
+          } else {
+            message = 'No products available right now.';
+          }
+
+          return Center(
+            child: Text(message, style: const TextStyle(color: Colors.grey)),
           );
         }
         return LayoutBuilder(

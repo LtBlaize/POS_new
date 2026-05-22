@@ -32,7 +32,7 @@ final _selectedPaymentProvider =
 class CheckoutDialog extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final String? existingOrderId;
-  final Order? existingOrder; // ← pass this from pos_screen for Print Bill
+  final Order? existingOrder;
 
   const CheckoutDialog({
     super.key,
@@ -78,27 +78,34 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     super.dispose();
   }
 
-  double get _subtotal {
-    ref.watch(cartProvider); // watch state to trigger rebuild
-    return ref.read(cartProvider.notifier).grandTotal;
-  }
+  double _computeSubtotal() => ref.read(cartProvider.notifier).grandTotal;
+
   double get _tendered =>
       double.tryParse(_tenderedController.text.replaceAll(',', '')) ?? 0;
 
-  double get _change => (_tendered - _subtotal).clamp(0, double.infinity);
+  double _computeChange(double subtotal) =>
+      (_tendered - subtotal).clamp(0, double.infinity);
 
-  bool get _canConfirm {
+  bool _computeCanConfirm(double subtotal) {
     final items = ref.read(cartProvider);
     if (items.isEmpty && widget.existingOrderId == null) return false;
     final method = ref.read(_selectedPaymentProvider);
-    if (method == PaymentMethod.cash) return _tendered >= _subtotal;
+    if (method == PaymentMethod.cash) {
+      if (subtotal == 0) return true;
+      return _tendered >= subtotal;
+    }
     return _refController.text.trim().isNotEmpty;
   }
 
   Future<void> _placeOrder({required bool payNow}) async {
+    final subtotal = _computeSubtotal();
+    final tendered = _tendered;
+    final change = _computeChange(subtotal);
     final items = ref.read(cartProvider);
+
     if (items.isEmpty && widget.existingOrderId == null) return;
-    if (payNow && widget.existingOrderId == null && !_canConfirm) return;
+    if (payNow && widget.existingOrderId == null &&
+        !_computeCanConfirm(subtotal)) return;
 
     final method = ref.read(_selectedPaymentProvider);
     setState(() => payNow ? _placing = true : _sendingToKitchen = true);
@@ -111,11 +118,12 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             hasKitchen: widget.featureManager.hasFeature('kitchen'),
             existingOrderId: widget.existingOrderId,
             paymentMethod: method,
-            tendered: _tendered,
-            change: _change,
-            subtotal: _subtotal,
+            tendered: tendered,
+            change: change,
+            subtotal: subtotal,
             items: items,
             discountAmount: ref.read(cartProvider.notifier).orderDiscountValue,
+            tipAmount: ref.read(cartProvider.notifier).tipAmount,
             referenceNumber: _refController.text.trim().isEmpty
                 ? null
                 : _refController.text.trim(),
@@ -125,7 +133,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
       switch (result.status) {
         case CheckoutStatus.error:
-          setState(() { _placing = false; _sendingToKitchen = false; });
+          setState(() {
+            _placing = false;
+            _sendingToKitchen = false;
+          });
           _showError(result.errorMessage ?? 'An error occurred.');
 
         case CheckoutStatus.sentToKitchen:
@@ -138,6 +149,23 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
           });
 
         case CheckoutStatus.paid:
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: const Row(children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('Payment confirmed!'),
+              ]),
+              backgroundColor: CheckoutTheme.mint,
+              duration: const Duration(milliseconds: 900),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ));
+            await Future.delayed(const Duration(milliseconds: 400));
+          }
+          if (!mounted) return;
           setState(() {
             _completedOrder = result.order;
             _sentToKitchenOnly = false;
@@ -148,7 +176,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _placing = false; _sendingToKitchen = false; });
+        setState(() {
+          _placing = false;
+          _sendingToKitchen = false;
+        });
         _showError('Failed: $e');
       }
     }
@@ -171,6 +202,12 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(cartProvider);
+    final subtotal = _computeSubtotal();
+    final tendered = _tendered;
+    final change = _computeChange(subtotal);
+    final canConfirm = _computeCanConfirm(subtotal);
+
     if (_completedOrder != null) {
       if (_sentToKitchenOnly) {
         return KitchenSentView(
@@ -205,10 +242,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       existingOrder: widget.existingOrder,
       tenderedController: _tenderedController,
       refController: _refController,
-      subtotal: _subtotal,
-      tendered: _tendered,
-      change: _change,
-      canConfirm: _canConfirm,
+      subtotal: subtotal,
+      tendered: tendered,
+      change: change,
+      canConfirm: canConfirm,
       placing: _placing,
       sendingToKitchen: _sendingToKitchen,
       onConfirm: () => _placeOrder(payNow: true),
@@ -364,26 +401,36 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                       OrderSummaryCard(
                         items: items,
                         subtotal: widget.subtotal,
-                        itemsTotal: ref.read(cartProvider.notifier).itemsTotal,
-                        orderDiscountValue: ref.read(cartProvider.notifier).orderDiscountValue,
-                        orderDiscountLabel: ref.read(cartProvider.notifier).orderDiscountType ==
-                                DiscountType.percentage
-                            ? 'Discount (${ref.read(cartProvider.notifier).orderDiscountAmount.toStringAsFixed(0)}%)'
-                            : 'Discount',
+                        itemsTotal:
+                            ref.read(cartProvider.notifier).itemsTotal,
+                        tipAmount:
+                            ref.read(cartProvider.notifier).tipAmount,
+                        orderDiscountValue:
+                            ref.read(cartProvider.notifier).orderDiscountValue,
+                        orderDiscountLabel:
+                            ref.read(cartProvider.notifier).orderDiscountType ==
+                                    DiscountType.percentage
+                                ? 'Discount (${ref.read(cartProvider.notifier).orderDiscountAmount.toStringAsFixed(0)}%)'
+                                : 'Discount',
                       ),
                       const SizedBox(height: 16),
 
-                      // REPLACE
                       if (ref.watch(discountsAllowedProvider))
                         _DiscountButton(isBusy: isBusy),
                       const SizedBox(height: 16),
+
+                      _TipSection(isBusy: isBusy),
+                      const SizedBox(height: 16),
+
                       const CheckoutSectionLabel('Payment Method'),
                       const SizedBox(height: 8),
                       PaymentMethodRow(
                         selected: method,
                         isBusy: isBusy,
                         onSelect: (m) {
-                          ref.read(_selectedPaymentProvider.notifier).state = m;
+                          ref
+                              .read(_selectedPaymentProvider.notifier)
+                              .state = m;
                           widget.refController.clear();
                         },
                       ),
@@ -398,6 +445,12 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                           change: widget.change,
                           onExact: isBusy ? null : _setExact,
                         ),
+
+                        if (widget.change > 0) ...[
+                          const SizedBox(height: 8),
+                          ChangeBreakdown(change: widget.change),
+                        ],
+
                         const SizedBox(height: 10),
                         QuickAmountRow(
                           subtotal: widget.subtotal,
@@ -441,7 +494,9 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
               Consumer(
                 builder: (context, ref, _) {
                   final profile = ref.watch(profileProvider);
-                  final businessName = profile.asData?.value?.business?.name ?? '';                  return ActionBar(
+                  final businessName =
+                      profile.asData?.value?.business?.name ?? '';
+                  return ActionBar(
                     isRestaurant: widget.isRestaurant,
                     existingOrderId: widget.existingOrderId,
                     isCash: isCash,
@@ -464,6 +519,100 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
         ),
       ),
     );
+  }
+}
+
+// ── ChangeBreakdown ───────────────────────────────────────────────────────────
+
+class ChangeBreakdown extends StatelessWidget {
+  final double change;
+
+  const ChangeBreakdown({
+    super.key,
+    required this.change,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final breakdown = _calculateBreakdown(change);
+
+    if (change <= 0) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CheckoutTheme.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: CheckoutTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Suggested Change',
+            style: TextStyle(
+              color: CheckoutTheme.textMid,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: breakdown.entries.map((entry) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: CheckoutTheme.elevated,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${entry.value} × ₱${entry.key.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: CheckoutTheme.textHigh,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<double, int> _calculateBreakdown(double amount) {
+    final denominations = [
+      1000.0,
+      500.0,
+      200.0,
+      100.0,
+      50.0,
+      20.0,
+      10.0,
+      5.0,
+      1.0,
+    ];
+
+    double remaining = amount.roundToDouble();
+    final result = <double, int>{};
+
+    for (final denom in denominations) {
+      final count = (remaining ~/ denom);
+      if (count > 0) {
+        result[denom] = count;
+        remaining -= count * denom;
+      }
+    }
+
+    return result;
   }
 }
 
@@ -526,8 +675,8 @@ class _CheckoutHeader extends StatelessWidget {
                         fontWeight: FontWeight.w600))
               else
                 const Text('Ready to collect payment',
-                    style: TextStyle(
-                        color: CheckoutTheme.textMid, fontSize: 11)),
+                    style:
+                        TextStyle(color: CheckoutTheme.textMid, fontSize: 11)),
             ],
           ),
           const Spacer(),
@@ -596,67 +745,71 @@ class _UtangButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: isBusy ? null : () async {
-        final result = await showDialog<AddCreditResult>(
-          context: context,
-          builder: (_) => AddCreditDialog(amount: subtotal),
-        );
-        if (result == null || !context.mounted) return;
+      onTap: isBusy
+          ? null
+          : () async {
+              final result = await showDialog<AddCreditResult>(
+                context: context,
+                builder: (_) => AddCreditDialog(amount: subtotal),
+              );
+              if (result == null || !context.mounted) return;
 
-        final checkoutResult =
-            await ref.read(checkoutServiceProvider).placeOrder(
-                  
-                  context: context,
-                  payNow: false,
-                  isRestaurant: isRestaurant,
-                  hasKitchen: featureManager.hasFeature('kitchen'),
-                  existingOrderId: existingOrderId,
-                  paymentMethod: PaymentMethod.cash,
-                  tendered: 0,
-                  change: 0,
-                  subtotal: subtotal,
-                  discountAmount: ref.read(cartProvider.notifier).orderDiscountValue,
-                  items: ref.read(cartProvider),
-                );
+              final checkoutResult =
+                  await ref.read(checkoutServiceProvider).placeOrder(
+                        context: context,
+                        payNow: false,
+                        isRestaurant: isRestaurant,
+                        hasKitchen: featureManager.hasFeature('kitchen'),
+                        existingOrderId: existingOrderId,
+                        paymentMethod: PaymentMethod.cash,
+                        tendered: 0,
+                        change: 0,
+                        subtotal: subtotal,
+                        discountAmount:
+                            ref.read(cartProvider.notifier).orderDiscountValue,
+                        tipAmount: ref.read(cartProvider.notifier).tipAmount,
+                        items: ref.read(cartProvider),
+                      );
 
-        if (!context.mounted) return;
+              if (!context.mounted) return;
 
-        if (checkoutResult.status == CheckoutStatus.error) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Row(children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(
-                      checkoutResult.errorMessage ?? 'Failed to record utang.')),
-            ]),
-            backgroundColor: CheckoutTheme.rose,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ));
-          return;
-        }
+              if (checkoutResult.status == CheckoutStatus.error) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Row(children: [
+                    const Icon(Icons.error_outline,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(checkoutResult.errorMessage ??
+                            'Failed to record utang.')),
+                  ]),
+                  backgroundColor: CheckoutTheme.rose,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.all(16),
+                ));
+                return;
+              }
 
-        onDone();
+              onDone();
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Row(children: [
-              const Icon(Icons.receipt_long_outlined,
-                  color: Colors.white, size: 16),
-              const SizedBox(width: 8),
-              Text('Utang recorded for ${result.customer.name}'),
-            ]),
-            backgroundColor: CheckoutTheme.rose,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ));
-        }
-      },
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Row(children: [
+                    const Icon(Icons.receipt_long_outlined,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Utang recorded for ${result.customer.name}'),
+                  ]),
+                  backgroundColor: CheckoutTheme.rose,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.all(16),
+                ));
+              }
+            },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -682,7 +835,8 @@ class _UtangButton extends ConsumerWidget {
     );
   }
 }
-// ADD at end of file (before final closing brace)
+
+// ── _DiscountButton ───────────────────────────────────────────────────────────
 
 class _DiscountButton extends ConsumerStatefulWidget {
   final bool isBusy;
@@ -704,7 +858,7 @@ class _DiscountButtonState extends ConsumerState<_DiscountButton> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(cartProvider); // watch state to trigger rebuilds
+    ref.watch(cartProvider);
     final notifier = ref.read(cartProvider.notifier);
     final hasDiscount = notifier.orderDiscountAmount > 0;
 
@@ -763,7 +917,7 @@ class _DiscountButtonState extends ConsumerState<_DiscountButton> {
   }
 }
 
-// ── Discount sheet ────────────────────────────────────────────────────────────
+// ── _DiscountSheet ────────────────────────────────────────────────────────────
 
 class _DiscountSheet extends ConsumerStatefulWidget {
   const _DiscountSheet();
@@ -782,9 +936,8 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
     final notifier = ref.read(cartProvider.notifier);
     if (notifier.orderDiscountAmount > 0) {
       _type = notifier.orderDiscountType;
-      _controller.text =
-          notifier.orderDiscountAmount.toStringAsFixed(
-              notifier.orderDiscountType == DiscountType.percentage ? 0 : 2);
+      _controller.text = notifier.orderDiscountAmount.toStringAsFixed(
+          notifier.orderDiscountType == DiscountType.percentage ? 0 : 2);
     }
   }
 
@@ -836,7 +989,6 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
 
-            // Type toggle
             Row(
               children: [
                 _TypeChip(
@@ -854,15 +1006,13 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
             ),
             const SizedBox(height: 14),
 
-            // Quick presets
             if (isPercent) ...[
               Row(
                 children: [5, 10, 15, 20].map((pct) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _controller.text = '$pct'),
+                      onTap: () => setState(() => _controller.text = '$pct'),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 7),
@@ -884,7 +1034,6 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
               const SizedBox(height: 12),
             ],
 
-            // Input
             TextField(
               controller: _controller,
               autofocus: true,
@@ -905,24 +1054,21 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
                 fillColor: CheckoutTheme.card,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: CheckoutTheme.border),
+                  borderSide: const BorderSide(color: CheckoutTheme.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: CheckoutTheme.border),
+                  borderSide: const BorderSide(color: CheckoutTheme.border),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                      color: CheckoutTheme.mint, width: 1.5),
+                  borderSide:
+                      const BorderSide(color: CheckoutTheme.mint, width: 1.5),
                 ),
               ),
             ),
             const SizedBox(height: 14),
 
-            // Apply
             GestureDetector(
               onTap: _apply,
               child: Container(
@@ -947,6 +1093,8 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
   }
 }
 
+// ── _TypeChip ─────────────────────────────────────────────────────────────────
+
 class _TypeChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -964,17 +1112,14 @@ class _TypeChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color: selected
               ? CheckoutTheme.mint.withOpacity(0.12)
               : CheckoutTheme.card,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? CheckoutTheme.mintBorder
-                : CheckoutTheme.border,
+            color: selected ? CheckoutTheme.mintBorder : CheckoutTheme.border,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -983,9 +1128,280 @@ class _TypeChip extends StatelessWidget {
           style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: selected
-                  ? CheckoutTheme.mint
-                  : CheckoutTheme.textMid),
+              color:
+                  selected ? CheckoutTheme.mint : CheckoutTheme.textMid),
+        ),
+      ),
+    );
+  }
+}
+
+// ── _TipSection ───────────────────────────────────────────────────────────────
+
+class _TipSection extends ConsumerWidget {
+  final bool isBusy;
+  const _TipSection({required this.isBusy});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(cartProvider);
+    final notifier = ref.read(cartProvider.notifier);
+    final tip = notifier.tipAmount;
+    final hasTip = tip > 0;
+
+    return GestureDetector(
+      onTap: isBusy ? null : () => _showTipSheet(context, ref),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+        decoration: BoxDecoration(
+          color: hasTip
+              ? CheckoutTheme.mint.withOpacity(0.08)
+              : CheckoutTheme.elevated,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hasTip
+                ? CheckoutTheme.mintBorder
+                : CheckoutTheme.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.volunteer_activism_outlined,
+                size: 15,
+                color: hasTip ? CheckoutTheme.mint : CheckoutTheme.textMid),
+            const SizedBox(width: 8),
+            Text(
+              hasTip
+                  ? 'Tip: ₱${tip.toStringAsFixed(2)}'
+                  : 'Add Tip',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      hasTip ? CheckoutTheme.mint : CheckoutTheme.textMid),
+            ),
+            const Spacer(),
+            if (hasTip)
+              GestureDetector(
+                onTap: () => ref.read(cartProvider.notifier).setTip(0),
+                child: const Icon(Icons.close,
+                    size: 15, color: CheckoutTheme.mint),
+              )
+            else
+              const Icon(Icons.chevron_right,
+                  size: 16, color: CheckoutTheme.textLow),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTipSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TipSheet(
+        itemsTotal: ref.read(cartProvider.notifier).itemsTotal,
+        currentTip: ref.read(cartProvider.notifier).tipAmount,
+        onApply: (v) => ref.read(cartProvider.notifier).setTip(v),
+      ),
+    );
+  }
+}
+
+// ── _TipSheet ─────────────────────────────────────────────────────────────────
+
+class _TipSheet extends StatefulWidget {
+  final double itemsTotal;
+  final double currentTip;
+  final ValueChanged<double> onApply;
+
+  const _TipSheet({
+    required this.itemsTotal,
+    required this.currentTip,
+    required this.onApply,
+  });
+
+  @override
+  State<_TipSheet> createState() => _TipSheetState();
+}
+
+class _TipSheetState extends State<_TipSheet> {
+  static const _presets = [0.05, 0.10, 0.15, 0.20];
+  double? _selectedPreset;
+  final _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.currentTip > 0) {
+      _controller.text = widget.currentTip.toStringAsFixed(2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(double pct) {
+    setState(() {
+      _selectedPreset = pct;
+      _controller.text =
+          (widget.itemsTotal * pct).toStringAsFixed(2);
+    });
+  }
+
+  void _apply() {
+    final value = double.tryParse(_controller.text) ?? 0;
+    widget.onApply(value);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: CheckoutTheme.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border(top: BorderSide(color: CheckoutTheme.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: CheckoutTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Add Tip',
+                style: TextStyle(
+                    color: CheckoutTheme.textHigh,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+
+            Row(
+              children: _presets.map((pct) {
+                final isSelected = _selectedPreset == pct;
+                final pctLabel = '${(pct * 100).toInt()}%';
+                final amount = widget.itemsTotal * pct;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => _selectPreset(pct),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? CheckoutTheme.mint.withOpacity(0.12)
+                              : CheckoutTheme.card,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? CheckoutTheme.mintBorder
+                                : CheckoutTheme.border,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(pctLabel,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected
+                                        ? CheckoutTheme.mint
+                                        : CheckoutTheme.textMid)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₱${amount.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: isSelected
+                                      ? CheckoutTheme.mint
+                                      : CheckoutTheme.textLow),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+
+            TextField(
+              controller: _controller,
+              autofocus: false,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() => _selectedPreset = null),
+              style: const TextStyle(
+                  color: CheckoutTheme.textHigh, fontSize: 18),
+              decoration: InputDecoration(
+                prefixText: '₱ ',
+                prefixStyle: const TextStyle(
+                    color: CheckoutTheme.textMid, fontSize: 18),
+                hintText: '0.00',
+                hintStyle:
+                    const TextStyle(color: CheckoutTheme.textLow),
+                filled: true,
+                fillColor: CheckoutTheme.card,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: CheckoutTheme.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: CheckoutTheme.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: CheckoutTheme.mint, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            GestureDetector(
+              onTap: _apply,
+              child: Container(
+                width: double.infinity,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: CheckoutTheme.mint,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: const Text('Apply Tip',
+                    style: TextStyle(
+                        color: CheckoutTheme.bg,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
         ),
       ),
     );

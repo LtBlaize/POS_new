@@ -127,6 +127,12 @@ class RetailReceiptView extends StatelessWidget {
                             '-₱${order.discountAmount.toStringAsFixed(2)}',
                         valueColor: AppColors.success,
                       ),
+                    if (order.tipAmount > 0)
+                      ReceiptRow(
+                        label: 'Tip',
+                        value: '+₱${order.tipAmount.toStringAsFixed(2)}',
+                        valueColor: AppColors.primary,
+                      ),
                     const SizedBox(height: 4),
                     ReceiptRow(
                       label: 'TOTAL',

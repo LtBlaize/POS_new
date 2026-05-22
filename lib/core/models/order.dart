@@ -61,11 +61,12 @@ class Order {
   final double subtotal;
   final double taxAmount;
   final double discountAmount;
+  final double tipAmount;
   final double totalAmount;
   final PaymentMethod? paymentMethod;
   final double? amountTendered;
   final double? changeAmount;
-  final String? referenceNumber; // ← NEW: for card / GCash / Maya
+  final String? referenceNumber;
   final String? notes;
   final DateTime? paidAt;
   final DateTime createdAt;
@@ -84,11 +85,12 @@ class Order {
     required this.subtotal,
     this.taxAmount = 0,
     this.discountAmount = 0,
+    this.tipAmount = 0,
     required this.totalAmount,
     this.paymentMethod,
     this.amountTendered,
     this.changeAmount,
-    this.referenceNumber, // ← NEW
+    this.referenceNumber,
     this.notes,
     this.paidAt,
     required this.createdAt,
@@ -108,11 +110,12 @@ class Order {
     double? subtotal,
     double? taxAmount,
     double? discountAmount,
+    double? tipAmount,
     double? totalAmount,
     PaymentMethod? paymentMethod,
     double? amountTendered,
     double? changeAmount,
-    String? referenceNumber, // ← NEW
+    String? referenceNumber,
     String? notes,
     DateTime? paidAt,
     DateTime? createdAt,
@@ -129,11 +132,12 @@ class Order {
       subtotal: subtotal ?? this.subtotal,
       taxAmount: taxAmount ?? this.taxAmount,
       discountAmount: discountAmount ?? this.discountAmount,
+      tipAmount: tipAmount ?? this.tipAmount,
       totalAmount: totalAmount ?? this.totalAmount,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       amountTendered: amountTendered ?? this.amountTendered,
       changeAmount: changeAmount ?? this.changeAmount,
-      referenceNumber: referenceNumber ?? this.referenceNumber, // ← NEW
+      referenceNumber: referenceNumber ?? this.referenceNumber,
       notes: notes ?? this.notes,
       paidAt: paidAt ?? this.paidAt,
       createdAt: createdAt ?? this.createdAt,
@@ -156,13 +160,14 @@ class Order {
       subtotal: (map['subtotal'] as num).toDouble(),
       taxAmount: (map['tax_amount'] as num).toDouble(),
       discountAmount: (map['discount_amount'] as num).toDouble(),
+      tipAmount: (map['tip_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num).toDouble(),
       paymentMethod: map['payment_method'] != null
           ? PaymentMethodX.fromString(map['payment_method'] as String)
           : null,
       amountTendered: (map['amount_tendered'] as num?)?.toDouble(),
       changeAmount: (map['change_amount'] as num?)?.toDouble(),
-      referenceNumber: map['reference_number'] as String?, // ← NEW
+      referenceNumber: map['reference_number'] as String?,
       notes: map['notes'] as String?,
       paidAt: map['paid_at'] != null
           ? DateTime.parse(map['paid_at'] as String)

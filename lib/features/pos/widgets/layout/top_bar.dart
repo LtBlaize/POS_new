@@ -10,7 +10,8 @@ const _kBreakpointSm = 900.0;
 
 // Change class declaration
 class TopBar extends ConsumerWidget {
-  const TopBar({super.key});
+  final VoidCallback? onCameraTap;
+  const TopBar({super.key, this.onCameraTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,7 +108,18 @@ class TopBar extends ConsumerWidget {
                     ),
                   ),
                 // Hide keyboard shortcut hint on compact
-                if (!isCompact)
+                if (onCameraTap != null)
+                  GestureDetector(
+                    onTap: onCameraTap,
+                    child: Container(
+                      margin: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(Icons.qr_code_scanner_rounded,
+                          size: isCompact ? 16 : 18,
+                          color: AppColors.textSecondary),
+                    ),
+                  )
+                else if (!isCompact)
                   Container(
                     margin: const EdgeInsets.all(4),
                     padding: const EdgeInsets.symmetric(

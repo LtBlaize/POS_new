@@ -81,6 +81,12 @@ class LanServerService {
         );
       });
 
+  /// Called by ParkedOrderService to push park/restore events to LAN clients.
+  void broadcastParkedOrderEvent(
+      String type, Map<String, dynamic> payload) {
+    _broadcast({'type': type, 'payload': payload});
+  }
+
   void _broadcast(Map<String, dynamic> message) {
     if (_clients.isEmpty) return;
     final encoded = jsonEncode(message);

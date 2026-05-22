@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/cart_provider.dart';
-import '../../../core/providers/product_provider.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../dialogs/checkout_dialog.dart';
+import '../../../core/models/product.dart';
+import '../../../core/services/parked_order_service.dart';
+import '../../../features/auth/auth_provider.dart';
 
 class CartPanel extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
@@ -16,77 +17,6 @@ class CartPanel extends ConsumerStatefulWidget {
 }
 
 class _CartPanelState extends ConsumerState<CartPanel> {
-  final _barcodeBuffer = StringBuffer();
-  DateTime _lastKeyTime = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    HardwareKeyboard.instance.addHandler(_onKey);
-  }
-
-  @override
-  void dispose() {
-    HardwareKeyboard.instance.removeHandler(_onKey);
-    super.dispose();
-  }
-
-  bool _onKey(KeyEvent event) {
-    if (event is! KeyDownEvent) return false;
-
-    final now = DateTime.now();
-    final gap = now.difference(_lastKeyTime).inMilliseconds;
-    _lastKeyTime = now;
-
-    if (gap > 100) _barcodeBuffer.clear();
-
-    if (event.logicalKey == LogicalKeyboardKey.enter) {
-      final barcode = _barcodeBuffer.toString().trim();
-      _barcodeBuffer.clear();
-      if (barcode.isNotEmpty) _handleBarcode(barcode);
-      return true;
-    }
-
-    final char = event.character;
-    if (char != null && char.isNotEmpty) {
-      _barcodeBuffer.write(char);
-    }
-
-    return false;
-  }
-
-  void _handleBarcode(String barcode) {
-    final products = ref.read(productListProvider).asData?.value ?? [];
-    final match = products
-        .where((p) => p.barcode == barcode && p.isActive)
-        .firstOrNull;
-
-    if (match == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No product found for barcode: $barcode'),
-        backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 2),
-      ));
-      return;
-    }
-
-    if (match.trackInventory && match.stockQuantity <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${match.name} is out of stock.'),
-        backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 2),
-      ));
-      return;
-    }
-
-    ref.read(cartProvider.notifier).addProduct(match);
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${match.name} added to cart'),
-      backgroundColor: AppColors.success,
-      duration: const Duration(milliseconds: 800),
-    ));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +46,29 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary)),
                 const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _showCustomItemDialog(context),
+                  child: Tooltip(
+                    message: 'Add custom item',
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.edit_outlined, size: 11, color: AppColors.warning),
+                          SizedBox(width: 3),
+                          Text('Custom', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.warning)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Tooltip(
                   message: 'Barcode scanner ready',
                   child: Icon(Icons.qr_code_scanner_rounded,
@@ -141,6 +94,49 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   ),
                 ],
                 const Spacer(),
+                // ── Hold button ──────────────────────────────
+                GestureDetector(
+                  onTap: items.isEmpty
+                      ? null
+                      : () => _showParkDialog(context),
+                  child: Tooltip(
+                    message: 'Park / hold this order',
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: items.isEmpty
+                            ? AppColors.divider.withOpacity(0.3)
+                            : AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: items.isEmpty
+                                ? AppColors.divider
+                                : AppColors.primary.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.pause_outlined,
+                              size: 11,
+                              color: items.isEmpty
+                                  ? AppColors.textSecondary.withOpacity(0.3)
+                                  : AppColors.primary),
+                          const SizedBox(width: 3),
+                          Text('Hold',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: items.isEmpty
+                                      ? AppColors.textSecondary
+                                          .withOpacity(0.3)
+                                      : AppColors.primary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 if (items.isNotEmpty)
                   TextButton.icon(
                     onPressed: cartNotifier.clear,
@@ -379,6 +375,124 @@ class _StepBtn extends StatelessWidget {
             size: 13,
             color:
                 positive ? AppColors.primary : AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+// ── Custom item dialog (lives on _CartPanelState) ─────────────────────────────
+
+extension _CartPanelDialogs on _CartPanelState {
+  void _showParkDialog(BuildContext context) {
+    final labelController = TextEditingController();
+    final items = ref.read(cartProvider);
+    final cartNotifier = ref.read(cartProvider.notifier);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hold Order',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${items.fold(0, (s, i) => s + i.quantity)} item(s) · ₱${cartNotifier.grandTotal.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: labelController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                  labelText: 'Label (optional)',
+                  hintText: 'e.g. Table 3, John, To-go'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.pause_outlined, size: 16),
+            label: const Text('Hold'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              // Get businessId from profile
+              final profile = ref
+                  .read(profileProvider)
+                  .asData
+                  ?.value;
+              if (profile?.businessId == null) return;
+
+              await ref.read(parkedOrderProvider.notifier).parkCart(
+                    businessId: profile!.businessId!,
+                    label: labelController.text,
+                    items: items,
+                    orderDiscountAmount: cartNotifier.orderDiscountAmount,
+                    orderDiscountType: cartNotifier.orderDiscountType,
+                    tipAmount: cartNotifier.tipAmount,
+                  );
+              cartNotifier.clear();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomItemDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Custom Item', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Item name', hintText: 'e.g. Special Request'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: priceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Price', prefixText: '₱'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  if (double.tryParse(v.trim()) == null) return 'Invalid price';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              final product = Product.custom(
+                name: nameController.text.trim(),
+                price: double.parse(priceController.text.trim()),
+              );
+              ref.read(cartProvider.notifier).addProduct(product);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add to Cart'),
+          ),
+        ],
       ),
     );
   }

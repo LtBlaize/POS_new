@@ -10,6 +10,7 @@ class OrderSummaryCard extends StatelessWidget {
   final double itemsTotal;
   final double orderDiscountValue;
   final String? orderDiscountLabel;
+  final double tipAmount;
 
   const OrderSummaryCard({
     super.key,
@@ -18,6 +19,7 @@ class OrderSummaryCard extends StatelessWidget {
     this.itemsTotal = 0,
     this.orderDiscountValue = 0,
     this.orderDiscountLabel,
+    this.tipAmount = 0,
   });
 
   @override
@@ -116,6 +118,28 @@ class OrderSummaryCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Column(
               children: [
+                if (tipAmount > 0) ...[
+                  Row(
+                    children: [
+                      const Text(
+                        'Tip',
+                        style: TextStyle(
+                            color: CheckoutTheme.mint,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '+₱${tipAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            color: CheckoutTheme.mint,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
                 if (orderDiscountValue > 0) ...[
                   Row(
                     children: [

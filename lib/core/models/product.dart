@@ -95,4 +95,21 @@ class Product {
     isActive: isActive,
     category: category,
   );
+  // ── Custom item support ───────────────────────────────────────────────────
+
+  factory Product.custom({required String name, required double price}) {
+    return Product(
+      id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+      businessId: '',
+      name: name,
+      price: price,
+      trackInventory: false,
+      sendToKitchen: false,
+      isAvailable: true,
+      isActive: true,
+      category: 'Miscellaneous',
+    );
+  }
+
+  bool get isCustom => id.startsWith('custom_');
 }

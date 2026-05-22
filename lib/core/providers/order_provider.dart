@@ -145,6 +145,7 @@ class OrderService {
     String? notes,
     double taxRate = 0.0,
     double discountAmount = 0.0,
+    double tipAmount = 0.0,
     String? cashierId,
   }) async {
     if (_isOnline) {
@@ -155,6 +156,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
+        tipAmount: tipAmount,
         cashierId: cashierId,
       );
     } else {
@@ -165,6 +167,7 @@ class OrderService {
         notes: notes,
         taxRate: taxRate,
         discountAmount: discountAmount,
+        tipAmount: tipAmount,
         cashierId: cashierId,
       );
     }
@@ -177,11 +180,12 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
+    double tipAmount = 0.0,
     String? cashierId,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
-    final totalAmount = subtotal + taxAmount - discountAmount;
+    final totalAmount = subtotal + taxAmount - discountAmount + tipAmount;
 
     final orderRow = await _client
         .from('orders')
@@ -194,6 +198,7 @@ class OrderService {
           'subtotal': subtotal,
           'tax_amount': taxAmount,
           'discount_amount': discountAmount,
+          'tip_amount': tipAmount,
           'total_amount': totalAmount,
           'notes': notes,
         })
@@ -232,11 +237,12 @@ class OrderService {
     String? notes,
     required double taxRate,
     required double discountAmount,
+    double tipAmount = 0.0,
     String? cashierId,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
-    final totalAmount = subtotal + taxAmount - discountAmount;
+    final totalAmount = subtotal + taxAmount - discountAmount + tipAmount;
 
     final offlineId = const Uuid().v4();
     final now = DateTime.now();
@@ -253,6 +259,7 @@ class OrderService {
       subtotal: subtotal,
       taxAmount: taxAmount,
       discountAmount: discountAmount,
+      tipAmount: tipAmount,
       totalAmount: totalAmount,
       notes: notes,
       createdAt: now,
@@ -286,6 +293,7 @@ class OrderService {
         'subtotal': subtotal,
         'tax_amount': taxAmount,
         'discount_amount': discountAmount,
+        'tip_amount': tipAmount,
         'total_amount': totalAmount,
         'notes': notes,
         'created_at': now.toIso8601String(),

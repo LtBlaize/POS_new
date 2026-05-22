@@ -56,6 +56,7 @@ class CheckoutService {
     required double subtotal,
     required List<CartItem> items,
     required double discountAmount,
+    double tipAmount = 0,
     String? referenceNumber,
     String? tableNumber,
     String? roomName,
@@ -96,6 +97,7 @@ class CheckoutService {
       if (_isOnline) {
         final client = _ref.read(supabaseClientProvider);
         for (final item in items) {
+          if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
           try {
             final row = await client
@@ -128,6 +130,7 @@ class CheckoutService {
       } else {
         final cached = await local.getProducts(profile!.businessId!);
         for (final item in items) {
+          if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
           final p =
               cached.where((p) => p.id == item.product.id).firstOrNull;
@@ -161,6 +164,7 @@ class CheckoutService {
         cashierId: cashierId,
         taxRate: taxRate,
         discountAmount: discountAmount,
+        tipAmount: tipAmount,
       );
       final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 

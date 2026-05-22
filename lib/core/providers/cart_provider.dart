@@ -38,12 +38,17 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     return orderDiscountAmount;
   }
 
-  double get grandTotal => (itemsTotal - orderDiscountValue).clamp(0, double.infinity);
+ double _tipAmount = 0;
+  double get tipAmount => _tipAmount;
+
+  void setTip(double amount) {
+    _tipAmount = amount.clamp(0, double.infinity);
+    state = [...state]; // trigger rebuild
+  }
+
+  double get grandTotal => (itemsTotal - orderDiscountValue + _tipAmount).clamp(0, double.infinity);
 
   void addProduct(Product product) {
-    // In addProduct, change the silent return to still add but cap at stock:
-
-
     final index = state.indexWhere((item) => item.product.id == product.id);
     if (index >= 0) {
       final current = state[index];
@@ -84,6 +89,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   void clear() {
     orderDiscountAmount = 0;
     orderDiscountType = DiscountType.fixed;
+    _tipAmount = 0;
     state = [];
   }
 
