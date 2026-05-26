@@ -5,15 +5,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product.dart';
+import '../models/product_variant.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 
-
-
 // ── Product list ──────────────────────────────────────────────────────────────
-
 
 final productListProvider = StreamProvider<List<Product>>((ref) async* {
   final profile = await ref.watch(profileProvider.future);
@@ -26,7 +24,7 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
   final local = ref.read(localDbServiceProvider);
   final client = ref.watch(supabaseClientProvider);
 
-  // Immediately yield cached data so UI is never blank
+  // Immediately yield cached data (includes cached variants) so UI is never blank
   final cached = await local.getProducts(businessId);
   if (cached.isNotEmpty) yield cached;
 
@@ -40,22 +38,57 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     sub.close();
   }
 
-  
-
   final controller = StreamController<List<Product>>();
 
+  /// Fetches products + their variants from Supabase, caches locally,
+  /// and returns the merged list.
   Future<List<Product>> fetchAll() async {
+    // 1. Fetch products
     final rows = await client
         .from('products')
         .select('*, categories(name)')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .order('name');
+
     final products = (rows as List)
         .map((m) => Product.fromMap(m as Map<String, dynamic>))
         .toList();
+
     await local.upsertProducts(products);
-    return products;
+
+    // 2. Fetch all variants for this business in one query
+    if (products.isEmpty) return products;
+
+    final productIds = products.map((p) => p.id).toList();
+
+    // Supabase: fetch variants where product_id is in our product list
+    final variantRows = await client
+        .from('product_variants')
+        .select()
+        .eq('is_active', true)
+        .inFilter('product_id', productIds);
+
+    final allVariants = (variantRows as List)
+        .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
+        .toList();
+
+    // Cache variants locally (bulk upsert)
+    if (allVariants.isNotEmpty) {
+      await local.upsertAllVariants(allVariants);
+    }
+
+    // 3. Group variants by product_id and attach
+    final variantMap = <String, List<ProductVariant>>{};
+    for (final v in allVariants) {
+      variantMap.putIfAbsent(v.productId, () => []);
+      variantMap[v.productId]!.add(v);
+    }
+
+    return products.map((p) {
+      final variants = variantMap[p.id] ?? [];
+      return p.copyWith(variants: variants);
+    }).toList();
   }
 
   void reload() async {
@@ -98,12 +131,20 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
         ),
         callback: (_) => reload(),
       )
+      // ── Also listen for variant changes ──────────────────────────────────
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'product_variants',
+        callback: (_) => reload(),
+      )
       .subscribe((status, [error]) {
-        debugPrint('[productListProvider] Realtime status: $status error: $error');
-        // ✅ If realtime fails to connect, fall back to polling every 30s
+        debugPrint(
+            '[productListProvider] Realtime status: $status error: $error');
         if (status == RealtimeSubscribeStatus.channelError ||
             status == RealtimeSubscribeStatus.timedOut) {
-          debugPrint('[productListProvider] Realtime failed, will rely on lifecycle refresh');
+          debugPrint(
+              '[productListProvider] Realtime failed, will rely on lifecycle refresh');
         }
       });
 
@@ -157,6 +198,7 @@ final categoryListProvider = FutureProvider<List<String>>((ref) async {
         .toList();
   }
 });
+
 bool _fuzzyMatch(String source, String query) {
   if (source.contains(query)) return true;
   int si = 0;
@@ -171,10 +213,8 @@ bool _fuzzyMatch(String source, String query) {
 // ── Selected category ─────────────────────────────────────────────────────────
 
 final selectedCategoryProvider = StateProvider<String?>((ref) => null);
-// add this after selectedCategoryProvider
 final posSearchQueryProvider = StateProvider<String>((ref) => '');
 
-// replace filteredProductsProvider
 final filteredProductsProvider = Provider<List<Product>>((ref) {
   final products = ref.watch(productListProvider).asData?.value ?? [];
   final category = ref.watch(selectedCategoryProvider);
@@ -182,6 +222,12 @@ final filteredProductsProvider = Provider<List<Product>>((ref) {
 
   bool isVisible(Product p) {
     if (!p.isAvailable) return false;
+    // For products with variants, show if any active variant has stock
+    // (or if inventory tracking is off)
+    if (p.hasVariants) {
+      if (!p.trackInventory) return true;
+      return p.activeVariants.any((v) => v.stockQuantity > 0);
+    }
     if (p.trackInventory && p.stockQuantity <= 0) return false;
     return true;
   }
@@ -278,16 +324,76 @@ class InventoryService {
     }
   }
 
+  // ── Variant-level stock adjust ────────────────────────────────────────────
+
+  Future<void> adjustVariantStock({
+    required String businessId,
+    required String variantId,
+    required String productId,
+    required int quantityChange,
+    required int quantityBefore,
+    String action = 'sale',
+    String? notes,
+  }) async {
+    final quantityAfter =
+        (quantityBefore + quantityChange).clamp(0, 9999);
+    await _local.updateVariantStock(variantId, quantityAfter);
+
+    final isOnline = _ref.read(isOnlineProvider);
+
+    if (isOnline) {
+      try {
+        await _client.from('product_variants').update({
+          'stock_quantity': quantityAfter,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', variantId);
+
+        // Still log to inventory_logs at product level for reporting
+        await _client.from('inventory_logs').insert({
+          'business_id': businessId,
+          'product_id': productId,
+          'action': action,
+          'quantity_change': quantityChange,
+          'quantity_before': quantityBefore,
+          'quantity_after': quantityAfter,
+          'performed_by': _client.auth.currentUser?.id,
+          'notes': notes ?? 'Variant: $variantId',
+        });
+      } catch (e) {
+        debugPrint(
+            '[InventoryService] Variant adjust failed, queuing: $e');
+        await _queueAdjust(
+          businessId: businessId,
+          productId: variantId, // record_id = variantId so sync knows
+          quantityChange: quantityChange,
+          action: action,
+          notes: notes,
+          isVariant: true,
+        );
+      }
+    } else {
+      await _queueAdjust(
+        businessId: businessId,
+        productId: variantId,
+        quantityChange: quantityChange,
+        action: action,
+        notes: notes,
+        isVariant: true,
+      );
+    }
+  }
+
   Future<void> _queueAdjust({
     required String businessId,
     required String productId,
     required int quantityChange,
     required String action,
     String? notes,
+    bool isVariant = false,
   }) async {
     await _syncQueue.enqueue(
-      operation: 'adjust_stock',
-      tableName: 'products',
+      operation: isVariant ? 'adjust_variant_stock' : 'adjust_stock',
+      tableName: isVariant ? 'product_variants' : 'products',
       recordId: productId,
       payload: {
         'business_id': businessId,

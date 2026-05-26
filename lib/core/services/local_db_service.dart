@@ -1,4 +1,17 @@
 // lib/core/services/local_db_service.dart
+//
+// SCHEMA VERSIONS
+// v1  — base tables: products, orders, order_items, staff_members,
+//        sync_queue, reports_cache
+// v2  — credit_customers + credit_transactions
+// v3  — cashier_shifts
+// v4  — reference_number column on orders
+// v5  — device_id column on cashier_shifts
+// v6  — void_order_items table
+// v7  — business_id column on credit_transactions; credits_paid on shifts
+// v8  — barcode index on products
+// v9  — parked_orders table
+// v10 — product_variants table
 
 import 'dart:async';
 import 'dart:convert';
@@ -12,6 +25,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../models/product_variant.dart';
 import '../models/staff.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -20,22 +34,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-// ── Database schema version ───────────────────────────────────────────────────
-//
-// v1 — base tables: products, orders, order_items, staff_members,
-//       sync_queue, reports_cache, credit_customers, credit_transactions
-// v2 — added credit_customers + credit_transactions
-// v3 — added cashier_shifts
-// v4 — added reference_number column to orders
-// v5 — added device_id column to cashier_shifts
-// v6 — added void_order_items table
-// v7 — added business_id column to credit_transactions
-//      WHY: the column was missing from the original schema, so offline
-//      shift summaries couldn't filter credits by business, and any insert
-//      that included business_id (offline payment path) would crash with
-//      "table has no column named business_id". The ALTER TABLE in _onUpgrade
-//      adds it safely to existing installs without wiping data.
-const _kDbVersion = 9;
+const _kDbVersion = 10;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -211,7 +210,6 @@ class LocalDbService {
       )
     ''');
 
-    // v7: business_id included from the start on fresh installs
     batch.execute('''
       CREATE TABLE credit_transactions (
         id TEXT PRIMARY KEY,
@@ -285,6 +283,28 @@ class LocalDbService {
         parked_at TEXT NOT NULL
       )
     ''');
+
+    // ── v10 tables ────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE product_variants (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        option_type TEXT,
+        price_delta REAL NOT NULL DEFAULT 0,
+        sku TEXT,
+        barcode TEXT,
+        stock_quantity INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        synced_at TEXT NOT NULL,
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    ''');
+
+    batch.execute(
+      'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
+    );
 
     await batch.commit(noResult: true);
   }
@@ -373,7 +393,34 @@ class LocalDbService {
       ''');
     }
 
-   if (oldVersion < 9) {
+    if (oldVersion < 7) {
+      try {
+        await db.execute(
+          'ALTER TABLE credit_transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ""',
+        );
+      } catch (e) {
+        debugPrint('[LocalDb] v7: business_id already exists ($e)');
+      }
+      try {
+        await db.execute(
+          'ALTER TABLE cashier_shifts ADD COLUMN credits_paid REAL NOT NULL DEFAULT 0',
+        );
+      } catch (e) {
+        debugPrint('[LocalDb] v7: credits_paid already exists ($e)');
+      }
+    }
+
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
+        );
+      } catch (e) {
+        debugPrint('[LocalDb] v8: barcode index error ($e)');
+      }
+    }
+
+    if (oldVersion < 9) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS parked_orders (
           id TEXT PRIMARY KEY,
@@ -388,39 +435,26 @@ class LocalDbService {
       ''');
     }
 
-    if (oldVersion < 8) {
-      try {
-        await db.execute(
-          'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
-        );
-      } catch (e) {
-        debugPrint('[LocalDb] v8 migration: barcode index error ($e)');
-      }
-    }
-
-    if (oldVersion < 7) {
-      // Add business_id to credit_transactions.
-      // Wrapped in try/catch because fresh installs that ran _onCreate
-      // at v7 already have this column — ALTER TABLE would throw.
-      try {
-        await db.execute(
-          'ALTER TABLE credit_transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ""',
-        );
-      } catch (e) {
-        debugPrint(
-            '[LocalDb] v7 migration: business_id already exists, skipping ($e)');
-      }
-
-      // Add credits_paid to cashier_shifts if missing (was absent in v3 DDL
-      // on some installs).
-      try {
-        await db.execute(
-          'ALTER TABLE cashier_shifts ADD COLUMN credits_paid REAL NOT NULL DEFAULT 0',
-        );
-      } catch (e) {
-        debugPrint(
-            '[LocalDb] v7 migration: credits_paid already exists, skipping ($e)');
-      }
+    if (oldVersion < 10) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS product_variants (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          option_type TEXT,
+          price_delta REAL NOT NULL DEFAULT 0,
+          sku TEXT,
+          barcode TEXT,
+          stock_quantity INTEGER NOT NULL DEFAULT 0,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          synced_at TEXT NOT NULL,
+          FOREIGN KEY (product_id) REFERENCES products(id)
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
+      );
+      debugPrint('[LocalDb] v10: product_variants table created');
     }
   }
 
@@ -457,6 +491,7 @@ class LocalDbService {
         await batch.commit(noResult: true);
       });
 
+  /// Fetches products and attaches their variants in one call.
   Future<List<Product>> getProducts(String businessId) async {
     final d = await db;
     final rows = await d.query(
@@ -465,7 +500,27 @@ class LocalDbService {
       whereArgs: [businessId],
       orderBy: 'name',
     );
-    return rows.map(_productFromRow).toList();
+
+    final variantRows = await d.query(
+      'product_variants',
+      where:
+          'product_id IN (SELECT id FROM products WHERE business_id = ? AND is_active = 1)',
+      whereArgs: [businessId],
+    );
+
+    // Group variants by product_id
+    final variantMap = <String, List<ProductVariant>>{};
+    for (final vr in variantRows) {
+      final pid = vr['product_id'] as String;
+      variantMap.putIfAbsent(pid, () => []);
+      variantMap[pid]!.add(ProductVariant.fromLocalRow(vr));
+    }
+
+    return rows.map((row) {
+      final product = _productFromRow(row);
+      final variants = variantMap[product.id] ?? [];
+      return product.copyWith(variants: variants);
+    }).toList();
   }
 
   Future<void> updateProductStock(String productId, int newStock) async {
@@ -519,7 +574,102 @@ class LocalDbService {
         isAvailable: (row['is_available'] as int) == 1,
         isActive: (row['is_active'] as int) == 1,
         category: row['category_name'] as String? ?? '',
+        // variants attached by caller
       );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PRODUCT VARIANTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Replaces all variants for a product — used after a Supabase fetch.
+  Future<void> upsertVariants(
+      String productId, List<ProductVariant> variants) =>
+      _write((d) async {
+        final now = DateTime.now().toIso8601String();
+        await d.transaction((txn) async {
+          // Remove stale variants no longer returned by server
+          await txn.delete(
+            'product_variants',
+            where: 'product_id = ?',
+            whereArgs: [productId],
+          );
+          for (final v in variants) {
+            await txn.insert(
+              'product_variants',
+              {
+                'id': v.id,
+                'product_id': v.productId,
+                'name': v.name,
+                'option_type': v.optionType,
+                'price_delta': v.priceDelta,
+                'sku': v.sku,
+                'barcode': v.barcode,
+                'stock_quantity': v.stockQuantity,
+                'is_active': v.isActive ? 1 : 0,
+                'synced_at': now,
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        });
+      });
+
+  /// Bulk upsert — used when syncing all variants for a business at once.
+  Future<void> upsertAllVariants(List<ProductVariant> variants) =>
+      _write((d) async {
+        final now = DateTime.now().toIso8601String();
+        final batch = d.batch();
+        for (final v in variants) {
+          batch.insert(
+            'product_variants',
+            {
+              'id': v.id,
+              'product_id': v.productId,
+              'name': v.name,
+              'option_type': v.optionType,
+              'price_delta': v.priceDelta,
+              'sku': v.sku,
+              'barcode': v.barcode,
+              'stock_quantity': v.stockQuantity,
+              'is_active': v.isActive ? 1 : 0,
+              'synced_at': now,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+      });
+
+  Future<List<ProductVariant>> getVariantsForProduct(
+      String productId) async {
+    final d = await db;
+    final rows = await d.query(
+      'product_variants',
+      where: 'product_id = ? AND is_active = 1',
+      whereArgs: [productId],
+      orderBy: 'name',
+    );
+    return rows.map(ProductVariant.fromLocalRow).toList();
+  }
+
+  Future<void> updateVariantStock(String variantId, int newStock) =>
+      _write((d) async {
+        await d.update(
+          'product_variants',
+          {'stock_quantity': newStock},
+          where: 'id = ?',
+          whereArgs: [variantId],
+        );
+      });
+
+  Future<void> deactivateVariant(String variantId) => _write((d) async {
+        await d.update(
+          'product_variants',
+          {'is_active': 0},
+          where: 'id = ?',
+          whereArgs: [variantId],
+        );
+      });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // ORDERS
@@ -852,8 +1002,7 @@ class LocalDbService {
     );
   }
 
-  Future<void> markVoidSynced(String voidId) =>
-      _write((d) async {
+  Future<void> markVoidSynced(String voidId) => _write((d) async {
         await d.update(
           'void_order_items',
           {'synced': 1},
@@ -875,13 +1024,11 @@ class LocalDbService {
   // CREDIT TRANSACTIONS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /// Inserts a credit or payment transaction into the local SQLite cache.
-  /// Used by both the online mirror path and the offline fast path.
   Future<void> insertCreditTransaction({
     required String id,
     required String customerId,
     required String businessId,
-    required String type, // 'credit' or 'payment'
+    required String type,
     required double amount,
     String? note,
     String? orderId,
@@ -904,9 +1051,6 @@ class LocalDbService {
         );
       });
 
-  /// Adjusts a customer's total_owed by [delta].
-  /// Pass a negative delta to reduce (payment), positive to increase (credit).
-  /// Clamps to 0 so it never goes negative.
   Future<void> updateCreditCustomerOwed({
     required String customerId,
     required double delta,
