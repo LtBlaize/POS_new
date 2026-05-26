@@ -18,13 +18,46 @@ class TopProduct {
   final String name;
   final int qty;
   final double revenue;
-  const TopProduct(this.name, this.qty, this.revenue);
+  final double cogs;
+  final double grossProfit;
+  final double marginPct;
+  final String category;
+
+  const TopProduct(
+    this.name,
+    this.qty,
+    this.revenue, {
+    this.cogs = 0,
+    this.grossProfit = 0,
+    this.marginPct = 0,
+    this.category = '',
+  });
 }
 
 class HourlySale {
   final int hour;
   final double amount;
   const HourlySale(this.hour, this.amount);
+}
+
+class HeatmapCell {
+  final int weekday; // 1=Mon … 7=Sun
+  final int hour;    // 0–23
+  final double amount;
+  final int orderCount;
+  const HeatmapCell({
+    required this.weekday,
+    required this.hour,
+    required this.amount,
+    required this.orderCount,
+  });
+}
+
+class WeeklyHeatmap {
+  final List<HeatmapCell> cells; // 7 × 24 = 168 entries
+  final double maxAmount;
+  const WeeklyHeatmap({required this.cells, required this.maxAmount});
+  static const empty = WeeklyHeatmap(cells: [], maxAmount: 0);
 }
 
 class DailyReport {
@@ -36,8 +69,16 @@ class DailyReport {
   final List<HourlySale> hourlySales;
   final int completedOrders;
   final int cancelledOrders;
+  final double totalCogs;
+  final double grossProfit;
+  final double totalTaxCollected;
+  final double totalDiscount;
+  final Map<String, double> discountByStaff;
   final bool isFromCache;
   final DateTime? cachedAt;
+
+  double get marginPct =>
+      totalRevenue > 0 ? (grossProfit / totalRevenue * 100) : 0;
 
   const DailyReport({
     required this.totalRevenue,
@@ -48,6 +89,11 @@ class DailyReport {
     required this.hourlySales,
     required this.completedOrders,
     required this.cancelledOrders,
+    this.totalCogs = 0,
+    this.grossProfit = 0,
+    this.totalTaxCollected = 0,
+    this.totalDiscount = 0,
+    this.discountByStaff = const {},
     this.isFromCache = false,
     this.cachedAt,
   });
@@ -61,6 +107,11 @@ class DailyReport {
     hourlySales: [],
     completedOrders: 0,
     cancelledOrders: 0,
+    totalCogs: 0,
+    grossProfit: 0,
+    totalTaxCollected: 0,
+    totalDiscount: 0,
+    discountByStaff: {},
   );
 }
 
@@ -126,7 +177,7 @@ class ShiftDaySummary {
 // TAB ENUM
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum ReportTab { daily, shifts }
+enum ReportTab { daily, shifts, auditLog }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROVIDERS
@@ -138,6 +189,214 @@ final selectedDateProvider = StateProvider<DateTime>((ref) {
 });
 
 final reportTabProvider = StateProvider<ReportTab>((ref) => ReportTab.daily);
+
+// ── Date range ────────────────────────────────────────────────────────────────
+
+enum RangePreset { day, week, month, custom }
+
+class DateRange {
+  final DateTime start;
+  final DateTime end;
+  final RangePreset preset;
+  const DateRange({
+    required this.start,
+    required this.end,
+    required this.preset,
+  });
+
+  bool get isSingleDay =>
+      start.year == end.year &&
+      start.month == end.month &&
+      start.day == end.day;
+
+  int get dayCount => end.difference(start).inDays + 1;
+}
+
+final dateRangeProvider = StateProvider<DateRange>((ref) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  return DateRange(start: today, end: today, preset: RangePreset.day);
+});
+
+// ── Heatmap provider ──────────────────────────────────────────────────────────
+final heatmapProvider =
+    FutureProvider.family<WeeklyHeatmap, DateRange>((ref, range) async {
+  if (range.isSingleDay) return WeeklyHeatmap.empty;
+  final profile = await ref.watch(profileProvider.future);
+  if (profile?.businessId == null) return WeeklyHeatmap.empty;
+  final businessId = profile!.businessId!;
+  final isOnline = ref.read(isOnlineProvider);
+  if (!isOnline) return WeeklyHeatmap.empty;
+
+  try {
+    final client = ref.watch(supabaseClientProvider);
+    final start = DateTime(range.start.year, range.start.month, range.start.day)
+        .toUtc().toIso8601String();
+    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59)
+        .toUtc().toIso8601String();
+
+    final rows = await client
+        .from('orders')
+        .select('created_at, total_amount')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .gte('created_at', start)
+        .lte('created_at', end);
+
+    // 7 × 24 accumulator: key = weekday * 100 + hour
+    final Map<int, double> amountMap = {};
+    final Map<int, int> countMap = {};
+
+    for (final o in (rows as List)) {
+      final dt = DateTime.tryParse(o['created_at'] as String? ?? '')?.toLocal();
+      if (dt == null) continue;
+      final amount = (o['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final key = dt.weekday * 100 + dt.hour;
+      amountMap[key] = (amountMap[key] ?? 0) + amount;
+      countMap[key] = (countMap[key] ?? 0) + 1;
+    }
+
+    final cells = <HeatmapCell>[];
+    double maxAmount = 0;
+    for (var wd = 1; wd <= 7; wd++) {
+      for (var h = 0; h < 24; h++) {
+        final key = wd * 100 + h;
+        final amt = amountMap[key] ?? 0;
+        if (amt > maxAmount) maxAmount = amt;
+        cells.add(HeatmapCell(
+          weekday: wd,
+          hour: h,
+          amount: amt,
+          orderCount: countMap[key] ?? 0,
+        ));
+      }
+    }
+
+    return WeeklyHeatmap(cells: cells, maxAmount: maxAmount);
+  } catch (_) {
+    return WeeklyHeatmap.empty;
+  }
+});
+
+// Slow movers threshold — user-adjustable, persists in provider state
+final slowMoverThresholdProvider = StateProvider<int>((ref) => 3);
+
+// All products with their sales data for the selected date/range
+// Returns products from inventory that had zero or low sales
+final slowMoversProvider =
+    FutureProvider.family<List<TopProduct>, ({DateRange range, int threshold})>(
+        (ref, args) async {
+  final profile = await ref.watch(profileProvider.future);
+  if (profile?.businessId == null) return [];
+  final businessId = profile!.businessId!;
+  final isOnline = ref.read(isOnlineProvider);
+  if (!isOnline) return [];
+
+  try {
+    final client = ref.watch(supabaseClientProvider);
+    final start =
+        DateTime(args.range.start.year, args.range.start.month, args.range.start.day)
+            .toUtc()
+            .toIso8601String();
+    final end = DateTime(args.range.end.year, args.range.end.month,
+            args.range.end.day, 23, 59, 59)
+        .toUtc()
+        .toIso8601String();
+
+    // Fetch all active products
+    final products = await client
+        .from('products')
+        .select('id, name, category_name, cost_price, price')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .order('name');
+
+    // Fetch sales in range
+    final orders = await client
+        .from('orders')
+        .select('order_items(product_id, product_name, quantity, subtotal, cost_at_sale)')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .gte('created_at', start)
+        .lte('created_at', end);
+
+    // Aggregate sold qty by product id
+    final Map<String, _ProductAccum> soldMap = {};
+    for (final order in (orders as List)) {
+      for (final item in (order['order_items'] as List? ?? [])) {
+        final pid = item['product_id'] as String? ?? '';
+        final name = item['product_name'] as String? ?? '';
+        final qty = item['quantity'] as int? ?? 0;
+        final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
+        final cost =
+            ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
+        final acc = soldMap[pid];
+        soldMap[pid] = acc != null
+            ? _ProductAccum(name, acc.qty + qty, acc.revenue + sub, acc.cogs + cost, '')
+            : _ProductAccum(name, qty, sub, cost, '');
+      }
+    }
+
+    // Find products at or below threshold
+    final result = <TopProduct>[];
+    for (final p in (products as List)) {
+      final pid = p['id'] as String;
+      final acc = soldMap[pid];
+      final qtySold = acc?.qty ?? 0;
+      if (qtySold <= args.threshold) {
+        final revenue = acc?.revenue ?? 0.0;
+        final cogs = acc?.cogs ?? 0.0;
+        final gp = revenue - cogs;
+        result.add(TopProduct(
+          p['name'] as String,
+          qtySold,
+          revenue,
+          cogs: cogs,
+          grossProfit: gp,
+          marginPct: revenue > 0 ? (gp / revenue * 100) : 0,
+          category: (p['category_name'] as String?) ?? '',
+        ));
+      }
+    }
+
+    result.sort((a, b) => a.qty.compareTo(b.qty));
+    return result;
+  } catch (_) {
+    return [];
+  }
+});
+
+final periodReportProvider =
+    FutureProvider.family<DailyReport, DateRange>((ref, range) async {
+  final profile = await ref.watch(profileProvider.future);
+  if (profile?.businessId == null) return DailyReport.empty;
+  final businessId = profile!.businessId!;
+  final isOnline = ref.read(isOnlineProvider);
+  if (!isOnline) return DailyReport.empty.copyWith(isFromCache: true);
+
+  try {
+    final client = ref.watch(supabaseClientProvider);
+    final start = DateTime(range.start.year, range.start.month, range.start.day)
+        .toUtc()
+        .toIso8601String();
+    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59)
+        .toUtc()
+        .toIso8601String();
+
+    final rows = await client
+        .from('orders')
+        .select(
+            '*, order_items(product_name, quantity, subtotal, cost_at_sale, products(category_name)), staff_members(name)')
+        .eq('business_id', businessId)
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at');
+
+    return _buildReport(rows as List, fromCache: false);
+  } catch (e) {
+    return DailyReport.empty;
+  }
+});
 
 final dailyReportProvider =
     FutureProvider.family<DailyReport, DateTime>((ref, date) async {
@@ -162,7 +421,7 @@ final dailyReportProvider =
 
     final rows = await client
         .from('orders')
-        .select('*, order_items(product_name, quantity, subtotal)')
+        .select('*, order_items(product_name, quantity, subtotal, cost_at_sale), staff_members(name)')
         .eq('business_id', businessId)
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd)
@@ -333,10 +592,14 @@ Future<DailyReport> _loadFromCache(
 
 DailyReport _buildReport(List orders, {required bool fromCache}) {
   double totalRevenue = 0;
+  double totalCogs = 0;
+  double totalTax = 0;
+  double totalDiscount = 0;
+  final Map<String, double> discountByStaff = {};
   int completed = 0;
   int cancelled = 0;
   final Map<String, double> byPayment = {};
-  final Map<String, TopProduct> productMap = {};
+  final Map<String, _ProductAccum> productAccum = {};
   final Map<int, double> hourMap = {};
 
   for (final o in orders) {
@@ -357,6 +620,16 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
       completed++;
       totalRevenue += amount;
       byPayment[method] = (byPayment[method] ?? 0) + amount;
+      totalTax += (row['tax_amount'] as num?)?.toDouble() ?? 0.0;
+      final disc = (row['discount_amount'] as num?)?.toDouble() ?? 0.0;
+      totalDiscount += disc;
+      if (disc > 0) {
+        final staffRow = row['staff_members'] as Map<String, dynamic>?;
+        final cashier = staffRow?['name'] as String? ??
+            row['cashier_id'] as String? ?? 'Unknown';
+        discountByStaff[cashier] =
+            (discountByStaff[cashier] ?? 0) + disc;
+      }
     }
 
     if (createdAt != null) {
@@ -365,31 +638,64 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
     }
 
     final items = row['order_items'] as List? ?? [];
-    for (final item in items) {
-      final name = item['product_name'] as String? ?? 'Unknown';
-      final qty = item['quantity'] as int? ?? 0;
-      final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
-      final existing = productMap[name];
-      productMap[name] = existing != null
-          ? TopProduct(name, existing.qty + qty, existing.revenue + sub)
-          : TopProduct(name, qty, sub);
-    }
+      for (final item in items) {
+        final name = item['product_name'] as String? ?? 'Unknown';
+        final qty = item['quantity'] as int? ?? 0;
+        final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
+        final itemCost = ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
+        final categoryRow = item['products'] as Map<String, dynamic>?;
+        final category = categoryRow?['category_name'] as String? ?? '';
+        if (isPaid) totalCogs += itemCost;
+        final acc = productAccum[name];
+        productAccum[name] = acc != null
+            ? _ProductAccum(name, acc.qty + qty, acc.revenue + sub,
+                acc.cogs + itemCost, acc.category)
+            : _ProductAccum(name, qty, sub, itemCost, category);
+      }
   }
 
-  final topProducts = productMap.values.toList()
+  final grossProfit = totalRevenue - totalCogs;
+
+  final topProducts = productAccum.values.map((a) {
+    final gp = a.revenue - a.cogs;
+    return TopProduct(
+      a.name,
+      a.qty,
+      a.revenue,
+      cogs: a.cogs,
+      grossProfit: gp,
+      marginPct: a.revenue > 0 ? (gp / a.revenue * 100) : 0,
+      category: a.category,
+    );
+  }).toList()
     ..sort((a, b) => b.qty.compareTo(a.qty));
 
   return DailyReport(
     totalRevenue: totalRevenue,
-    totalOrders: completed,             // ← only paid orders
+    totalOrders: completed,
     avgOrderValue: completed > 0 ? totalRevenue / completed : 0,
     revenueByPayment: byPayment,
-    topProducts: topProducts.take(5).toList(),
+    topProducts: topProducts,
     hourlySales: List.generate(24, (h) => HourlySale(h, hourMap[h] ?? 0)),
     completedOrders: completed,
     cancelledOrders: cancelled,
+    totalCogs: totalCogs,
+    grossProfit: grossProfit,
+    totalTaxCollected: totalTax,
+    totalDiscount: totalDiscount,
+    discountByStaff: discountByStaff,
     isFromCache: fromCache,
   );
+}
+
+class _ProductAccum {
+  final String name;
+  final int qty;
+  final double revenue;
+  final double cogs;
+  final String category;
+  const _ProductAccum(
+      this.name, this.qty, this.revenue, this.cogs, this.category);
 }
 
 Future<List<Map<String, dynamic>>> _localShiftRows(
@@ -473,6 +779,11 @@ extension DailyReportCopyWith on DailyReport {
     List<HourlySale>? hourlySales,
     int? completedOrders,
     int? cancelledOrders,
+    double? totalCogs,
+    double? grossProfit,
+    double? totalTaxCollected,
+    double? totalDiscount,
+    Map<String, double>? discountByStaff,
     bool? isFromCache,
     DateTime? cachedAt,
   }) =>
@@ -485,7 +796,139 @@ extension DailyReportCopyWith on DailyReport {
         hourlySales: hourlySales ?? this.hourlySales,
         completedOrders: completedOrders ?? this.completedOrders,
         cancelledOrders: cancelledOrders ?? this.cancelledOrders,
+        totalCogs: totalCogs ?? this.totalCogs,
+        grossProfit: grossProfit ?? this.grossProfit,
+        totalTaxCollected: totalTaxCollected ?? this.totalTaxCollected,
+        totalDiscount: totalDiscount ?? this.totalDiscount,
+        discountByStaff: discountByStaff ?? this.discountByStaff,
         isFromCache: isFromCache ?? this.isFromCache,
         cachedAt: cachedAt ?? this.cachedAt,
       );
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOG MODELS + PROVIDER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AuditLogEntry {
+  final String id;
+  final String performedByName;
+  final String performedByRole;
+  final String? authorisedByName;
+  final String actionType;
+  final String? entityType;
+  final String? entityId;
+  final String description;
+  final Map<String, dynamic>? metadata;
+  final DateTime createdAt;
+
+  const AuditLogEntry({
+    required this.id,
+    required this.performedByName,
+    required this.performedByRole,
+    required this.actionType,
+    required this.description,
+    required this.createdAt,
+    this.authorisedByName,
+    this.entityType,
+    this.entityId,
+    this.metadata,
+  });
+
+  factory AuditLogEntry.fromMap(Map<String, dynamic> m) => AuditLogEntry(
+        id:                m['id'] as String,
+        performedByName:   m['performed_by_staff_name'] as String,
+        performedByRole:   m['performed_by_role'] as String,
+        authorisedByName:  m['authorised_by_staff_name'] as String?,
+        actionType:        m['action_type'] as String,
+        entityType:        m['entity_type'] as String?,
+        entityId:          m['entity_id'] as String?,
+        description:       m['description'] as String,
+        metadata:          m['metadata'] as Map<String, dynamic>?,
+        createdAt:         DateTime.parse(m['created_at'] as String).toLocal(),
+      );
+}
+
+// Filter state for the audit log viewer
+class AuditFilter {
+  final String? actionType;
+  final String? staffName;
+  final DateTime? from;
+  final DateTime? to;
+
+  const AuditFilter({
+    this.actionType,
+    this.staffName,
+    this.from,
+    this.to,
+  });
+
+  AuditFilter copyWith({
+    Object? actionType = _sentinel,
+    Object? staffName = _sentinel,
+    Object? from = _sentinel,
+    Object? to = _sentinel,
+  }) =>
+      AuditFilter(
+        actionType: actionType == _sentinel
+            ? this.actionType
+            : actionType as String?,
+        staffName:
+            staffName == _sentinel ? this.staffName : staffName as String?,
+        from: from == _sentinel ? this.from : from as DateTime?,
+        to: to == _sentinel ? this.to : to as DateTime?,
+      );
+}
+
+const _sentinel = Object();
+
+final auditFilterProvider = StateProvider<AuditFilter>(
+  (_) => const AuditFilter(),
+);
+
+final auditLogProvider =
+    FutureProvider.family<List<AuditLogEntry>, AuditFilter>(
+        (ref, filter) async {
+  final profile = await ref.watch(profileProvider.future);
+  if (profile?.businessId == null) return [];
+  final businessId = profile!.businessId!;
+  final isOnline = ref.read(isOnlineProvider);
+  if (!isOnline) return [];
+
+  try {
+    final client = ref.watch(supabaseClientProvider);
+    var query = client
+        .from('audit_logs')
+        .select()
+        .eq('business_id', businessId);
+
+    if (filter.actionType != null) {
+      query = query.eq('action_type', filter.actionType!);
+    }
+    if (filter.staffName != null && filter.staffName!.isNotEmpty) {
+      query = query.ilike(
+          'performed_by_staff_name', '%${filter.staffName}%');
+    }
+    if (filter.from != null) {
+      query = query.gte('created_at',
+          filter.from!.toUtc().toIso8601String());
+    }
+    if (filter.to != null) {
+      query = query.lte(
+          'created_at',
+          DateTime(filter.to!.year, filter.to!.month, filter.to!.day,
+                  23, 59, 59)
+              .toUtc()
+              .toIso8601String());
+    }
+
+    final rows = await query
+        .order('created_at', ascending: false)
+        .limit(200);
+
+    return (rows as List)
+        .map((r) => AuditLogEntry.fromMap(r as Map<String, dynamic>))
+        .toList();
+  } catch (_) {
+    return [];
+  }
+});

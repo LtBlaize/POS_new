@@ -5,8 +5,9 @@ import '../../../shared/widgets/app_colors.dart';
 import '../inventory_service.dart';
 import '../../../core/providers/product_provider.dart';
 import '../../../core/models/product.dart';
-import '../../../core/providers/staff_provider.dart'; // ← added
-import '../../../core/models/staff.dart';             // ← added
+import '../../../core/models/product_variant.dart';
+import '../../../core/providers/staff_provider.dart';
+import '../../../core/models/staff.dart';
 
 class AddProductDialog extends ConsumerStatefulWidget {
 final Product? product;
@@ -22,6 +23,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   // Controllers
   final _nameController        = TextEditingController();
   final _priceController       = TextEditingController();
+  final _costController        = TextEditingController();
   final _descController        = TextEditingController();
   final _barcodeController     = TextEditingController();
   final _skuController         = TextEditingController();
@@ -40,6 +42,11 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   // Categories loaded from DB
   List<Map<String, dynamic>> _categories = [];
   bool _categoriesLoading = true;
+
+  // Variants
+  List<ProductVariant> _variants = [];
+  final List<String> _removedVariantIds = [];
+  bool _variantsLoading = false;
 
   void _showError(String msg) {
     if (!mounted) return;
@@ -61,12 +68,40 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
       _descController.text     = p.description ?? '';
       _barcodeController.text  = p.barcode ?? '';
       _skuController.text      = p.sku ?? '';
+      _costController.text     = p.costPrice > 0 ? p.costPrice.toStringAsFixed(2) : '';
       _stockController.text    = '${p.stockQuantity}';
       _sendToKitchen           = p.sendToKitchen;
       _imageUrlController.text = p.imageUrl ?? '';
       _trackInventory          = p.trackInventory;
       _selectedCategoryId      = p.categoryId;
-      _originalStock           = p.stockQuantity; // ← added
+      _originalStock           = p.stockQuantity;
+      // Load existing variants
+      _variants = List<ProductVariant>.from(p.variants);
+      if (_variants.isEmpty && p.id.isNotEmpty) _loadVariants(p.id);
+    }
+  }
+
+  Future<void> _loadVariants(String productId) async {
+    setState(() => _variantsLoading = true);
+    try {
+      final client = ref.read(supabaseClientProvider);
+      final rows = await client
+          .from('product_variants')
+          .select()
+          .eq('product_id', productId)
+          .eq('is_active', true)
+          .order('name');
+      if (mounted) {
+        setState(() {
+          _variants = (rows as List)
+              .map((r) => ProductVariant.fromMap(r as Map<String, dynamic>))
+              .toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('[AddProductDialog] variant load failed: $e');
+    } finally {
+      if (mounted) setState(() => _variantsLoading = false);
     }
   }
 
@@ -146,6 +181,13 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
       }
     }
 
+    for (int i = 0; i < _variants.length; i++) {
+      if (_variants[i].name.trim().isEmpty) {
+        _showError('Variant ${i + 1} is missing a name.');
+        return;
+      }
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -158,26 +200,37 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'image_url':       _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
         'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
         'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+        'cost_price':      double.tryParse(_costController.text) ?? 0,
         'track_inventory': _trackInventory,
         'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
         'send_to_kitchen': _sendToKitchen,
       };
 
+      String productId;
+
       if (widget.product == null) {
-        // ── Insert ──────────────────────────────────────────────────────
-        await client.from('products').insert({
-          ...data,
-          'business_id': profile!.businessId,
-          'is_available': true,
-          'is_active':    true,
-        });
+        // ── Insert — capture returned id ────────────────────────────────
+        final row = await client
+            .from('products')
+            .insert({
+              ...data,
+              'business_id': profile!.businessId,
+              'is_available': true,
+              'is_active': true,
+            })
+            .select('id')
+            .single();
+        productId = row['id'] as String;
       } else {
         // ── Update ──────────────────────────────────────────────────────
         await client
             .from('products')
             .update(data)
             .eq('id', widget.product!.id);
+        productId = widget.product!.id;
       }
+
+      await _saveVariants(client, productId);
 
       await ref.read(inventoryProvider.notifier).refresh();
       ref.invalidate(productListProvider);
@@ -186,6 +239,37 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     } catch (e) {
       setState(() => _saving = false);
       _showError('Failed to save product: $e');
+    }
+  }
+
+  Future<void> _saveVariants(dynamic client, String productId) async {
+    for (final v in _variants) {
+      final payload = {
+        'product_id': productId,
+        'name': v.name,
+        'option_type': v.optionType,
+        'price_delta': v.priceDelta,
+        'sku': v.sku?.trim().isEmpty == true ? null : v.sku,
+        'barcode': v.barcode?.trim().isEmpty == true ? null : v.barcode,
+        'stock_quantity': v.stockQuantity,
+        'cost_price': v.costPrice,
+        'is_active': true,
+      };
+      if (v.id.startsWith('new_')) {
+        await client.from('product_variants').insert(payload);
+      } else {
+        await client
+            .from('product_variants')
+            .update(payload)
+            .eq('id', v.id);
+      }
+    }
+    // Soft-delete removed variants
+    for (final id in _removedVariantIds) {
+      await client
+          .from('product_variants')
+          .update({'is_active': false})
+          .eq('id', id);
     }
   }
 
@@ -269,6 +353,15 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                           }
                           return null;
                         },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Cost price
+                      _label('Cost Price (₱)'),
+                      _field(
+                        controller: _costController,
+                        hint: '0.00  (optional — used for margin reports)',
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       ),
                       const SizedBox(height: 14),
 
@@ -393,6 +486,29 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                           ),
                         ],
                       ],
+
+                      const SizedBox(height: 20),
+
+                      // ── Variants section ───────────────────────────────
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _priceController,
+                        builder: (_, __, ___) => _VariantsSection(
+                        productId: widget.product?.id,
+                        basePrice: double.tryParse(_priceController.text) ?? 0,
+                        variants: _variants,
+                        loading: _variantsLoading,
+                        onAdd: (v) => setState(() => _variants.add(v)),
+                        onUpdate: (i, v) =>
+                            setState(() => _variants[i] = v),
+                        onRemove: (i) => setState(() {
+                          final removed = _variants[i];
+                          if (!removed.id.startsWith('new_')) {
+                            _removedVariantIds.add(removed.id);
+                          }
+                          _variants.removeAt(i);
+                        }),
+                      ),
+                      ), // ValueListenableBuilder
 
                       const SizedBox(height: 24),
 
@@ -721,6 +837,454 @@ class _TrackInventoryToggle extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Variants section ──────────────────────────────────────────────────────────
+
+class _VariantsSection extends StatefulWidget {
+  final String? productId;
+  final double basePrice;
+  final List<ProductVariant> variants;
+  final bool loading;
+  final void Function(ProductVariant) onAdd;
+  final void Function(int, ProductVariant) onUpdate;
+  final void Function(int) onRemove;
+
+  const _VariantsSection({
+    required this.productId,
+    required this.basePrice,
+    required this.variants,
+    required this.loading,
+    required this.onAdd,
+    required this.onUpdate,
+    required this.onRemove,
+  });
+
+  @override
+  State<_VariantsSection> createState() => _VariantsSectionState();
+}
+
+class _VariantsSectionState extends State<_VariantsSection> {
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.variants.isNotEmpty;
+  }
+
+  void _addVariant() {
+    final newVariant = ProductVariant(
+      id: 'new_${DateTime.now().millisecondsSinceEpoch}',
+      productId: widget.productId ?? '',
+      name: '',
+      priceDelta: 0,
+      stockQuantity: 0,
+      costPrice: 0,
+    );
+    widget.onAdd(newVariant);
+    setState(() => _expanded = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.variants.length;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: _expanded
+              ? AppColors.primary.withOpacity(0.3)
+              : AppColors.divider,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          // ── Header / toggle ──────────────────────────────────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  const Icon(Icons.tune_outlined,
+                      size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Variants',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        Text(
+                          count == 0
+                              ? 'Size, colour, flavour, etc.'
+                              : '$count variant${count > 1 ? 's' : ''}',
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.loading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Expanded body ────────────────────────────────────────────
+          if (_expanded) ...[
+            const Divider(height: 1),
+            if (widget.variants.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                child: Text(
+                  'No variants yet. Add one below.',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary.withOpacity(0.7)),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: widget.variants.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1),
+                itemBuilder: (_, i) => _VariantRow(
+                  variant: widget.variants[i],
+                  basePrice: widget.basePrice,
+                  onUpdate: (v) => widget.onUpdate(i, v),
+                  onRemove: () => widget.onRemove(i),
+                ),
+              ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _addVariant,
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('Add Variant',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Single variant row (inline edit) ─────────────────────────────────────────
+
+class _VariantRow extends StatefulWidget {
+  final ProductVariant variant;
+  final double basePrice;
+  final void Function(ProductVariant) onUpdate;
+  final VoidCallback onRemove;
+
+  const _VariantRow({
+    required this.variant,
+    required this.basePrice,
+    required this.onUpdate,
+    required this.onRemove,
+  });
+
+  @override
+  State<_VariantRow> createState() => _VariantRowState();
+}
+
+class _VariantRowState extends State<_VariantRow> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _deltaCtrl;
+  late final TextEditingController _stockCtrl;
+  late final TextEditingController _costCtrl;
+  late final TextEditingController _skuCtrl;
+  late final TextEditingController _barcodeCtrl;
+  late final TextEditingController _optionTypeCtrl;
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final v = widget.variant;
+    _nameCtrl  = TextEditingController(text: v.name);
+    _deltaCtrl = TextEditingController(
+        text: v.priceDelta == 0 ? '' : v.priceDelta.toStringAsFixed(2));
+    _stockCtrl = TextEditingController(text: '${v.stockQuantity}');
+    _costCtrl  = TextEditingController(
+        text: v.costPrice == 0 ? '' : v.costPrice.toStringAsFixed(2));
+    _skuCtrl          = TextEditingController(text: v.sku ?? '');
+    _barcodeCtrl      = TextEditingController(text: v.barcode ?? '');
+    _optionTypeCtrl   = TextEditingController(text: v.optionType ?? '');
+
+    // Auto-expand new (unsaved) rows so user fills them in immediately
+    _expanded = v.id.startsWith('new_');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _deltaCtrl.dispose();
+    _stockCtrl.dispose();
+    _costCtrl.dispose();
+    _skuCtrl.dispose();
+    _barcodeCtrl.dispose();
+    _optionTypeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _pushUpdate() {
+    widget.onUpdate(widget.variant.copyWith(
+      name: _nameCtrl.text.trim(),
+      optionType: _optionTypeCtrl.text.trim().isEmpty ? null : _optionTypeCtrl.text.trim(),
+      priceDelta: double.tryParse(_deltaCtrl.text) ?? 0,
+      stockQuantity: int.tryParse(_stockCtrl.text) ?? 0,
+      costPrice: double.tryParse(_costCtrl.text) ?? 0,
+      sku: _skuCtrl.text.trim().isEmpty ? null : _skuCtrl.text.trim(),
+      barcode: _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedPrice =
+        widget.basePrice + (double.tryParse(_deltaCtrl.text) ?? 0);
+
+    return Column(
+      children: [
+        // ── Collapsed summary row ──────────────────────────────────────
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _nameCtrl.text.isEmpty ? 'New variant' : _nameCtrl.text,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _nameCtrl.text.isEmpty
+                          ? AppColors.textSecondary
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  '₱${resolvedPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Stock: ${_stockCtrl.text}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: widget.onRemove,
+                  child: const Icon(Icons.close,
+                      size: 16, color: AppColors.danger),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Expanded edit fields ───────────────────────────────────────
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name + option type row
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: _miniField(
+                        controller: _nameCtrl,
+                        label: 'Variant name *',
+                        hint: 'e.g. Large',
+                        onChanged: (_) => setState(_pushUpdate),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: _miniField(
+                        controller: _optionTypeCtrl,
+                        label: 'Type',
+                        hint: 'size / colour',
+                        onChanged: (_) => _pushUpdate(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Price delta + stock + cost
+                Row(
+                  children: [
+                    Expanded(
+                      child: _miniField(
+                        controller: _deltaCtrl,
+                        label: 'Price +/− (₱)',
+                        hint: '0.00',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        onChanged: (_) => setState(_pushUpdate),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _miniField(
+                        controller: _stockCtrl,
+                        label: 'Stock',
+                        hint: '0',
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => _pushUpdate(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _miniField(
+                        controller: _costCtrl,
+                        label: 'Cost (₱)',
+                        hint: '0.00',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        onChanged: (_) => _pushUpdate(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // SKU
+                Row(
+                  children: [
+                    Expanded(
+                      child: _miniField(
+                        controller: _skuCtrl,
+                        label: 'SKU',
+                        hint: 'Optional',
+                        onChanged: (_) => _pushUpdate(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _miniField(
+                        controller: _barcodeCtrl,
+                        label: 'Barcode',
+                        hint: 'Optional',
+                        onChanged: (_) => _pushUpdate(),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Resolved price hint
+                const SizedBox(height: 6),
+                Text(
+                  'Final price: ₱${resolvedPrice.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.primary.withOpacity(0.8),
+                      fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _miniField({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    TextInputType? keyboardType,
+    required void Function(String) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          onChanged: onChanged,
+          style: const TextStyle(fontSize: 12),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+                color: AppColors.textSecondary.withOpacity(0.5),
+                fontSize: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.divider)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.divider)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 1.5)),
+            filled: true,
+            fillColor: AppColors.surface,
+            isDense: true,
+          ),
+        ),
+      ],
     );
   }
 }

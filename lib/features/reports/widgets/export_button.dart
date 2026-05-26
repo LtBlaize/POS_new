@@ -17,12 +17,14 @@ import '../../../shared/widgets/app_colors.dart';
 
 class ExportButton extends ConsumerStatefulWidget {
   final DateTime date;
+  final DateRange? dateRange;
   final DailyReport? dailyReport;
   final List<ShiftEntry>? shifts;
 
   const ExportButton({
     super.key,
     required this.date,
+    this.dateRange,
     required this.dailyReport,
     required this.shifts,
   });
@@ -58,6 +60,7 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
       final service = ref.read(reportExcelServiceProvider);
       final tempPath = await service.buildAndSave(
         date: widget.date,
+        dateRange: widget.dateRange,
         dailyReport: report,
         shiftEntries: shifts,
       );
@@ -130,9 +133,19 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
     );
   }
 
-  String _fileName(DateTime d) =>
-      'report_${d.year}-${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}.xlsx';
+  String _fileName(DateTime d) {
+    final range = widget.dateRange;
+    if (range != null && !range.isSingleDay) {
+      final s = range.start;
+      final e = range.end;
+      return 'report_${s.year}-${s.month.toString().padLeft(2, '0')}-'
+          '${s.day.toString().padLeft(2, '0')}_to_'
+          '${e.year}-${e.month.toString().padLeft(2, '0')}-'
+          '${e.day.toString().padLeft(2, '0')}.xlsx';
+    }
+    return 'report_${d.year}-${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}.xlsx';
+  }
 
   // ── Build ──────────────────────────────────────────────────────────────────
 

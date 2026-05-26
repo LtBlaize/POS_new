@@ -12,6 +12,7 @@ class Product {
   final String? imageUrl;
   final String? barcode;
   final String? sku;
+  final double costPrice;
   final bool trackInventory;
   final int stockQuantity;
   final bool isAvailable;
@@ -32,6 +33,7 @@ class Product {
     this.imageUrl,
     this.barcode,
     this.sku,
+    this.costPrice = 0,
     this.trackInventory = true,
     this.stockQuantity = 0,
     this.isAvailable = true,
@@ -65,6 +67,7 @@ class Product {
       name: map['name'] as String,
       description: map['description'] as String?,
       price: (map['price'] as num).toDouble(),
+      costPrice: (map['cost_price'] as num?)?.toDouble() ?? 0,
       imageUrl: map['image_url'] as String?,
       barcode: map['barcode'] as String?,
       sku: map['sku'] as String?,
@@ -87,6 +90,7 @@ class Product {
         'name': name,
         'description': description,
         'price': price,
+        'cost_price': costPrice,
         'image_url': imageUrl,
         'barcode': barcode,
         'sku': sku,
@@ -100,6 +104,7 @@ class Product {
   Product copyWith({
     String? name,
     double? price,
+    double? costPrice,
     bool? isAvailable,
     int? stockQuantity,
     bool? sendToKitchen,
@@ -112,6 +117,7 @@ class Product {
         name: name ?? this.name,
         description: description,
         price: price ?? this.price,
+        costPrice: costPrice ?? this.costPrice,
         imageUrl: imageUrl,
         barcode: barcode,
         sku: sku,

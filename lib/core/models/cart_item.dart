@@ -1,22 +1,33 @@
 import 'product.dart';
+import 'product_variant.dart';
 
 // REPLACE
 enum DiscountType { percentage, fixed }
 
 class CartItem {
   final Product product;
+  final ProductVariant? selectedVariant;
   int quantity;
   double discountAmount;
   DiscountType discountType;
+  final double costAtSale;
 
   CartItem({
     required this.product,
+    this.selectedVariant,
     this.quantity = 1,
     this.discountAmount = 0,
     this.discountType = DiscountType.fixed,
-  });
+    double? costAtSale,
+  }) : costAtSale = costAtSale ??
+            (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
+                ? selectedVariant.costPrice
+                : product.costPrice);
+  double get effectivePrice => selectedVariant != null
+      ? selectedVariant!.resolvedPrice(product.price)
+      : product.price;
 
-  double get rawTotal => product.price * quantity;
+  double get rawTotal => effectivePrice * quantity;
 
   double get discountValue => discountType == DiscountType.percentage
       ? rawTotal * (discountAmount / 100)
@@ -24,7 +35,7 @@ class CartItem {
 
   double get total => (rawTotal - discountValue).clamp(0, double.infinity);
 
-  Map<String, dynamic> toParkedMap() => {
+ Map<String, dynamic> toParkedMap() => {
         'product_id': product.id,
         'product_business_id': product.businessId,
         'product_name': product.name,
@@ -35,23 +46,43 @@ class CartItem {
         'quantity': quantity,
         'discount_amount': discountAmount,
         'discount_type': discountType.name,
+        'variant_id': selectedVariant?.id,
+        'variant_name': selectedVariant?.name,
+        'variant_price_delta': selectedVariant?.priceDelta,
+        'variant_cost_price': selectedVariant?.costPrice,
+        'cost_at_sale': costAtSale,
       };
 
-  factory CartItem.fromParkedMap(Map<String, dynamic> m) => CartItem(
-        product: Product(
-          id: m['product_id'] as String,
-          businessId: m['product_business_id'] as String? ?? '',
-          name: m['product_name'] as String,
-          price: (m['product_price'] as num).toDouble(),
-          category: m['product_category'] as String? ?? '',
-          trackInventory: m['product_track_inventory'] as bool? ?? false,
-          sendToKitchen: m['product_send_to_kitchen'] as bool? ?? false,
-        ),
-        quantity: m['quantity'] as int,
-        discountAmount: (m['discount_amount'] as num?)?.toDouble() ?? 0,
-        discountType: DiscountType.values.firstWhere(
-          (e) => e.name == m['discount_type'],
-          orElse: () => DiscountType.fixed,
-        ),
-      );
+  factory CartItem.fromParkedMap(Map<String, dynamic> m) {
+    final variantId = m['variant_id'] as String?;
+    final selectedVariant = variantId != null
+        ? ProductVariant(
+            id: variantId,
+            productId: m['product_id'] as String,
+            name: m['variant_name'] as String? ?? '',
+            priceDelta: (m['variant_price_delta'] as num?)?.toDouble() ?? 0,
+            costPrice: (m['variant_cost_price'] as num?)?.toDouble() ?? 0,
+          )
+        : null;
+
+    return CartItem(
+      product: Product(
+        id: m['product_id'] as String,
+        businessId: m['product_business_id'] as String? ?? '',
+        name: m['product_name'] as String,
+        price: (m['product_price'] as num).toDouble(),
+        category: m['product_category'] as String? ?? '',
+        trackInventory: m['product_track_inventory'] as bool? ?? false,
+        sendToKitchen: m['product_send_to_kitchen'] as bool? ?? false,
+      ),
+      selectedVariant: selectedVariant,
+      quantity: m['quantity'] as int,
+      discountAmount: (m['discount_amount'] as num?)?.toDouble() ?? 0,
+      discountType: DiscountType.values.firstWhere(
+        (e) => e.name == m['discount_type'],
+        orElse: () => DiscountType.fixed,
+      ),
+      costAtSale: (m['cost_at_sale'] as num?)?.toDouble() ?? 0,
+    );
+  }
 }

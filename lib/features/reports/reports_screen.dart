@@ -12,6 +12,9 @@ import 'reports_providers.dart';
 import 'widgets/daily_tab.dart';
 import 'widgets/export_button.dart';   // FIX: was never imported
 import 'widgets/shifts_tab.dart';
+import 'widgets/audit_log_tab.dart';
+import '../../core/models/staff.dart';
+import '../../core/providers/staff_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAYOUT HELPER
@@ -37,15 +40,21 @@ class ReportsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedDate = ref.watch(selectedDateProvider);
+    final dateRange = ref.watch(dateRangeProvider);
     final activeTab = ref.watch(reportTabProvider);
-    final reportAsync = ref.watch(dailyReportProvider(selectedDate));
-    final shiftAsync = ref.watch(shiftReportProvider(selectedDate));
     final isOnline = ref.watch(isOnlineProvider);
     final isRestaurant = featureManager.hasFeature('kitchen') ||
         featureManager.hasFeature('tables');
     final layout = layoutOf(context);
 
-    // Unwrap nullable data to pass into ExportButton
+    final isRangeMode = !dateRange.isSingleDay;
+
+    // Use period provider when range selected, daily otherwise
+    final reportAsync = isRangeMode
+        ? ref.watch(periodReportProvider(dateRange))
+        : ref.watch(dailyReportProvider(selectedDate));
+    final shiftAsync = ref.watch(shiftReportProvider(selectedDate));
+
     final dailyReport = reportAsync.valueOrNull;
     final shifts = shiftAsync.valueOrNull;
 
@@ -76,10 +85,9 @@ class ReportsScreen extends ConsumerWidget {
             ),
 
           // ── Header ───────────────────────────────────────────────────────
-          // FIX: pass dailyReport + shifts so ExportButton can be placed
-          // inside the header and receive live data.
           ReportHeader(
             selectedDate: selectedDate,
+            dateRange: dateRange,
             isRestaurant: isRestaurant,
             layout: layout,
             activeTab: activeTab,
@@ -87,10 +95,11 @@ class ReportsScreen extends ConsumerWidget {
             shifts: shifts,
             onTabChanged: (t) =>
                 ref.read(reportTabProvider.notifier).state = t,
-            onPrev: () =>
-                ref.read(selectedDateProvider.notifier).state =
+            onPrev: isRangeMode
+                ? null
+                : () => ref.read(selectedDateProvider.notifier).state =
                     selectedDate.subtract(const Duration(days: 1)),
-            onNext: _isToday(selectedDate)
+            onNext: isRangeMode || _isToday(selectedDate)
                 ? null
                 : () => ref.read(selectedDateProvider.notifier).state =
                     selectedDate.add(const Duration(days: 1)),
@@ -103,53 +112,91 @@ class ReportsScreen extends ConsumerWidget {
               );
               if (picked != null) {
                 ref.read(selectedDateProvider.notifier).state = picked;
+                ref.read(dateRangeProvider.notifier).state = DateRange(
+                  start: picked,
+                  end: picked,
+                  preset: RangePreset.day,
+                );
               }
             },
-            onToday: _isToday(selectedDate)
+            onToday: _isToday(selectedDate) && !isRangeMode
                 ? null
                 : () {
                     final now = DateTime.now();
-                    ref.read(selectedDateProvider.notifier).state =
-                        DateTime(now.year, now.month, now.day);
+                    final today = DateTime(now.year, now.month, now.day);
+                    ref.read(selectedDateProvider.notifier).state = today;
+                    ref.read(dateRangeProvider.notifier).state = DateRange(
+                      start: today,
+                      end: today,
+                      preset: RangePreset.day,
+                    );
                   },
+            onRangeChanged: (range) {
+              ref.read(dateRangeProvider.notifier).state = range;
+              ref.read(selectedDateProvider.notifier).state = range.start;
+            },
+            onRangePick: () async {
+              final now = DateTime.now();
+              final result = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: now,
+                initialDateRange: DateTimeRange(
+                  start: dateRange.start,
+                  end: dateRange.end,
+                ),
+              );
+              if (result != null) {
+                ref.read(dateRangeProvider.notifier).state = DateRange(
+                  start: result.start,
+                  end: result.end,
+                  preset: RangePreset.custom,
+                );
+                ref.read(selectedDateProvider.notifier).state = result.start;
+              }
+            },
           ),
 
           // ── Body ─────────────────────────────────────────────────────────
           Expanded(
-            child: activeTab == ReportTab.daily
-                ? reportAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text('Error loading report: $e',
-                            style:
-                                const TextStyle(color: AppColors.danger)),
+            child: activeTab == ReportTab.auditLog
+                ? const AuditLogTab()
+                : activeTab == ReportTab.daily
+                    ? reportAsync.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (e, _) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text('Error loading report: $e',
+                                style: const TextStyle(
+                                    color: AppColors.danger)),
+                          ),
+                        ),
+                        data: (report) => DailyTab(
+                          report: report,
+                          isRestaurant: isRestaurant,
+                          layout: layout,
+                          isToday: _isToday(selectedDate) && !isRangeMode,
+                          dateRange: isRangeMode ? dateRange : null,
+                        ),
+                      )
+                    : shiftAsync.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (e, _) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text('Error loading shifts: $e',
+                                style: const TextStyle(
+                                    color: AppColors.danger)),
+                          ),
+                        ),
+                        data: (entries) => ShiftsTab(
+                          entries: entries,
+                          layout: layout,
+                        ),
                       ),
-                    ),
-                    data: (report) => DailyTab(
-                      report: report,
-                      isRestaurant: isRestaurant,
-                      layout: layout,
-                    ),
-                  )
-                : shiftAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text('Error loading shifts: $e',
-                            style:
-                                const TextStyle(color: AppColors.danger)),
-                      ),
-                    ),
-                    data: (entries) => ShiftsTab(
-                      entries: entries,
-                      layout: layout,
-                    ),
-                  ),
           ),
         ],
       ),
@@ -170,21 +217,24 @@ class ReportsScreen extends ConsumerWidget {
 
 class ReportHeader extends StatelessWidget {
   final DateTime selectedDate;
+  final DateRange dateRange;
   final bool isRestaurant;
   final ReportLayout layout;
   final ReportTab activeTab;
   final ValueChanged<ReportTab> onTabChanged;
-  final VoidCallback onPrev;
+  final VoidCallback? onPrev;
   final VoidCallback? onNext;
   final VoidCallback onPick;
   final VoidCallback? onToday;
-  // FIX: added so ExportButton can be placed in the header
+  final ValueChanged<DateRange> onRangeChanged;
+  final VoidCallback onRangePick;
   final DailyReport? dailyReport;
   final List<ShiftEntry>? shifts;
 
   const ReportHeader({
     super.key,
     required this.selectedDate,
+    required this.dateRange,
     required this.isRestaurant,
     required this.layout,
     required this.activeTab,
@@ -193,6 +243,8 @@ class ReportHeader extends StatelessWidget {
     required this.onNext,
     required this.onPick,
     required this.onToday,
+    required this.onRangeChanged,
+    required this.onRangePick,
     required this.dailyReport,
     required this.shifts,
   });
@@ -209,11 +261,17 @@ class ReportHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           isPhone
-              ? _phoneTitleRow(selectedDate, isRestaurant, dailyReport, shifts)
-              : _wideTitleRow(selectedDate, isRestaurant, dailyReport, shifts),
+              ? _phoneTitleRow(selectedDate, isRestaurant, dailyReport, shifts, dateRange)
+          : _wideTitleRow(selectedDate, isRestaurant, dailyReport, shifts, dateRange),
           SizedBox(height: isPhone ? 10 : 14),
           isPhone ? _phoneDateRow() : _wideDateRow(),
-          SizedBox(height: isPhone ? 10 : 14),
+          const SizedBox(height: 8),
+          _RangePresetRow(
+            current: dateRange,
+            onChanged: onRangeChanged,
+            onCustomPick: onRangePick,
+          ),
+          SizedBox(height: isPhone ? 8 : 10),
           TabSwitcher(active: activeTab, onChanged: onTabChanged),
         ],
       ),
@@ -226,6 +284,7 @@ class ReportHeader extends StatelessWidget {
     bool isRestaurant,
     DailyReport? dailyReport,
     List<ShiftEntry>? shifts,
+    DateRange dateRange,
   ) =>
       Row(
         children: [
@@ -260,6 +319,7 @@ class ReportHeader extends StatelessWidget {
           // FIX: ExportButton placed here — was missing entirely before
           ExportButton(
             date: date,
+            dateRange: dateRange,
             dailyReport: dailyReport,
             shifts: shifts,
           ),
@@ -271,6 +331,7 @@ class ReportHeader extends StatelessWidget {
     bool isRestaurant,
     DailyReport? dailyReport,
     List<ShiftEntry>? shifts,
+    DateRange dateRange,
   ) =>
       Row(
         children: [
@@ -304,6 +365,7 @@ class ReportHeader extends StatelessWidget {
           // FIX: ExportButton placed here — was missing entirely before
           ExportButton(
             date: date,
+            dateRange: dateRange,
             dailyReport: dailyReport,
             shifts: shifts,
           ),
@@ -432,14 +494,17 @@ class ReportHeader extends StatelessWidget {
 // TAB SWITCHER
 // ─────────────────────────────────────────────────────────────────────────────
 
-class TabSwitcher extends StatelessWidget {
+class TabSwitcher extends ConsumerWidget {
   final ReportTab active;
   final ValueChanged<ReportTab> onChanged;
 
   const TabSwitcher({super.key, required this.active, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeStaff = ref.watch(activeStaffProvider);
+    final isOwner = activeStaff?.role == StaffRole.owner;
+
     return Row(
       children: [
         _Tab(
@@ -455,6 +520,15 @@ class TabSwitcher extends StatelessWidget {
           active: active == ReportTab.shifts,
           onTap: () => onChanged(ReportTab.shifts),
         ),
+        if (isOwner) ...[
+          const SizedBox(width: 4),
+          _Tab(
+            label: 'Audit Log',
+            icon: Icons.history_rounded,
+            active: active == ReportTab.auditLog,
+            onTap: () => onChanged(ReportTab.auditLog),
+          ),
+        ],
       ],
     );
   }
@@ -560,6 +634,137 @@ class DateNavButton extends StatelessWidget {
             color: onTap == null
                 ? AppColors.textSecondary.withOpacity(0.3)
                 : AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RANGE PRESET ROW
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RangePresetRow extends StatelessWidget {
+  final DateRange current;
+  final ValueChanged<DateRange> onChanged;
+  final VoidCallback onCustomPick;
+
+  const _RangePresetRow({
+    required this.current,
+    required this.onChanged,
+    required this.onCustomPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _PresetChip(
+            label: 'Today',
+            active: current.preset == RangePreset.day,
+            onTap: () => onChanged(DateRange(
+              start: today,
+              end: today,
+              preset: RangePreset.day,
+            )),
+          ),
+          const SizedBox(width: 6),
+          _PresetChip(
+            label: 'Last 7 Days',
+            active: current.preset == RangePreset.week,
+            onTap: () => onChanged(DateRange(
+              start: today.subtract(const Duration(days: 6)),
+              end: today,
+              preset: RangePreset.week,
+            )),
+          ),
+          const SizedBox(width: 6),
+          _PresetChip(
+            label: 'This Month',
+            active: current.preset == RangePreset.month,
+            onTap: () => onChanged(DateRange(
+              start: DateTime(now.year, now.month, 1),
+              end: today,
+              preset: RangePreset.month,
+            )),
+          ),
+          const SizedBox(width: 6),
+          _PresetChip(
+            label: current.preset == RangePreset.custom
+                ? '${_fmt(current.start)} – ${_fmt(current.end)}'
+                : 'Custom Range',
+            active: current.preset == RangePreset.custom,
+            icon: Icons.date_range_outlined,
+            onTap: onCustomPick,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _fmt(DateTime d) =>
+      '${d.month}/${d.day}/${d.year}';
+}
+
+class _PresetChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  const _PresetChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.primary.withOpacity(0.1)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active
+                ? AppColors.primary.withOpacity(0.4)
+                : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon,
+                  size: 12,
+                  color: active
+                      ? AppColors.primary
+                      : AppColors.textSecondary),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight:
+                    active ? FontWeight.w700 : FontWeight.w500,
+                color: active
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

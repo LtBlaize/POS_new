@@ -21,6 +21,9 @@ import '../widgets/receipt/restaurant_receipt_view.dart';
 import '../widgets/receipt/retail_receipt_view.dart';
 import '../../../core/models/cart_item.dart';
 import '../../settings/settings_provider.dart';
+import '../../auth/manager_override_dialog.dart';
+import '../../../core/services/audit_service.dart';
+import '../../../core/providers/role_permissions_provider.dart';
 
 // ── Payment method selector ───────────────────────────────────────────────────
 
@@ -947,10 +950,57 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
     super.dispose();
   }
 
-  void _apply() {
+  Future<void> _apply() async {
     final value = double.tryParse(_controller.text) ?? 0;
+    if (value <= 0) {
+      ref.read(cartProvider.notifier).applyOrderDiscount(0, _type);
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Load capability from JSONB — not a hardcoded role check
+    final caps = ref.read(activeRoleCapabilitiesProvider).valueOrNull;
+
+    // Cap the discount at the role's maximum
+    final maxPct = caps?.maxDiscountPercent ?? 0;
+    if (_type == DiscountType.percentage && maxPct < 100) {
+      if (value > maxPct) {
+        final approved = await requireManagerOverride(
+          context: context,
+          ref: ref,
+          action: 'Apply ${value.toStringAsFixed(0)}% discount (limit: $maxPct%)',
+        );
+        if (approved == null) return;
+      }
+    }
+
+    // Require override if role is configured to need one
+    final needsOverride = caps?.requiresManagerForDiscount ?? true;
+    if (needsOverride && (caps?.maxDiscountPercent ?? 0) >= (
+        _type == DiscountType.percentage ? value : 100)) {
+      final approved = await requireManagerOverride(
+        context: context,
+        ref: ref,
+        action: 'Apply ${_type == DiscountType.percentage ? '${value.toStringAsFixed(0)}%' : '₱${value.toStringAsFixed(2)}'} discount',
+      );
+      if (approved == null) return;
+    }
+
     ref.read(cartProvider.notifier).applyOrderDiscount(value, _type);
-    Navigator.of(context).pop();
+
+    // Audit log
+    ref.read(auditServiceProvider).log(
+      actionType:  AuditAction.discountApplied,
+      entityType:  'cart',
+      description: 'Discount applied: '
+          '${_type == DiscountType.percentage ? '${value.toStringAsFixed(0)}%' : '₱${value.toStringAsFixed(2)}'} off',
+      metadata: {
+        'type':  _type == DiscountType.percentage ? 'percentage' : 'fixed',
+        'value': value,
+      },
+    );
+
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -1070,7 +1120,7 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
             const SizedBox(height: 14),
 
             GestureDetector(
-              onTap: _apply,
+              onTap: () => _apply(),
               child: Container(
                 width: double.infinity,
                 height: 50,

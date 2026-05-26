@@ -7,6 +7,7 @@ import '../../core/services/local_db_service.dart';
 import '../../core/services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../core/providers/product_provider.dart'; // ✅ REQUIRED IMPORT
+import '../../config/business_config.dart';
 
 // ── InventoryEntry ────────────────────────────────────────────────────────────
 
@@ -37,12 +38,14 @@ class InventoryState {
   final bool loading;
   final String? error;
   final bool isOffline;
+  final String? lowStockAlert; // non-null = show alert banner
 
   const InventoryState({
     this.entries = const [],
     this.loading = false,
     this.error,
     this.isOffline = false,
+    this.lowStockAlert,
   });
 
   InventoryState copyWith({
@@ -50,12 +53,14 @@ class InventoryState {
     bool? loading,
     String? error,
     bool? isOffline,
+    String? lowStockAlert,
   }) =>
       InventoryState(
         entries: entries ?? this.entries,
         loading: loading ?? this.loading,
         error: error,
         isOffline: isOffline ?? this.isOffline,
+        lowStockAlert: lowStockAlert,
       );
 
   List<InventoryEntry> get lowStockItems =>
@@ -200,6 +205,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         loading: false,
         isOffline: false,
       );
+
+      // Fire low stock alerts if enabled
+      await _checkLowStockAlerts(entries, threshold);
+
     } catch (e, stack) {
       debugPrint('[Inventory] Supabase load failed: $e\n$stack');
       state = state.copyWith(
@@ -211,6 +220,8 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
   }
 
   Future<void> refresh() => _load();
+
+  void dismissAlert() => state = state.copyWith(lowStockAlert: null);
 
   // ── Adjust stock ──────────────────────────────────────────────────────────
 
@@ -358,6 +369,50 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           action: 'restock', notes: notes ?? 'Restock');
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  Future<void> _checkLowStockAlerts(
+    List<InventoryEntry> entries,
+    int threshold,
+  ) async {
+    try {
+      // Check if alerts are enabled in business config
+      final config = _ref.read(businessConfigProvider);
+      if (config == null || !config.enableInventoryAlerts) return;
+
+      final lowItems = entries.where((e) => e.isLowStock).toList();
+      if (lowItems.isEmpty) return;
+
+      // Get products already alerted in the last 24h to avoid spamming
+      final alreadyAlerted =
+          await _local.getRecentlyAlertedProductIds(_businessId);
+
+      final toAlert =
+          lowItems.where((e) => !alreadyAlerted.contains(e.product.id)).toList();
+      if (toAlert.isEmpty) return;
+
+      // Mark all as alerted first so concurrent loads don't double-fire
+      for (final entry in toAlert) {
+        await _local.markLowStockAlerted(
+          productId: entry.product.id,
+          businessId: _businessId,
+          productName: entry.product.name,
+          stockQuantity: entry.stock,
+        );
+      }
+
+      // Build the alert message
+      final names = toAlert.take(3).map((e) => e.product.name).join(', ');
+      final extra = toAlert.length > 3 ? ' +${toAlert.length - 3} more' : '';
+      final message = '${toAlert.length} item${toAlert.length > 1 ? 's' : ''} low: $names$extra';
+
+      debugPrint('[Inventory] Low stock alert: $message');
+
+      // Update state with a dismissible alert message
+      state = state.copyWith(lowStockAlert: message);
+    } catch (e) {
+      debugPrint('[Inventory] Alert check failed: $e');
+    }
+  }
 
   void _updateEntry(int index, InventoryEntry updated) {
     final list = List<InventoryEntry>.from(state.entries);

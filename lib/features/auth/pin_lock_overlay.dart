@@ -11,6 +11,7 @@ import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/open_shift_screen.dart';
 import '../../core/providers/role_permissions_provider.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../core/services/audit_service.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -232,6 +233,12 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
       HapticFeedback.lightImpact();
       ref.read(activeStaffProvider.notifier).login(staff);
       ref.read(rolePermissionsProvider.notifier).refresh();
+      // Audit staff login
+      ref.read(auditServiceProvider).log(
+        actionType:  AuditAction.staffLogin,
+        description: '${staff.name} logged in (${staff.role.label})',
+        metadata:    {'role': staff.role.value},
+      );
       widget.onUnlocked();
     } else {
       HapticFeedback.heavyImpact();

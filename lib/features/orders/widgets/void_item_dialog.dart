@@ -10,6 +10,7 @@ import '../../../core/models/void_record.dart';
 import '../../../core/providers/order_provider.dart';
 import '../../../core/providers/staff_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
+import '../../../core/services/audit_service.dart';
 
 // ── Result returned to caller ─────────────────────────────────────────────────
 
@@ -159,6 +160,23 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             trackInventory: widget.item.product.trackInventory,
             currentStock: widget.item.product.stockQuantity,
           );
+
+      // Audit log
+      await ref.read(auditServiceProvider).log(
+        actionType:  AuditAction.voidItem,
+        entityType:  'order_item',
+        entityId:    widget.orderId,
+        description: 'Voided ${widget.item.quantity}× ${widget.item.product.name}'
+            ' — reason: $_selectedReason',
+        authorisedBy: widget.authorisedStaff,
+        metadata: {
+          'product_name': widget.item.product.name,
+          'quantity':     widget.item.quantity,
+          'unit_price':   widget.item.product.price,
+          'reason':       _selectedReason,
+          'order_id':     widget.orderId,
+        },
+      );
 
       // Invalidate so the orders screen refreshes
       ref.invalidate(ordersStreamProvider);

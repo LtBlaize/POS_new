@@ -162,6 +162,7 @@ class ReportExcelService {
     required DateTime date,
     required DailyReport dailyReport,
     required List<ShiftEntry> shiftEntries,
+    DateRange? dateRange,
   }) async {
     final profile    = await _ref.read(profileProvider.future);
     final businessId = profile?.businessId ?? '';
@@ -170,10 +171,12 @@ class ReportExcelService {
     final config     = _ref.read(settingsProvider).config;
 
     // ── Fetch data ──────────────────────────────────────────────────────────
-    final salesRows       = await _fetchSalesRows(businessId, date, isOnline, local, shiftEntries);
+    final rangeStart = dateRange?.start ?? date;
+    final rangeEnd   = dateRange?.end   ?? date;
+    final salesRows       = await _fetchSalesRowsRange(businessId, rangeStart, rangeEnd, isOnline, local, shiftEntries);
     final inventoryRows   = await _fetchInventoryRows(businessId, isOnline, local);
-    final expenseRows     = await _fetchExpenseRows(businessId, date, isOnline, local, shiftEntries);
-    final supplierRows    = await _fetchSupplierRows(businessId, date, isOnline);
+    final expenseRows     = await _fetchExpenseRowsRange(businessId, rangeStart, rangeEnd, isOnline, local, shiftEntries);
+    final supplierRows    = await _fetchSupplierRowsRange(businessId, rangeStart, rangeEnd, isOnline);
     final payrollRows     = _buildPayrollRows(shiftEntries);
     final performanceRows = _buildPerformanceRows(shiftEntries);
     final cashFlowRows    = _buildCashFlowRows(shiftEntries);
@@ -190,10 +193,15 @@ class ReportExcelService {
     _buildPerformance(excel, performanceRows);
     _buildSuppliers(excel, supplierRows);
     _buildCashFlow(excel, cashFlowRows);
+    _buildTaxReport(excel, salesRows, dailyReport, date);
+    _buildDiscountReport(excel, salesRows, dailyReport);
 
     // ── Save ────────────────────────────────────────────────────────────────
     final dir     = await getTemporaryDirectory();
-    final path    = '${dir.path}/pos_report_${_fmtDate(date)}.xlsx';
+    final suffix  = (dateRange != null && !dateRange.isSingleDay)
+        ? '${_fmtDate(dateRange.start)}_to_${_fmtDate(dateRange.end)}'
+        : _fmtDate(date);
+    final path    = '${dir.path}/pos_report_$suffix.xlsx';
     final encoded = excel.encode();
     if (encoded == null) throw Exception('Excel encoding returned null');
     await File(path).writeAsBytes(encoded, flush: true);
@@ -204,15 +212,22 @@ class ReportExcelService {
   // DATA FETCHERS
   // ─────────────────────────────────────────────────────────────────────────
 
+  Future<List<_SalesRow>> _fetchSalesRowsRange(
+    String businessId, DateTime start, DateTime end, bool isOnline,
+    LocalDbService local, List<ShiftEntry> shiftEntries,
+  ) async {
+    return _fetchSalesRows(businessId, start, end, isOnline, local, shiftEntries);
+  }
+
   Future<List<_SalesRow>> _fetchSalesRows(
-    String businessId, DateTime date, bool isOnline,
+    String businessId, DateTime start, DateTime end, bool isOnline,
     LocalDbService local, List<ShiftEntry> shiftEntries,
   ) async {
     final cashierNames = {
       for (final e in shiftEntries) e.shift.staffId: e.shift.staffName,
     };
-    final dayStart = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd   = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc().toIso8601String();
+    final dayStart = DateTime(start.year, start.month, start.day).toUtc().toIso8601String();
+    final dayEnd   = DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String();
 
     List<Map<String, dynamic>> rows = [];
     if (isOnline) {
@@ -238,7 +253,7 @@ class ReportExcelService {
     final result = <_SalesRow>[];
     int seq = 1;
     for (final order in rows) {
-      final createdAt   = DateTime.tryParse(order['created_at'] as String? ?? '')?.toLocal() ?? date;
+      final createdAt   = DateTime.tryParse(order['created_at'] as String? ?? '')?.toLocal() ?? start;
       final payMethod   = _normalisePayment(order['payment_method'] as String? ?? 'cash');
       final cashierName = order['cashier_name'] as String? ??
           cashierNames[order['cashier_id'] as String? ?? ''] ?? 'Unknown';
@@ -326,12 +341,17 @@ class ReportExcelService {
     )).cast<Map<String, dynamic>>();
   }
 
+  Future<List<_ExpenseRow>> _fetchExpenseRowsRange(
+    String businessId, DateTime start, DateTime end, bool isOnline,
+    LocalDbService local, List<ShiftEntry> shiftEntries,
+  ) => _fetchExpenseRows(businessId, start, end, isOnline, local, shiftEntries);
+
   Future<List<_ExpenseRow>> _fetchExpenseRows(
-    String businessId, DateTime date, bool isOnline,
+    String businessId, DateTime start, DateTime end, bool isOnline,
     LocalDbService local, List<ShiftEntry> shiftEntries,
   ) async {
-    final dayStart = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd   = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc().toIso8601String();
+    final dayStart = DateTime(start.year, start.month, start.day).toUtc().toIso8601String();
+    final dayEnd   = DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String();
     if (isOnline) {
       try {
         final raw = await Supabase.instance.client
@@ -343,7 +363,7 @@ class ReportExcelService {
         final rows = List<Map<String, dynamic>>.from(raw as List);
         if (rows.isNotEmpty) {
           return rows.map((r) => _ExpenseRow(
-            date:          DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? date,
+            date:          DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? start,
             category:      r['category']    as String? ?? 'Operations',
             description:   r['description'] as String? ?? '',
             vendor:        r['vendor']      as String? ?? '',
@@ -365,12 +385,16 @@ class ReportExcelService {
     )).toList();
   }
 
+  Future<List<_SupplierRow>> _fetchSupplierRowsRange(
+    String businessId, DateTime start, DateTime end, bool isOnline,
+  ) => _fetchSupplierRows(businessId, start, end, isOnline);
+
   Future<List<_SupplierRow>> _fetchSupplierRows(
-    String businessId, DateTime date, bool isOnline,
+    String businessId, DateTime start, DateTime end, bool isOnline,
   ) async {
     if (!isOnline) return [];
-    final dayStart = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd   = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc().toIso8601String();
+    final dayStart = DateTime(start.year, start.month, start.day).toUtc().toIso8601String();
+    final dayEnd   = DateTime(end.year, end.month, end.day, 23, 59, 59).toUtc().toIso8601String();
     try {
       final raw = await Supabase.instance.client
           .from('supplier_purchases')
@@ -379,7 +403,7 @@ class ReportExcelService {
           .gte('purchase_date', dayStart).lte('purchase_date', dayEnd)
           .order('purchase_date');
       return (raw as List).cast<Map<String, dynamic>>().map((r) => _SupplierRow(
-        purchaseDate:     DateTime.tryParse(r['purchase_date'] as String? ?? '')?.toLocal() ?? date,
+        purchaseDate:     DateTime.tryParse(r['purchase_date'] as String? ?? '')?.toLocal() ?? start,
         supplierName:     r['supplier_name']   as String? ?? '',
         productPurchased: r['product_name']    as String? ?? '',
         quantity:         (r['quantity']        as num?)?.toInt()    ?? 0,
@@ -497,7 +521,7 @@ class ReportExcelService {
       _ws(sh, r, 9,  l.paymentMethod);
       _ws(sh, r, 10, l.cashier);
       _ws(sh, r, 11, l.customerName);
-      _wf(sh, r, 12, 'F$er*(1-G$er/100)-2.8');
+      _wf(sh, r, 12, 'F$er*(1-G$er/100)');
       _wf(sh, r, 13, 'M$er*E$er');
     }
   }
@@ -603,6 +627,129 @@ class ReportExcelService {
       _wf(sh, r, 5, 'D$er*E$er');
       _ws(sh, r, 6, l.deliveryStatus);
       _ws(sh, r, 7, l.paymentStatus);
+    }
+  }
+
+  void _buildDiscountReport(
+    Excel excel,
+    List<_SalesRow> salesRows,
+    DailyReport report,
+  ) {
+    final sh = excel['💳 Discounts'];
+    _wh(sh, 0, 0, '💳  DISCOUNT & PROMO REPORT');
+
+    // ── Summary ────────────────────────────────────────────────────────────
+    _wh(sh, 2, 0, 'SUMMARY');
+    _ws(sh, 3, 0, 'Total Discounts Given');
+    _wd(sh, 3, 1, report.totalDiscount);
+    _ws(sh, 4, 0, 'Total Revenue');
+    _wd(sh, 4, 1, report.totalRevenue);
+    _ws(sh, 5, 0, 'Discount Rate');
+    final rateCell = sh.cell(
+        CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 5));
+    rateCell.value = FormulaCellValue('IFERROR(B4/(B5+B4)*100,0)');
+
+    // ── By cashier ─────────────────────────────────────────────────────────
+    _wh(sh, 7, 0, 'BY CASHIER');
+    _writeHeaders(sh, 8, ['Cashier', 'Total Discount', 'Share (%)']);
+    final byStaff = report.discountByStaff.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    for (var i = 0; i < byStaff.length; i++) {
+      final r = 9 + i;
+      final er = r + 1;
+      _ws(sh, r, 0, byStaff[i].key);
+      _wd(sh, r, 1, byStaff[i].value);
+      _wf(sh, r, 2, 'IFERROR(B$er/\$B\$4*100,0)');
+    }
+
+    // ── Transaction detail ─────────────────────────────────────────────────
+    final detailStart = 10 + byStaff.length + 2;
+    _wh(sh, detailStart, 0, 'DISCOUNTED TRANSACTIONS');
+    _writeHeaders(sh, detailStart + 1, [
+      'Date', 'Invoice #', 'Product', 'Unit Price',
+      'Qty', 'Discount (%)', 'Discount Amount', 'Cashier',
+    ]);
+    final discounted =
+        salesRows.where((r) => r.discountPercent > 0).toList();
+    for (var i = 0; i < discounted.length; i++) {
+      final r = detailStart + 2 + i;
+      final l = discounted[i];
+      final discAmt =
+          l.unitPrice * l.qtySold * (l.discountPercent / 100);
+      _ws(sh, r, 0, _fmtDate(l.date));
+      _ws(sh, r, 1, l.invoiceNumber);
+      _ws(sh, r, 2, l.productName);
+      _wd(sh, r, 3, l.unitPrice);
+      _wi(sh, r, 4, l.qtySold);
+      _wd(sh, r, 5, l.discountPercent);
+      _wd(sh, r, 6, discAmt);
+      _ws(sh, r, 7, l.cashier);
+    }
+  }
+
+  void _buildTaxReport(
+    Excel excel,
+    List<_SalesRow> salesRows,
+    DailyReport report,
+    DateTime date,
+  ) {
+    final sh = excel['🧾 Tax Report'];
+    _wh(sh, 0, 0, '🧾  TAX COLLECTION REPORT');
+
+    // ── Summary block ──────────────────────────────────────────────────────
+    _wh(sh, 2, 0, 'SUMMARY');
+    _ws(sh, 3, 0, 'Report Date');
+    _ws(sh, 3, 1, _fmtDate(date));
+    _ws(sh, 4, 0, 'Gross Revenue (incl. tax)');
+    _wd(sh, 4, 1, report.totalRevenue);
+    _ws(sh, 5, 0, 'Total Tax Collected');
+    _wd(sh, 5, 1, report.totalTaxCollected);
+    _ws(sh, 6, 0, 'Net Revenue (excl. tax)');
+    final sh6 = sh.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 6));
+    sh6.value = FormulaCellValue('B5-B6');
+    _ws(sh, 7, 0, 'Total Orders Taxed');
+    _wi(sh, 7, 1, report.completedOrders);
+    _ws(sh, 8, 0, 'Effective Tax Rate');
+    final sh8 = sh.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 8));
+    sh8.value = FormulaCellValue('IFERROR(B6/B5*100,0)');
+
+    // ── Per-transaction detail ─────────────────────────────────────────────
+    _wh(sh, 11, 0, 'TRANSACTION DETAIL');
+    _writeHeaders(sh, 12, [
+      'Date', 'Invoice #', 'Product', 'Category',
+      'Unit Price', 'Qty', 'Subtotal', 'Tax Rate (%)', 'Tax Amount', 'Payment Method',
+    ]);
+
+    for (var i = 0; i < salesRows.length; i++) {
+      final r = 13 + i;
+      final l = salesRows[i];
+      final subtotal = l.unitPrice * l.qtySold * (1 - l.discountPercent / 100);
+      final taxAmt = subtotal * (l.taxPercent / 100);
+      _ws(sh, r, 0, _fmtDate(l.date));
+      _ws(sh, r, 1, l.invoiceNumber);
+      _ws(sh, r, 2, l.productName);
+      _ws(sh, r, 3, l.category);
+      _wd(sh, r, 4, l.unitPrice);
+      _wi(sh, r, 5, l.qtySold);
+      _wd(sh, r, 6, subtotal);
+      _wd(sh, r, 7, l.taxPercent);
+      _wd(sh, r, 8, taxAmt);
+      _ws(sh, r, 9, l.paymentMethod);
+    }
+
+    // ── Totals row ─────────────────────────────────────────────────────────
+    if (salesRows.isNotEmpty) {
+      final totalRow = 13 + salesRows.length;
+      final lastEr = totalRow; // last data Excel row
+      _wh(sh, totalRow, 1, 'TOTALS');
+      final subtotalCell = sh.cell(
+          CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: totalRow));
+      subtotalCell.value = FormulaCellValue('SUM(G14:G$lastEr)');
+      subtotalCell.cellStyle = CellStyle(bold: true);
+      final taxTotalCell = sh.cell(
+          CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: totalRow));
+      taxTotalCell.value = FormulaCellValue('SUM(I14:I$lastEr)');
+      taxTotalCell.cellStyle = CellStyle(bold: true);
     }
   }
 

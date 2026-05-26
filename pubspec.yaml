@@ -53,6 +53,9 @@ dependencies:
   mobile_scanner: ^5.2.3
   collection: ^1.18.0
 
+  file_picker: ^8.0.0
+  file_saver: ^0.2.14
+
   printing: ^5.13.1        # PDF generation + print dialog
   pdf: ^3.10.8             # Build the thermal receipt PDF
   esc_pos_utils_plus: ^2.0.1  # ESC/POS commands for cash drawer pulse

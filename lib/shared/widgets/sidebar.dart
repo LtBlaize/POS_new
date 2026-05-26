@@ -6,6 +6,7 @@ import '../../core/providers/role_permissions_provider.dart';
 import '../../features/auth/auth_provider.dart';
 import 'app_colors.dart';
 import '../../shared/widgets/offline_banner.dart';
+import '../../features/inventory/inventory_service.dart';
 
 class SidebarItem {
   final IconData icon;
@@ -171,8 +172,16 @@ class Sidebar extends ConsumerWidget {
 
           ...visibleItems.map((item) {
             final isActive = currentRoute == item.route;
+            final isInventory = item.route == '/inventory';
+            final lowStockAlert = isInventory
+                ? ref.watch(inventoryProvider).lowStockAlert
+                : null;
+            final hasBadge = lowStockAlert != null;
+
             return Tooltip(
-              message: item.label,
+              message: hasBadge
+                  ? '${item.label} — $lowStockAlert'
+                  : item.label,
               preferBelow: false,
               child: GestureDetector(
                 onTap: () =>
@@ -195,12 +204,30 @@ class Sidebar extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        item.icon,
-                        color: isActive
-                            ? AppColors.accent
-                            : AppColors.textOnDark.withOpacity(0.5),
-                        size: 24,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            item.icon,
+                            color: isActive
+                                ? AppColors.accent
+                                : AppColors.textOnDark.withOpacity(0.5),
+                            size: 24,
+                          ),
+                          if (hasBadge)
+                            Positioned(
+                              top: -3,
+                              right: -5,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.danger,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(

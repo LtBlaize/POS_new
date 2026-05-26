@@ -4,6 +4,7 @@ import '../../../config/business_config.dart';
 import 'kitchen_settings_section.dart';
 import '../../../core/models/business.dart';
 import '../../../shared/widgets/app_colors.dart';
+import '../../../core/services/audit_service.dart';
 
 
 class GeneralSettingsSection extends ConsumerStatefulWidget {
@@ -204,6 +205,16 @@ class _GeneralSettingsSectionState
 
   void _save(BusinessConfig config) {
     ref.read(settingsProvider.notifier).saveConfig(config);
+    ref.read(auditServiceProvider).log(
+      actionType:  AuditAction.settingsChanged,
+      description: 'Business settings updated',
+      metadata: {
+        'tax_rate':        config.taxRate,
+        'allow_discounts': config.allowDiscounts,
+        'kitchen_display': config.enableKitchenDisplay,
+        'table_mgmt':      config.enableTableManagement,
+      },
+    );
   }
 
   void _saveAll(BusinessConfig config) {

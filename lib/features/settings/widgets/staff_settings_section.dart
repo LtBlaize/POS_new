@@ -5,6 +5,7 @@ import '../../../core/models/staff.dart';
 import '../../../core/providers/staff_provider.dart';
 import '../../../core/providers/role_permissions_provider.dart';
 import '../../../features/auth/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/widgets/app_colors.dart';
 
 class StaffSettingsSection extends ConsumerWidget {
@@ -170,6 +171,13 @@ class _RolePermissionsCard extends ConsumerWidget {
     'settings': ('Settings', Icons.settings_outlined),
   };
 
+  static const _capabilityLabels = <String, (String, IconData)>{
+    'can_void_item':    ('Void items', Icons.remove_circle_outline),
+    'can_void_order':   ('Void orders', Icons.remove_shopping_cart_outlined),
+    'can_apply_discount': ('Apply discounts', Icons.local_offer_outlined),
+    'can_issue_refund': ('Issue refunds', Icons.replay_outlined),
+  };
+
   static const _roleColors = {
     StaffRole.manager: Color(0xFF4CAF50),
     StaffRole.cashier: Color(0xFF2196F3),
@@ -263,25 +271,97 @@ class _RolePermissionsCard extends ConsumerWidget {
                         fontSize: 11,
                         color: AppColors.textSecondary),
                   ),
-                  children: tabsForBusinessType(isRestaurant).map((tab) {
-                    final info = _tabLabels[tab];
-                    if (info == null) return const SizedBox.shrink();
-                    final (label, icon) = info;
-                    final enabled = roleTabs.contains(tab);
-
-                    return SwitchListTile(
-                      dense: true,
-                      secondary: Icon(icon,
-                          size: 18, color: AppColors.textSecondary),
-                      title: Text(label,
-                          style: const TextStyle(fontSize: 13)),
-                      value: enabled,
-                      activeThumbColor: color,
-                      onChanged: (_) => ref
-                          .read(rolePermissionsProvider.notifier)
-                          .toggle(roleKey, tab),
-                    );
-                  }).toList(),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text('Screen access',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary)),
+                    ),
+                    ...tabsForBusinessType(isRestaurant).map((tab) {
+                      final info = _tabLabels[tab];
+                      if (info == null) return const SizedBox.shrink();
+                      final (label, icon) = info;
+                      final enabled = roleTabs.contains(tab);
+                      return SwitchListTile(
+                        dense: true,
+                        secondary: Icon(icon,
+                            size: 18, color: AppColors.textSecondary),
+                        title: Text(label,
+                            style: const TextStyle(fontSize: 13)),
+                        value: enabled,
+                        activeThumbColor: color,
+                        onChanged: (_) => ref
+                            .read(rolePermissionsProvider.notifier)
+                            .toggle(roleKey, tab),
+                      );
+                    }),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text('Actions',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary)),
+                    ),
+                    ..._capabilityLabels.entries.map((entry) {
+                      final (label, icon) = entry.value;
+                      return FutureBuilder(
+                        future: Supabase.instance.client
+                            .from('business_configs')
+                            .select('role_permissions')
+                            .eq('business_id',
+                                ref.read(profileProvider).asData?.value?.businessId ?? '')
+                            .maybeSingle(),
+                        builder: (context, snapshot) {
+                          final raw = snapshot.data?['role_permissions']
+                              as Map<String, dynamic>?;
+                          final roleData =
+                              raw?[roleKey] as Map<String, dynamic>?;
+                          final enabled =
+                              roleData?[entry.key] as bool? ?? false;
+                          return SwitchListTile(
+                            dense: true,
+                            secondary: Icon(icon,
+                                size: 18, color: AppColors.textSecondary),
+                            title: Text(label,
+                                style: const TextStyle(fontSize: 13)),
+                            value: enabled,
+                            activeThumbColor: color,
+                            onChanged: (_) async {
+                              final client = Supabase.instance.client;
+                              final bizId = ref
+                                      .read(profileProvider)
+                                      .asData
+                                      ?.value
+                                      ?.businessId ??
+                                  '';
+                              final currentRow = await client
+                                  .from('business_configs')
+                                  .select('role_permissions')
+                                  .eq('business_id', bizId)
+                                  .maybeSingle();
+                              final current = Map<String, dynamic>.from(
+                                  currentRow?['role_permissions']
+                                      as Map<String, dynamic>? ??
+                                      {});
+                              final roleMap = Map<String, dynamic>.from(
+                                  current[roleKey] as Map<String, dynamic>? ??
+                                      {});
+                              roleMap[entry.key] = !enabled;
+                              current[roleKey] = roleMap;
+                              await client
+                                  .from('business_configs')
+                                  .update({'role_permissions': current})
+                                  .eq('business_id', bizId);
+                            },
+                          );
+                        },
+                      );
+                    }),
+                  ],
                 );
               }).toList(),
             ),

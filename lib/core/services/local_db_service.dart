@@ -12,6 +12,8 @@
 // v8  — barcode index on products
 // v9  — parked_orders table
 // v10 — product_variants table
+// v11 — low_stock_alerts table
+// v12 — cost_at_sale column on order_items
 
 import 'dart:async';
 import 'dart:convert';
@@ -34,7 +36,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 10;
+const _kDbVersion = 12;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ class LocalDbService {
         product_id TEXT NOT NULL,
         product_name TEXT NOT NULL,
         unit_price REAL NOT NULL,
+        cost_at_sale REAL NOT NULL DEFAULT 0,
         quantity INTEGER NOT NULL,
         subtotal REAL NOT NULL,
         FOREIGN KEY (order_id) REFERENCES orders(id)
@@ -306,6 +309,18 @@ class LocalDbService {
       'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
     );
 
+    // ── v11 tables ────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE low_stock_alerts (
+        product_id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        stock_quantity INTEGER NOT NULL,
+        alerted_at TEXT NOT NULL
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -456,6 +471,30 @@ class LocalDbService {
       );
       debugPrint('[LocalDb] v10: product_variants table created');
     }
+
+    if (oldVersion < 11) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS low_stock_alerts (
+          product_id TEXT PRIMARY KEY,
+          business_id TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          stock_quantity INTEGER NOT NULL,
+          alerted_at TEXT NOT NULL
+        )
+      ''');
+      debugPrint('[LocalDb] v11: low_stock_alerts table created');
+    }
+
+    if (oldVersion < 12) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN cost_at_sale REAL NOT NULL DEFAULT 0',
+        );
+        debugPrint('[LocalDb] v12: cost_at_sale added to order_items');
+      } catch (e) {
+        debugPrint('[LocalDb] v12: cost_at_sale already exists ($e)');
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -583,7 +622,7 @@ class LocalDbService {
 
   /// Replaces all variants for a product — used after a Supabase fetch.
   Future<void> upsertVariants(
-      String productId, List<ProductVariant> variants) =>
+          String productId, List<ProductVariant> variants) =>
       _write((d) async {
         final now = DateTime.now().toIso8601String();
         await d.transaction((txn) async {
@@ -715,6 +754,7 @@ class LocalDbService {
             'product_id': item.product.id,
             'product_name': item.product.name,
             'unit_price': item.product.price,
+            'cost_at_sale': item.costAtSale,
             'quantity': item.quantity,
             'subtotal': item.total,
           },
@@ -779,6 +819,7 @@ class LocalDbService {
                   'product_id': item.product.id,
                   'product_name': item.product.name,
                   'unit_price': item.product.price,
+                  'cost_at_sale': item.costAtSale,
                   'quantity': item.quantity,
                   'subtotal': item.total,
                 },
@@ -862,7 +903,11 @@ class LocalDbService {
         name: r['product_name'] as String,
         price: (r['unit_price'] as num).toDouble(),
       );
-      return CartItem(product: product, quantity: r['quantity'] as int);
+      return CartItem(
+        product: product,
+        quantity: r['quantity'] as int,
+        costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
+      );
     }).toList();
   }
 
@@ -1287,4 +1332,57 @@ class LocalDbService {
           whereArgs: [id],
         );
       });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // LOW STOCK ALERTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Returns product IDs that have already been alerted recently (within 24h).
+  Future<Set<String>> getRecentlyAlertedProductIds(String businessId) async {
+    final d = await db;
+    final cutoff = DateTime.now()
+        .subtract(const Duration(hours: 24))
+        .toIso8601String();
+    final rows = await d.query(
+      'low_stock_alerts',
+      columns: ['product_id'],
+      where: 'business_id = ? AND alerted_at > ?',
+      whereArgs: [businessId, cutoff],
+    );
+    return rows.map((r) => r['product_id'] as String).toSet();
+  }
+
+  /// Marks a product as alerted. Call this after firing the notification.
+  Future<void> markLowStockAlerted({
+    required String productId,
+    required String businessId,
+    required String productName,
+    required int stockQuantity,
+  }) =>
+      _write((d) async {
+        await d.insert(
+          'low_stock_alerts',
+          {
+            'product_id': productId,
+            'business_id': businessId,
+            'product_name': productName,
+            'stock_quantity': stockQuantity,
+            'alerted_at': DateTime.now().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      });
+
+  /// Clears stale alert records older than 24h — call on app start.
+  Future<void> pruneStaleAlerts() async {
+    final d = await db;
+    final cutoff = DateTime.now()
+        .subtract(const Duration(hours: 24))
+        .toIso8601String();
+    await d.delete(
+      'low_stock_alerts',
+      where: 'alerted_at < ?',
+      whereArgs: [cutoff],
+    );
+  }
 }

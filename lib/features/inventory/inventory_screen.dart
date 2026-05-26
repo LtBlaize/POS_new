@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'inventory_service.dart';
+import 'inventory_import_service.dart';
+import 'inventory_export_service.dart';
+import 'widgets/import_preview_dialog.dart';
 import '../../shared/widgets/app_colors.dart';
 import 'widgets/add_product_dialog.dart';
 import 'widgets/inventory_shared.dart';
@@ -109,7 +112,7 @@ class InventoryScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // ── Phone: row 2 — add + refresh ──────────────
+                  // ── Phone: row 2 — add + import + export + refresh ──
                   Row(
                     children: [
                       Expanded(
@@ -134,6 +137,10 @@ class InventoryScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      _ImportButton(),
+                      const SizedBox(width: 4),
+                      _ExportButton(),
+                      const SizedBox(width: 4),
                       IconButton(
                         onPressed: () =>
                             ref.read(inventoryProvider.notifier).refresh(),
@@ -196,6 +203,10 @@ class InventoryScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      _ImportButton(),
+                      const SizedBox(width: 4),
+                      _ExportButton(),
+                      const SizedBox(width: 4),
                       IconButton(
                         onPressed: () =>
                             ref.read(inventoryProvider.notifier).refresh(),
@@ -475,4 +486,163 @@ List<InventoryEntry> _applyFilters(
       });
 
   return list;
+}
+
+// ── Import button ─────────────────────────────────────────────────────────────
+
+class _ImportButton extends ConsumerStatefulWidget {
+  const _ImportButton();
+  @override
+  ConsumerState<_ImportButton> createState() => _ImportButtonState();
+}
+
+class _ImportButtonState extends ConsumerState<_ImportButton> {
+  bool _busy = false;
+
+  Future<void> _onPressed() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final service = ref.read(importServiceProvider);
+      final preview = await service.pickAndPreview();
+      if (preview == null || !mounted) return;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => ImportPreviewDialog(
+          preview: preview,
+          onConfirm: () => _commit(preview),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commit(preview) async {
+    final service = ref.read(importServiceProvider);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Importing…'), duration: Duration(seconds: 60)),
+    );
+
+    final result = await service.commit(preview);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (result.success) {
+      await ref.read(inventoryProvider.notifier).refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✓ ${result.inserted} added, ${result.updated} updated',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Import error: ${result.error}'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Import from CSV',
+      child: IconButton(
+        onPressed: _busy ? null : _onPressed,
+        icon: _busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.upload_outlined,
+                size: 18, color: AppColors.textSecondary),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Export button ─────────────────────────────────────────────────────────────
+
+class _ExportButton extends ConsumerStatefulWidget {
+  const _ExportButton();
+  @override
+  ConsumerState<_ExportButton> createState() => _ExportButtonState();
+}
+
+class _ExportButtonState extends ConsumerState<_ExportButton> {
+  bool _busy = false;
+
+  Future<void> _onPressed() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(exportServiceProvider).exportToCsv();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inventory exported to CSV'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Export to CSV',
+      child: IconButton(
+        onPressed: _busy ? null : _onPressed,
+        icon: _busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.download_outlined,
+                size: 18, color: AppColors.textSecondary),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
 }

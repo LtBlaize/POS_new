@@ -10,6 +10,7 @@ class ProductVariant {
   final String? barcode;
   final int stockQuantity;
   final bool isActive;
+  final double costPrice;
 
   const ProductVariant({
     required this.id,
@@ -21,6 +22,7 @@ class ProductVariant {
     this.barcode,
     this.stockQuantity = 0,
     this.isActive = true,
+    this.costPrice = 0,
   });
 
   /// Resolved price = parent base price + delta
@@ -38,6 +40,7 @@ class ProductVariant {
         barcode: map['barcode'] as String?,
         stockQuantity: map['stock_quantity'] as int? ?? 0,
         isActive: map['is_active'] as bool? ?? true,
+        costPrice: (map['cost_price'] as num?)?.toDouble() ?? 0,
       );
 
   /// For SQLite rows (booleans as int)
@@ -52,6 +55,7 @@ class ProductVariant {
         barcode: row['barcode'] as String?,
         stockQuantity: row['stock_quantity'] as int? ?? 0,
         isActive: (row['is_active'] as int? ?? 1) == 1,
+        costPrice: (row['cost_price'] as num?)?.toDouble() ?? 0,
       );
 
   Map<String, dynamic> toMap() => {
@@ -63,6 +67,7 @@ class ProductVariant {
         'barcode': barcode,
         'stock_quantity': stockQuantity,
         'is_active': isActive,
+        'cost_price': costPrice,
       };
 
   ProductVariant copyWith({
@@ -73,6 +78,7 @@ class ProductVariant {
     String? barcode,
     int? stockQuantity,
     bool? isActive,
+    double? costPrice,
   }) =>
       ProductVariant(
         id: id,
@@ -84,6 +90,7 @@ class ProductVariant {
         barcode: barcode ?? this.barcode,
         stockQuantity: stockQuantity ?? this.stockQuantity,
         isActive: isActive ?? this.isActive,
+        costPrice: costPrice ?? this.costPrice,
       );
 
   @override

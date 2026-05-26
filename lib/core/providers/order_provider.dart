@@ -16,6 +16,7 @@ import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 import 'product_provider.dart';
 
+
 // ── Live / cached order stream ────────────────────────────────────────────────
 
 final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
@@ -62,21 +63,22 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
             .inFilter('order_id', orderIds);
 
         final itemsByOrder = <String, List<CartItem>>{};
-        for (final item in allItemRows as List) {
-          final orderId = item['order_id'] as String;
-          final pMap =
-              item['products'] as Map<String, dynamic>? ?? {};
-          final product = Product.fromMap({
-            ...pMap,
-            'category': '',
-            'business_id': pMap['business_id'] ?? '',
-          });
-          itemsByOrder
-              .putIfAbsent(orderId, () => [])
-              .add(CartItem(
-                  product: product,
-                  quantity: item['quantity'] as int));
-        }
+          for (final item in allItemRows as List) {
+            final orderId = item['order_id'] as String;
+            final pMap =
+                item['products'] as Map<String, dynamic>? ?? {};
+            final product = Product.fromMap({
+              ...pMap,
+              'category': '',
+              'business_id': pMap['business_id'] ?? '',
+            });
+            itemsByOrder
+                .putIfAbsent(orderId, () => [])
+                .add(CartItem(
+                    product: product,
+                    quantity: item['quantity'] as int,
+                    costAtSale: (item['cost_price'] as num?)?.toDouble() ?? 0));
+          }
 
         final orders = rows.map((row) {
           final orderId = row['id'] as String;
@@ -213,8 +215,10 @@ class OrderService {
               'product_id': item.product.id,
               'product_name': item.product.name,
               'unit_price': item.product.price,
+              'cost_price': item.costAtSale,
               'quantity': item.quantity,
               'subtotal': item.total,
+              'cost_at_sale': _effectiveCost(item),
             })
         .toList();
 
@@ -273,9 +277,10 @@ class OrderService {
               'order_id': offlineId,
               'product_id': i.product.id,
               'product_name': i.product.name,
-              'unit_price': i.product.price,
+              'unit_price': i.effectivePrice,
               'quantity': i.quantity,
               'subtotal': i.total,
+              'cost_at_sale': _effectiveCost(i),
             })
         .toList();
 
@@ -568,16 +573,18 @@ class OrderService {
             .eq('order_id', orderId);
 
         final cartItems = (itemRows as List).map((row) {
-          final pMap =
-              row['products'] as Map<String, dynamic>? ?? {};
-          final product = Product.fromMap({
-            ...pMap,
-            'category': '',
-            'business_id': pMap['business_id'] ?? '',
-          });
-          return CartItem(
-              product: product, quantity: row['quantity'] as int);
-        }).toList();
+            final pMap =
+                row['products'] as Map<String, dynamic>? ?? {};
+            final product = Product.fromMap({
+              ...pMap,
+              'category': '',
+              'business_id': pMap['business_id'] ?? '',
+            });
+            return CartItem(
+                product: product,
+                quantity: row['quantity'] as int,
+                costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0);
+          }).toList();
 
         return Order.fromMap(orderRow, items: cartItems);
       } catch (e) {
@@ -592,6 +599,15 @@ class OrderService {
     final cached = orders.where((o) => o.id == orderId).firstOrNull;
     if (cached != null) return cached;
     throw Exception('Order $orderId not found in local cache');
+  }
+
+  // ── Cost resolution ─────────────────────────────────────────────────────────
+
+  double _effectiveCost(CartItem item) {
+    if (item.selectedVariant != null && item.selectedVariant!.costPrice > 0) {
+      return item.selectedVariant!.costPrice;
+    }
+    return item.product.costPrice;
   }
 
   // ── Inventory deduction ─────────────────────────────────────────────────────

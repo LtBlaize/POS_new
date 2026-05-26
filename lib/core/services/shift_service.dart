@@ -79,7 +79,7 @@ class ShiftService {
     await d.insert('cashier_shifts', payload,
         conflictAlgorithm: ConflictAlgorithm.replace);
 
-    return CashierShift(
+    final shift = CashierShift(
       id: id,
       businessId: businessId,
       staffId: staffId,
@@ -88,6 +88,8 @@ class ShiftService {
       openedAt: now,
       status: ShiftStatus.open,
     );
+
+    return shift;
   }
 
   // ── Get Open Shift ─────────────────────────────────────────────────────────
@@ -189,7 +191,7 @@ class ShiftService {
     await d.update('cashier_shifts', updates,
         where: 'id = ?', whereArgs: [shiftId]);
 
-    return shift.copyWith(
+    final closed = shift.copyWith(
       status: ShiftStatus.closed,
       closedAt: now,
       actualCashCount: actualCashCount,
@@ -201,6 +203,10 @@ class ShiftService {
       creditGiven: summary['credit_given']!,
       creditsPaid: summary['credits_paid']!,
     );
+
+    
+
+    return closed;
   }
 
   // ── Live totals preview ────────────────────────────────────────────────────
