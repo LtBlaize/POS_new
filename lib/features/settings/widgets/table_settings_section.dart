@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../tables/table_provider.dart';
+import '../../tables/floor_plan_view.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 
@@ -159,6 +160,53 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
             ],
           ),
         ),
+
+        const SizedBox(height: 12),
+
+        // Edit layout button
+        if (tableState.tables.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => Dialog(
+                insetPadding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 600,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Row(
+                          children: [
+                            const Text('Edit Floor Plan',
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700)),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Expanded(
+                          child: FloorPlanView(editMode: true)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.edit_location_outlined, size: 16),
+            label: const Text('Edit Floor Plan'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
 
         const SizedBox(height: 12),
 

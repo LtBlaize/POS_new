@@ -108,7 +108,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
     if (items.isEmpty && widget.existingOrderId == null) return;
     if (payNow && widget.existingOrderId == null &&
-        !_computeCanConfirm(subtotal)) return;
+        !_computeCanConfirm(subtotal)) {
+      return;
+    }
 
     final method = ref.read(_selectedPaymentProvider);
     setState(() => payNow ? _placing = true : _sendingToKitchen = true);
@@ -234,7 +236,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
               order: _completedOrder!,
               tendered: _savedTendered,
               change: _savedChange,
-              onDone: () => Navigator.of(context).pop(),
+              onDone: () => Navigator.of(context).pop(_completedOrder),
             );
     }
 
@@ -417,6 +419,11 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                                 : 'Discount',
                       ),
                       const SizedBox(height: 16),
+
+                      if (!widget.isRestaurant)
+                        _OrderTypeSelector(isBusy: isBusy),
+                      if (!widget.isRestaurant)
+                        const SizedBox(height: 16),
 
                       if (ref.watch(discountsAllowedProvider))
                         _DiscountButton(isBusy: isBusy),
@@ -1144,6 +1151,118 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
 }
 
 // ── _TypeChip ─────────────────────────────────────────────────────────────────
+
+// ── _OrderTypeSelector ────────────────────────────────────────────────────────
+
+class _OrderTypeSelector extends ConsumerWidget {
+  final bool isBusy;
+  const _OrderTypeSelector({required this.isBusy});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(cartProvider);
+    final current = ref.read(cartProvider.notifier).orderType;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const CheckoutSectionLabel('Order Type'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _OrderTypeChip(
+              label: 'Walk-in',
+              icon: Icons.storefront_outlined,
+              selected: current == OrderType.walkIn,
+              disabled: isBusy,
+              onTap: () => ref
+                  .read(cartProvider.notifier)
+                  .setOrderType(OrderType.walkIn),
+            ),
+            const SizedBox(width: 8),
+            _OrderTypeChip(
+              label: 'Takeaway',
+              icon: Icons.takeout_dining_outlined,
+              selected: current == OrderType.takeOut,
+              disabled: isBusy,
+              onTap: () => ref
+                  .read(cartProvider.notifier)
+                  .setOrderType(OrderType.takeOut),
+            ),
+            const SizedBox(width: 8),
+            _OrderTypeChip(
+              label: 'Delivery',
+              icon: Icons.delivery_dining_outlined,
+              selected: current == OrderType.delivery,
+              disabled: isBusy,
+              onTap: () => ref
+                  .read(cartProvider.notifier)
+                  .setOrderType(OrderType.delivery),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _OrderTypeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  const _OrderTypeChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: disabled ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? CheckoutTheme.mint.withOpacity(0.12)
+                : CheckoutTheme.card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? CheckoutTheme.mintBorder
+                  : CheckoutTheme.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: selected
+                      ? CheckoutTheme.mint
+                      : CheckoutTheme.textMid),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: selected
+                          ? CheckoutTheme.mint
+                          : CheckoutTheme.textMid)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _TypeChip extends StatelessWidget {
   final String label;

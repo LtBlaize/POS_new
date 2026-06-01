@@ -1201,7 +1201,7 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-                error: (_, __) => const Padding(
+                error: (_, _) => const Padding(
                   padding: EdgeInsets.all(12),
                   child: Text(
                     'Slow movers require an internet connection.',
@@ -1377,7 +1377,7 @@ class SalesHeatmap extends ConsumerWidget {
           height: 120,
           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
-        error: (_, __) => const SizedBox(
+        error: (_, _) => const SizedBox(
           height: 60,
           child: Center(
             child: Text('Could not load heatmap',

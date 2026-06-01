@@ -9,12 +9,20 @@ class TableEntry {
   final String? uuid;
   final TableStatus status;
   final String? orderId;
+  final double x;
+  final double y;
+  final double w;
+  final double h;
 
   const TableEntry({
     required this.name,
     this.uuid,
     this.status = TableStatus.available,
     this.orderId,
+    this.x = 0,
+    this.y = 0,
+    this.w = 80,
+    this.h = 80,
   });
 
   TableEntry copyWith({
@@ -22,12 +30,20 @@ class TableEntry {
     TableStatus? status,
     String? orderId,
     bool clearOrder = false,
+    double? x,
+    double? y,
+    double? w,
+    double? h,
   }) {
     return TableEntry(
       name: name,
       uuid: uuid ?? this.uuid,
       status: status ?? this.status,
       orderId: clearOrder ? null : (orderId ?? this.orderId),
+      x: x ?? this.x,
+      y: y ?? this.y,
+      w: w ?? this.w,
+      h: h ?? this.h,
     );
   }
 }
@@ -91,18 +107,23 @@ class TableNotifier extends StateNotifier<TableState> {
     try {
       final rows = await _client
           .from('restaurant_tables')
-          .select('id, table_number, is_occupied')
+          .select('id, table_number, is_occupied, metadata')
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number');
 
       final tables = (rows as List).map((row) {
+        final meta = row['metadata'] as Map<String, dynamic>? ?? {};
         return TableEntry(
           name: row['table_number'].toString(),
           uuid: row['id'] as String,
           status: (row['is_occupied'] as bool? ?? false)
               ? TableStatus.occupied
               : TableStatus.available,
+          x: (meta['x'] as num?)?.toDouble() ?? 0,
+          y: (meta['y'] as num?)?.toDouble() ?? 0,
+          w: (meta['w'] as num?)?.toDouble() ?? 80,
+          h: (meta['h'] as num?)?.toDouble() ?? 80,
         );
       }).toList();
 
@@ -149,6 +170,28 @@ class TableNotifier extends StateNotifier<TableState> {
       clearSelection: state.selectedTableName == name,
     );
     _updateOccupied(name, occupied: false);
+  }
+
+  void moveTable(String name, double x, double y) {
+    state = state.copyWith(
+      tables: [
+        for (final t in state.tables)
+          if (t.name == name) t.copyWith(x: x, y: y) else t,
+      ],
+    );
+  }
+
+  Future<void> saveLayout() async {
+    if (_businessId == null) return;
+    for (final t in state.tables) {
+      if (t.uuid == null) continue;
+      try {
+        await _client
+            .from('restaurant_tables')
+            .update({'metadata': {'x': t.x, 'y': t.y, 'w': t.w, 'h': t.h}})
+            .eq('id', t.uuid!);
+      } catch (_) {}
+    }
   }
 
   Future<void> _updateOccupied(String name, {required bool occupied}) async {

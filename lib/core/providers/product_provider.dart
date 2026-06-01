@@ -203,7 +203,9 @@ bool _fuzzyMatch(String source, String query) {
   if (source.contains(query)) return true;
   int si = 0;
   for (int qi = 0; qi < query.length && si < source.length; qi++) {
-    while (si < source.length && source[si] != query[qi]) si++;
+    while (si < source.length && source[si] != query[qi]) {
+      si++;
+    }
     if (si >= source.length) return false;
     si++;
   }

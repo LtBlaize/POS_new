@@ -10,8 +10,8 @@
 // The full placeOrder() flow requires Riverpod mocking — see checkout_integration_test.dart (future).
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pos_new/core/services/checkout_service.dart';
-import 'package:pos_new/core/models/order.dart';
+import 'package:flutter_application_1/core/services/checkout_service.dart';
+import 'package:flutter_application_1/core/models/order.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

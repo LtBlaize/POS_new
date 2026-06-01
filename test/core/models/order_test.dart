@@ -5,7 +5,7 @@
 // Tests Order.fromMap deserialization, extension round-trips, and copyWith.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pos_new/core/models/order.dart';
+import 'package:flutter_application_1/core/models/order.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -539,7 +539,7 @@ class _KitchenColumn extends StatelessWidget {
                   : ListView.separated(
                       padding: const EdgeInsets.all(10),
                       itemCount: orders.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _KitchenOrderCard(
                         key: ValueKey('${orders[i].id}-${orders[i].status}'),
                         order: orders[i],
@@ -710,10 +710,27 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                       ),
                       const SizedBox(width: 7),
                       Expanded(
-                        child: Text(item.product.name,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textPrimary)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.product.name,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textPrimary)),
+                            if (item.selectedVariant != null)
+                              Text(item.selectedVariant!.name,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.info)),
+                            if (item.notes != null && item.notes!.isNotEmpty)
+                              Text(item.notes!,
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.warning,
+                                      fontStyle: FontStyle.italic)),
+                          ],
+                        ),
                       ),
                     ],
                   ),

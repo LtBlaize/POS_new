@@ -77,7 +77,8 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                 .add(CartItem(
                     product: product,
                     quantity: item['quantity'] as int,
-                    costAtSale: (item['cost_price'] as num?)?.toDouble() ?? 0));
+                    costAtSale: (item['cost_price'] as num?)?.toDouble() ?? 0,
+                    notes: item['notes'] as String?));
           }
 
         final orders = rows.map((row) {
@@ -149,6 +150,7 @@ class OrderService {
     double discountAmount = 0.0,
     double tipAmount = 0.0,
     String? cashierId,
+    OrderType orderType = OrderType.walkIn,
   }) async {
     if (_isOnline) {
       return _placeOnline(
@@ -160,6 +162,7 @@ class OrderService {
         discountAmount: discountAmount,
         tipAmount: tipAmount,
         cashierId: cashierId,
+        orderType: orderType,
       );
     } else {
       return _placeOffline(
@@ -171,6 +174,7 @@ class OrderService {
         discountAmount: discountAmount,
         tipAmount: tipAmount,
         cashierId: cashierId,
+        orderType: orderType,
       );
     }
   }
@@ -184,6 +188,7 @@ class OrderService {
     required double discountAmount,
     double tipAmount = 0.0,
     String? cashierId,
+    OrderType orderType = OrderType.walkIn,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -195,7 +200,7 @@ class OrderService {
           'business_id': businessId,
           'table_id': tableId,
           'cashier_id': cashierId,
-          'order_type': tableId != null ? 'dine_in' : 'walk_in',
+          'order_type': tableId != null ? 'dine_in' : orderType.value,
           'status': 'pending',
           'subtotal': subtotal,
           'tax_amount': taxAmount,
@@ -219,6 +224,7 @@ class OrderService {
               'quantity': item.quantity,
               'subtotal': item.total,
               'cost_at_sale': _effectiveCost(item),
+              'notes': item.notes,
             })
         .toList();
 
@@ -243,6 +249,7 @@ class OrderService {
     required double discountAmount,
     double tipAmount = 0.0,
     String? cashierId,
+    OrderType orderType = OrderType.walkIn,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -258,7 +265,7 @@ class OrderService {
       tableId: tableId,
       cashierId: cashierId,
       orderNumber: localOrderNumber,
-      orderType: OrderType.walkIn,
+      orderType: tableId != null ? OrderType.walkIn : orderType,
       status: OrderStatus.pending,
       subtotal: subtotal,
       taxAmount: taxAmount,
@@ -281,6 +288,7 @@ class OrderService {
               'quantity': i.quantity,
               'subtotal': i.total,
               'cost_at_sale': _effectiveCost(i),
+              'notes': i.notes,
             })
         .toList();
 
@@ -293,7 +301,7 @@ class OrderService {
         'business_id': businessId,
         'table_id': tableId,
         'cashier_id': cashierId,
-        'order_type': tableId != null ? 'dine_in' : 'walk_in',
+        'order_type': tableId != null ? 'dine_in' : orderType.value,
         'status': 'pending',
         'subtotal': subtotal,
         'tax_amount': taxAmount,
@@ -583,7 +591,8 @@ class OrderService {
             return CartItem(
                 product: product,
                 quantity: row['quantity'] as int,
-                costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0);
+                costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+                notes: row['notes'] as String?);
           }).toList();
 
         return Order.fromMap(orderRow, items: cartItems);

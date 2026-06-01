@@ -420,7 +420,9 @@ class ReportExcelService {
 
   List<_PayrollRow> _buildPayrollRows(List<ShiftEntry> entries) {
     final byStaff = <String, List<ShiftEntry>>{};
-    for (final e in entries) byStaff.putIfAbsent(e.shift.staffId, () => []).add(e);
+    for (final e in entries) {
+      byStaff.putIfAbsent(e.shift.staffId, () => []).add(e);
+    }
     return byStaff.entries.map((kv) {
       final first        = kv.value.first.shift;
       final totalMinutes = kv.value.fold<int>(0, (s, e) => s + e.duration.inMinutes);
@@ -477,13 +479,17 @@ class ReportExcelService {
     _wh(sh, 17, 0, 'REPORT SETTINGS');
 
     const bizLabels = ['Business Name','Address','Phone','Email','Tax / Business ID','Currency Symbol'];
-    for (var i = 0; i < bizLabels.length; i++) _ws(sh, 4 + i, 1, bizLabels[i]);
+    for (var i = 0; i < bizLabels.length; i++) {
+      _ws(sh, 4 + i, 1, bizLabels[i]);
+    }
     _ws(sh, 4, 2, ''); _ws(sh, 5, 2, ''); _ws(sh, 6, 2, '');
     _ws(sh, 7, 2, ''); _ws(sh, 8, 2, ''); _ws(sh, 9, 2, '₱');
 
     const finLabels = ['VAT Rate (%)','Overtime Multiplier','Late Penalty/Minute',
                        'SSS Deduction','PhilHealth Deduction','Pag-IBIG Deduction'];
-    for (var i = 0; i < finLabels.length; i++) _ws(sh, 11 + i, 1, finLabels[i]);
+    for (var i = 0; i < finLabels.length; i++) {
+      _ws(sh, 11 + i, 1, finLabels[i]);
+    }
     _wd(sh, 11, 2, cfg?.taxRate ?? 0.0);
     _wd(sh, 12, 2, _kOvertimeMultiplier);
     _wd(sh, 13, 2, _kLatePenaltyPerMin);
@@ -493,7 +499,9 @@ class ReportExcelService {
 
     const repLabels = ['Report Start Date','Report End Date','Fiscal Year',
                        'Low Stock Threshold','Expiry Warning Days'];
-    for (var i = 0; i < repLabels.length; i++) _ws(sh, 18 + i, 1, repLabels[i]);
+    for (var i = 0; i < repLabels.length; i++) {
+      _ws(sh, 18 + i, 1, repLabels[i]);
+    }
     _ws(sh, 18, 2, _fmtDate(date));
     _ws(sh, 19, 2, _fmtDate(date));
     _wi(sh, 20, 2, date.year);

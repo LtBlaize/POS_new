@@ -4,6 +4,7 @@ import '../../../core/providers/cart_provider.dart';
 import '../../../core/services/feature_manager.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../dialogs/checkout_dialog.dart';
+import '../dialogs/split_bill_dialog.dart';
 import '../../../core/models/product.dart';
 import '../../../core/services/parked_order_service.dart';
 import '../../../features/auth/auth_provider.dart';
@@ -94,6 +95,54 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   ),
                 ],
                 const Spacer(),
+                // ── Split bill button ────────────────────────
+                GestureDetector(
+                  onTap: items.isEmpty
+                      ? null
+                      : () => showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => SplitBillDialog(
+                              featureManager: widget.featureManager,
+                            ),
+                          ),
+                  child: Tooltip(
+                    message: 'Split bill between guests',
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: items.isEmpty
+                            ? AppColors.divider.withOpacity(0.3)
+                            : AppColors.success.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: items.isEmpty
+                                ? AppColors.divider
+                                : AppColors.success.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.call_split_outlined,
+                              size: 11,
+                              color: items.isEmpty
+                                  ? AppColors.textSecondary.withOpacity(0.3)
+                                  : AppColors.success),
+                          const SizedBox(width: 3),
+                          Text('Split',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: items.isEmpty
+                                      ? AppColors.textSecondary.withOpacity(0.3)
+                                      : AppColors.success)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 // ── Hold button ──────────────────────────────
                 GestureDetector(
                   onTap: items.isEmpty
@@ -186,47 +235,61 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                         const Divider(height: 1, indent: 16, endIndent: 16),
                     itemBuilder: (context, index) {
                       final item = items[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        child: Row(
-                          children: [
-                            _QuantityStepper(
-                              quantity: item.quantity,
-                              onDecrement: () => item.quantity == 1
-                                  ? cartNotifier
-                                      .removeProduct(item.product.id)
-                                  : cartNotifier
-                                      .decrementProduct(item.product.id),
-                              onIncrement: () =>
-                                  cartNotifier.addProduct(item.product),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(item.product.name,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textPrimary),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                  Text(
-                                      '₱${item.product.price.toStringAsFixed(0)} each',
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textSecondary)),
-                                ],
+                      return GestureDetector(
+                        onLongPress: () =>
+                            _showNotesDialog(context, item.product.id, item.notes),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: Row(
+                            children: [
+                              _QuantityStepper(
+                                quantity: item.quantity,
+                                onDecrement: () => item.quantity == 1
+                                    ? cartNotifier
+                                        .removeProduct(item.product.id)
+                                    : cartNotifier
+                                        .decrementProduct(item.product.id),
+                                onIncrement: () =>
+                                    cartNotifier.addProduct(item.product),
                               ),
-                            ),
-                            Text('₱${item.total.toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary)),
-                          ],
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.product.name,
+                                        style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis),
+                                    if (item.notes != null &&
+                                        item.notes!.isNotEmpty)
+                                      Text(item.notes!,
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.warning,
+                                              fontStyle: FontStyle.italic),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis)
+                                    else
+                                      Text(
+                                          '₱${item.product.price.toStringAsFixed(0)} each',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                              Text('₱${item.total.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary)),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -438,6 +501,50 @@ extension _CartPanelDialogs on _CartPanelState {
                   );
               cartNotifier.clear();
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNotesDialog(BuildContext context, String productId, String? existing) {
+    final controller = TextEditingController(text: existing ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Item Note',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          maxLength: 120,
+          decoration: const InputDecoration(
+            hintText: 'e.g. no onions, extra sauce, well done…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          if (existing != null && existing.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                ref.read(cartProvider.notifier).setItemNotes(productId, null);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Remove',
+                  style: TextStyle(color: AppColors.danger)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              ref
+                  .read(cartProvider.notifier)
+                  .setItemNotes(productId, controller.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

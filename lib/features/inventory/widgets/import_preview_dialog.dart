@@ -124,7 +124,7 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                               child: ListView.separated(
                                 shrinkWrap: true,
                                 itemCount: p.valid.length,
-                                separatorBuilder: (_, __) =>
+                                separatorBuilder: (_, _) =>
                                     const Divider(height: 1),
                                 itemBuilder: (_, i) =>
                                     _PreviewRow(row: p.valid[i]),

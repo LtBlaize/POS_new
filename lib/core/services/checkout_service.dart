@@ -156,6 +156,7 @@ class CheckoutService {
         }
       }
 
+      final orderType = _ref.read(cartProvider.notifier).orderType;
       order = await service.placeOrder(
         businessId: profile!.businessId!,
         items: items,
@@ -165,6 +166,7 @@ class CheckoutService {
         taxRate: taxRate,
         discountAmount: discountAmount,
         tipAmount: tipAmount,
+        orderType: orderType,
       );
       final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 

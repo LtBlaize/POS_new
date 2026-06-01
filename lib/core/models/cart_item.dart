@@ -11,6 +11,7 @@ class CartItem {
   double discountAmount;
   DiscountType discountType;
   final double costAtSale;
+  final String? notes;
 
   CartItem({
     required this.product,
@@ -19,6 +20,7 @@ class CartItem {
     this.discountAmount = 0,
     this.discountType = DiscountType.fixed,
     double? costAtSale,
+    this.notes,
   }) : costAtSale = costAtSale ??
             (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
                 ? selectedVariant.costPrice
@@ -51,6 +53,7 @@ class CartItem {
         'variant_price_delta': selectedVariant?.priceDelta,
         'variant_cost_price': selectedVariant?.costPrice,
         'cost_at_sale': costAtSale,
+        'notes': notes,
       };
 
   factory CartItem.fromParkedMap(Map<String, dynamic> m) {
@@ -83,6 +86,7 @@ class CartItem {
         orElse: () => DiscountType.fixed,
       ),
       costAtSale: (m['cost_at_sale'] as num?)?.toDouble() ?? 0,
+      notes: m['notes'] as String?,
     );
   }
 }

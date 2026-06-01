@@ -1,6 +1,7 @@
 // lib/core/providers/cart_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cart_item.dart';
+import '../models/order.dart';
 import '../models/product.dart';
 
 // REPLACE
@@ -9,6 +10,12 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   double orderDiscountAmount = 0;
   DiscountType orderDiscountType = DiscountType.fixed;
+  OrderType orderType = OrderType.walkIn;
+
+  void setOrderType(OrderType type) {
+    orderType = type;
+    state = [...state];
+  }
 
   void applyOrderDiscount(double amount, DiscountType type) {
     orderDiscountAmount = amount;
@@ -20,11 +27,32 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     final index = state.indexWhere((i) => i.product.id == productId);
     if (index < 0) return;
     final updated = List<CartItem>.from(state);
+    final item = state[index];
     updated[index] = CartItem(
-      product: state[index].product,
-      quantity: state[index].quantity,
+      product: item.product,
+      selectedVariant: item.selectedVariant,
+      quantity: item.quantity,
       discountAmount: amount,
       discountType: type,
+      costAtSale: item.costAtSale,
+      notes: item.notes,
+    );
+    state = updated;
+  }
+
+  void setItemNotes(String productId, String? notes) {
+    final index = state.indexWhere((i) => i.product.id == productId);
+    if (index < 0) return;
+    final updated = List<CartItem>.from(state);
+    final item = state[index];
+    updated[index] = CartItem(
+      product: item.product,
+      selectedVariant: item.selectedVariant,
+      quantity: item.quantity,
+      discountAmount: item.discountAmount,
+      discountType: item.discountType,
+      costAtSale: item.costAtSale,
+      notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
     );
     state = updated;
   }
@@ -60,7 +88,12 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       final updated = List<CartItem>.from(state);
       updated[index] = CartItem(
         product: current.product,
+        selectedVariant: current.selectedVariant,
         quantity: current.quantity + 1,
+        discountAmount: current.discountAmount,
+        discountType: current.discountType,
+        costAtSale: current.costAtSale,
+        notes: current.notes,
       );
       state = updated;
     } else {
@@ -76,8 +109,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       removeProduct(productId);
     } else {
       final updated = List<CartItem>.from(state);
-      updated[index] =
-          CartItem(product: current.product, quantity: current.quantity - 1);
+      updated[index] = CartItem(
+        product: current.product,
+        selectedVariant: current.selectedVariant,
+        quantity: current.quantity - 1,
+        discountAmount: current.discountAmount,
+        discountType: current.discountType,
+        costAtSale: current.costAtSale,
+        notes: current.notes,
+      );
       state = updated;
     }
   }
@@ -90,7 +130,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     orderDiscountAmount = 0;
     orderDiscountType = DiscountType.fixed;
     _tipAmount = 0;
+    orderType = OrderType.walkIn;
     state = [];
+  }
+
+  void loadItems(List<CartItem> items) {
+    orderDiscountAmount = 0;
+    orderDiscountType = DiscountType.fixed;
+    _tipAmount = 0;
+    state = List.from(items);
   }
 
   double get total => grandTotal;

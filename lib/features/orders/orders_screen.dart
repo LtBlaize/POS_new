@@ -171,7 +171,7 @@ class _OrderList extends StatelessWidget {
     return ListView.separated(
       padding: EdgeInsets.all(width < 600 ? 12 : 16),
       itemCount: orders.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _OrderCard(
         key: ValueKey('${orders[i].id}-${orders[i].status}'),
         order: orders[i],

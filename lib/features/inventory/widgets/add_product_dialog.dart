@@ -492,7 +492,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       // ── Variants section ───────────────────────────────
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _priceController,
-                        builder: (_, __, ___) => _VariantsSection(
+                        builder: (_, _, _) => _VariantsSection(
                         productId: widget.product?.id,
                         basePrice: double.tryParse(_priceController.text) ?? 0,
                         variants: _variants,
@@ -777,7 +777,7 @@ class _SendToKitchenToggle extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.orange,
+            activeThumbColor: Colors.orange,
           ),
         ],
       ),
@@ -969,7 +969,7 @@ class _VariantsSectionState extends State<_VariantsSection> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: widget.variants.length,
-                separatorBuilder: (_, __) =>
+                separatorBuilder: (_, _) =>
                     const Divider(height: 1),
                 itemBuilder: (_, i) => _VariantRow(
                   variant: widget.variants[i],

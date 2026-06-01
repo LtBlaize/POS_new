@@ -5,9 +5,9 @@
 // No mocks needed — CartItem is pure math + serialization.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:test/core/models/cart_item.dart';
-import 'package:test/core/models/product.dart';
-import 'package:test/core/models/product_variant.dart';
+import 'package:flutter_application_1/core/models/cart_item.dart';
+import 'package:flutter_application_1/core/models/product.dart';
+import 'package:flutter_application_1/core/models/product_variant.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
