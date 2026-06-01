@@ -133,6 +133,8 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
       }).eq('business_id', profile.businessId!);
     } catch (e) {
       debugPrint('[RolePermissions] save failed: $e');
+      // Revert optimistic update on failure
+      state = AsyncData(current);
     }
   }
 
@@ -268,7 +270,14 @@ final activeStaffTabsProvider = Provider<Set<String>>((ref) {
   final permsAsync = ref.watch(rolePermissionsProvider);
   debugPrint('[Tabs] permsAsync state: $permsAsync');
 
-  if (permsAsync.isLoading) return {};
+  if (permsAsync.isLoading) {
+    // Fall back to defaults while loading so sidebar isn't blank
+    final staff2 = ref.read(activeStaffProvider);
+    final defaults = kDefaultPermissions.map(
+      (r, tabs) => MapEntry(r, Set<String>.from(tabs)),
+    );
+    return defaults[staff2?.role.value] ?? {};
+  }
 
   final perms = permsAsync.value ??
       kDefaultPermissions.map(

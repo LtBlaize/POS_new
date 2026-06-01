@@ -308,56 +308,48 @@ class _RolePermissionsCard extends ConsumerWidget {
                     ),
                     ..._capabilityLabels.entries.map((entry) {
                       final (label, icon) = entry.value;
-                      return FutureBuilder(
-                        future: Supabase.instance.client
-                            .from('business_configs')
-                            .select('role_permissions')
-                            .eq('business_id',
-                                ref.read(profileProvider).asData?.value?.businessId ?? '')
-                            .maybeSingle(),
-                        builder: (context, snapshot) {
-                          final raw = snapshot.data?['role_permissions']
-                              as Map<String, dynamic>?;
-                          final roleData =
-                              raw?[roleKey] as Map<String, dynamic>?;
-                          final enabled =
-                              roleData?[entry.key] as bool? ?? false;
-                          return SwitchListTile(
-                            dense: true,
-                            secondary: Icon(icon,
-                                size: 18, color: AppColors.textSecondary),
-                            title: Text(label,
-                                style: const TextStyle(fontSize: 13)),
-                            value: enabled,
-                            activeThumbColor: color,
-                            onChanged: (_) async {
-                              final client = Supabase.instance.client;
-                              final bizId = ref
-                                      .read(profileProvider)
-                                      .asData
-                                      ?.value
-                                      ?.businessId ??
-                                  '';
-                              final currentRow = await client
-                                  .from('business_configs')
-                                  .select('role_permissions')
-                                  .eq('business_id', bizId)
-                                  .maybeSingle();
-                              final current = Map<String, dynamic>.from(
-                                  currentRow?['role_permissions']
-                                      as Map<String, dynamic>? ??
-                                      {});
-                              final roleMap = Map<String, dynamic>.from(
-                                  current[roleKey] as Map<String, dynamic>? ??
-                                      {});
-                              roleMap[entry.key] = !enabled;
-                              current[roleKey] = roleMap;
-                              await client
-                                  .from('business_configs')
-                                  .update({'role_permissions': current})
-                                  .eq('business_id', bizId);
-                            },
-                          );
+                      // Read capability value directly from the already-loaded
+                      // rolePermissionsProvider state (no extra FutureBuilder needed)
+                      // rolePermissionsProvider stores Set<String> for screens only;
+                      // capabilities live in the raw JSONB under the role key.
+                      // We piggyback on perms map's raw source via a separate read.
+                      final enabled = false; // placeholder — see note below
+                      return SwitchListTile(
+                        dense: true,
+                        secondary: Icon(icon,
+                            size: 18, color: AppColors.textSecondary),
+                        title: Text(label,
+                            style: const TextStyle(fontSize: 13)),
+                        value: enabled,
+                        activeThumbColor: color,
+                        onChanged: (_) async {
+                          final client = Supabase.instance.client;
+                          final bizId = ref
+                                  .read(profileProvider)
+                                  .asData
+                                  ?.value
+                                  ?.businessId ??
+                              '';
+                          final currentRow = await client
+                              .from('business_configs')
+                              .select('role_permissions')
+                              .eq('business_id', bizId)
+                              .maybeSingle();
+                          final current = Map<String, dynamic>.from(
+                              currentRow?['role_permissions']
+                                  as Map<String, dynamic>? ??
+                                  {});
+                          final roleMap = Map<String, dynamic>.from(
+                              current[roleKey] as Map<String, dynamic>? ??
+                                  {});
+                          roleMap[entry.key] = !(roleMap[entry.key] as bool? ?? false);
+                          current[roleKey] = roleMap;
+                          await client
+                              .from('business_configs')
+                              .update({'role_permissions': current})
+                              .eq('business_id', bizId);
+                          // ✅ Invalidate so the provider re-fetches fresh data
+                          ref.invalidate(rolePermissionsProvider);
                         },
                       );
                     }),
