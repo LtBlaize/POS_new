@@ -14,19 +14,18 @@ import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../providers/app_context_provider.dart';
 import 'product_provider.dart';
 
 
 // ── Live / cached order stream ────────────────────────────────────────────────
 
 final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) {
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) {
     yield [];
     return;
   }
-
-  final businessId = profile!.businessId!;
   final local = ref.read(localDbServiceProvider);
 
   final cached = await local.getOrders(businessId);
@@ -417,6 +416,7 @@ class OrderService {
     required String businessId,
     bool trackInventory = false,
     int currentStock = 0,
+    String? variantId,
   }) async {
     final voidId = const Uuid().v4();
     final subtotal = unitPrice * quantity;
@@ -441,13 +441,25 @@ class OrderService {
     if (trackInventory) {
       try {
         final inventoryService = _ref.read(inventoryServiceProvider);
-        await inventoryService.adjustStock(
-          businessId: businessId,
-          productId: productId,
-          quantityChange: quantity, // positive = restoring stock
-          quantityBefore: currentStock,
-          action: 'void',
-        );
+        // variantId is non-null when the voided item was a variant sale
+        if (variantId != null) {
+          await inventoryService.adjustVariantStock(
+            businessId: businessId,
+            productId: productId,
+            variantId: variantId,
+            quantityChange: quantity,
+            quantityBefore: currentStock,
+            action: 'void',
+          );
+        } else {
+          await inventoryService.adjustStock(
+            businessId: businessId,
+            productId: productId,
+            quantityChange: quantity,
+            quantityBefore: currentStock,
+            action: 'void',
+          );
+        }
         _ref.invalidate(productListProvider);
       } catch (e) {
         debugPrint(
@@ -563,6 +575,136 @@ class OrderService {
     return voidRecord;
   }
 
+  // ── Void entire order ───────────────────────────────────────────────────────
+
+  Future<void> voidOrder({
+    required String orderId,
+    required String businessId,
+    required String reason,
+    required String voidedByStaffId,
+    required String voidedByStaffName,
+    required List<CartItem> items,
+  }) async {
+    final now = DateTime.now();
+
+    // 1. Cancel locally
+    await _local.markOrderStatus(orderId, OrderStatus.cancelled);
+
+    // 2. Reverse inventory for all items
+    try {
+      final inventoryService = _ref.read(inventoryServiceProvider);
+      for (final item in items) {
+        if (!item.product.trackInventory) continue;
+        if (item.selectedVariant != null) {
+          final freshVariants =
+              await _local.getVariantsForProduct(item.product.id);
+          final freshVariant = freshVariants
+              .where((v) => v.id == item.selectedVariant!.id)
+              .firstOrNull;
+          await inventoryService.adjustVariantStock(
+            businessId: businessId,
+            productId: item.product.id,
+            variantId: item.selectedVariant!.id,
+            quantityChange: item.quantity,
+            quantityBefore:
+                freshVariant?.stockQuantity ?? item.selectedVariant!.stockQuantity,
+            action: 'void',
+          );
+        } else {
+          final freshProducts = await _local.getProducts(businessId);
+          final freshProduct = freshProducts
+              .where((p) => p.id == item.product.id)
+              .firstOrNull;
+          await inventoryService.adjustStock(
+            businessId: businessId,
+            productId: item.product.id,
+            quantityChange: item.quantity,
+            quantityBefore:
+                freshProduct?.stockQuantity ?? item.product.stockQuantity,
+            action: 'void',
+          );
+        }
+      }
+      _ref.invalidate(productListProvider);
+    } catch (e) {
+      debugPrint('[OrderService] voidOrder inventory reversal error: $e');
+    }
+
+    // 3. Sync or enqueue
+    if (_isOnline) {
+      try {
+        await _client.from('orders').update({
+          'status': OrderStatus.cancelled.value,
+          'notes': reason,
+          'updated_at': now.toIso8601String(),
+        }).eq('id', orderId);
+
+        // Void each item row in Supabase
+        for (final item in items) {
+          final voidId = const Uuid().v4();
+          await _client.from('void_order_items').insert({
+            'id': voidId,
+            'order_id': orderId,
+            'product_id': item.product.id,
+            'product_name': item.product.name,
+            'unit_price': item.effectivePrice,
+            'quantity': item.quantity,
+            'subtotal': item.total,
+            'reason': reason,
+            'voided_by_staff_id': voidedByStaffId,
+            'voided_by_staff_name': voidedByStaffName,
+            'voided_at': now.toIso8601String(),
+          });
+        }
+
+        // Void the receipt if one exists
+        await _client
+            .from('receipts')
+            .update({
+              'is_voided': true,
+              'voided_at': now.toIso8601String(),
+              'voided_by': voidedByStaffId,
+              'void_reason': reason,
+              'updated_at': now.toIso8601String(),
+            })
+            .eq('order_id', orderId)
+            .eq('is_voided', false);
+
+        debugPrint('[OrderService] voidOrder synced: $orderId');
+        return;
+      } catch (e) {
+        debugPrint('[OrderService] voidOrder online failed, queuing: $e');
+      }
+    }
+
+    // Offline path
+    await _syncQueue.enqueue(
+      operation: 'void_order',
+      tableName: 'orders',
+      recordId: orderId,
+      idempotencyKey: '${orderId}_void',
+      payload: {
+        'order_id': orderId,
+        'business_id': businessId,
+        'reason': reason,
+        'voided_by_staff_id': voidedByStaffId,
+        'voided_by_staff_name': voidedByStaffName,
+        'voided_at': now.toIso8601String(),
+        'items': items
+            .map((i) => {
+                  'product_id': i.product.id,
+                  'product_name': i.product.name,
+                  'unit_price': i.effectivePrice,
+                  'quantity': i.quantity,
+                  'subtotal': i.total,
+                })
+            .toList(),
+      },
+    );
+
+    debugPrint('[OrderService] voidOrder queued: $orderId');
+  }
+
   // ── Fetch single order ──────────────────────────────────────────────────────
 
   Future<Order> fetchOrderWithItems(String orderId) async {
@@ -626,12 +768,33 @@ class OrderService {
     try {
       final inventoryService = _ref.read(inventoryServiceProvider);
       for (final item in items) {
-        if (item.product.trackInventory) {
+        if (!item.product.trackInventory) continue;
+
+        if (item.selectedVariant != null) {
+          final freshVariants = await _local.getVariantsForProduct(item.product.id);
+          final freshVariant = freshVariants
+              .where((v) => v.id == item.selectedVariant!.id)
+              .firstOrNull;
+          final quantityBefore = freshVariant?.stockQuantity ?? item.selectedVariant!.stockQuantity;
+          await inventoryService.adjustVariantStock(
+            businessId: businessId,
+            productId: item.product.id,
+            variantId: item.selectedVariant!.id,
+            quantityChange: -item.quantity,
+            quantityBefore: quantityBefore,
+            action: 'sale',
+          );
+        } else {
+          final freshProducts = await _local.getProducts(businessId);
+          final freshProduct = freshProducts
+              .where((p) => p.id == item.product.id)
+              .firstOrNull;
+          final quantityBefore = freshProduct?.stockQuantity ?? item.product.stockQuantity;
           await inventoryService.adjustStock(
             businessId: businessId,
             productId: item.product.id,
             quantityChange: -item.quantity,
-            quantityBefore: item.product.stockQuantity,
+            quantityBefore: quantityBefore,
             action: 'sale',
           );
         }

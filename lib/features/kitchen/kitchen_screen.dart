@@ -19,6 +19,7 @@ import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../core/services/lan_config_service.dart';
 import '../../core/services/lan_client_service.dart';
+import '../../core/services/lan_status_queue.dart';
 import '../../../main.dart' show deviceRoleProvider, DeviceRole;
 import '../../config/business_config.dart';
 
@@ -207,8 +208,13 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     return _KitchenBody(
       orders: kitchenState.orders,
       connection: kitchenState.connection,
-      onAdvanceStatus: (orderId, next) =>
-          ref.read(kitchenStateProvider.notifier).advanceStatus(orderId, next),
+      onAdvanceStatus: (orderId, next) async {
+        // Optimistic update in the notifier (updates local UI immediately)
+        ref.read(kitchenStateProvider.notifier).advanceStatus(orderId, next);
+        // Route through the queue so failed patches are retried when POS
+        // is temporarily unreachable — fixes issue #25 (silent drop).
+        ref.read(lanStatusQueueProvider).enqueue(orderId, next.value);
+      },
     );
   }
 }

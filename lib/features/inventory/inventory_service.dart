@@ -8,6 +8,7 @@ import '../../core/services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../core/providers/product_provider.dart'; // ✅ REQUIRED IMPORT
 import '../../config/business_config.dart';
+import '../../core/providers/app_context_provider.dart';
 
 // ── InventoryEntry ────────────────────────────────────────────────────────────
 
@@ -466,6 +467,72 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       },
     );
   }
+
+  // ── Variant stock adjustment ───────────────────────────────────────────────
+
+  Future<void> adjustVariantStock({
+    required String businessId,
+    required String productId,
+    required String variantId,
+    required int quantityChange,
+    required int quantityBefore,
+    required String action,
+    String? notes,
+  }) async {
+    final after = (quantityBefore + quantityChange).clamp(0, 9999);
+
+    await _local.updateVariantStock(variantId, after);
+
+    if (_isOnline) {
+      try {
+        await Future.wait([
+          _client.from('product_variants').update({
+            'stock_quantity': after,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', variantId),
+          _client.from('inventory_logs').insert({
+            'business_id': businessId,
+            'product_id': productId,
+            'action': action,
+            'quantity_change': quantityChange,
+            'quantity_before': quantityBefore,
+            'quantity_after': after,
+            'performed_by': _client.auth.currentUser?.id,
+            'notes': notes ?? 'Variant sale: $variantId',
+          }),
+        ]);
+      } catch (e) {
+        debugPrint('[Inventory] Variant stock online write failed, queuing: $e');
+        await _syncQueue.enqueue(
+          operation: 'adjust_variant_stock',
+          tableName: 'product_variants',
+          recordId: variantId,
+          payload: {
+            'business_id': businessId,
+            'product_id': productId,
+            'quantity_change': quantityChange,
+            'action': action,
+            'performed_by': _client.auth.currentUser?.id,
+            'notes': notes,
+          },
+        );
+      }
+    } else {
+      await _syncQueue.enqueue(
+        operation: 'adjust_variant_stock',
+        tableName: 'product_variants',
+        recordId: variantId,
+        payload: {
+          'business_id': businessId,
+          'product_id': productId,
+          'quantity_change': quantityChange,
+          'action': action,
+          'performed_by': _client.auth.currentUser?.id,
+          'notes': notes,
+        },
+      );
+    }
+  }
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -473,8 +540,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 final inventoryProvider =
     StateNotifierProvider<InventoryNotifier, InventoryState>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  final profile = ref.watch(profileProvider).asData?.value;
-  final businessId = profile?.businessId ?? '';
+  final businessId = ref.watch(activeBusinessIdProvider) ?? '';
   final local = ref.read(localDbServiceProvider);
   final syncQueue = ref.read(syncQueueServiceProvider);
 

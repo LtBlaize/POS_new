@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../models/product_variant.dart';
+
 
 // REPLACE
 class CartNotifier extends StateNotifier<List<CartItem>> {
@@ -76,12 +78,16 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   double get grandTotal => (itemsTotal - orderDiscountValue + _tipAmount).clamp(0, double.infinity);
 
-  void addProduct(Product product) {
-    final index = state.indexWhere((item) => item.product.id == product.id);
+  void addProduct(Product product, {ProductVariant? variant}) {
+    final index = state.indexWhere((item) =>
+        item.product.id == product.id &&
+        item.selectedVariant?.id == variant?.id);
     if (index >= 0) {
       final current = state[index];
-      if (product.trackInventory &&
-          current.quantity >= product.stockQuantity) {
+      final stockCap = variant != null
+          ? variant.stockQuantity
+          : product.stockQuantity;
+      if (product.trackInventory && current.quantity >= stockCap) {
         return;
       }
 
@@ -97,7 +103,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       );
       state = updated;
     } else {
-      state = [...state, CartItem(product: product)];
+      state = [...state, CartItem(product: product, selectedVariant: variant)];
     }
   }
 
@@ -134,10 +140,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [];
   }
 
-  void loadItems(List<CartItem> items) {
-    orderDiscountAmount = 0;
-    orderDiscountType = DiscountType.fixed;
-    _tipAmount = 0;
+  void loadItems(
+    List<CartItem> items, {
+    double orderDiscountAmount = 0,
+    DiscountType orderDiscountType = DiscountType.fixed,
+    double tipAmount = 0,
+  }) {
+    this.orderDiscountAmount = orderDiscountAmount;
+    this.orderDiscountType = orderDiscountType;
+    _tipAmount = tipAmount;
     state = List.from(items);
   }
 

@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/business.dart';
-import '../../config/business_config.dart' show BusinessFeatures;
+import '../../config/business_config.dart';
 import '../../core/services/feature_manager.dart';
 import '../../features/settings/settings_provider.dart';
 
@@ -62,9 +62,22 @@ final authStateProvider = StreamProvider<User?>((ref) {
 });
 
 final profileProvider = FutureProvider<Profile?>((ref) async {
-  final userAsync = ref.watch(authStateProvider);
-  final user = userAsync.asData?.value;
-  if (user == null) return null;
+  // Use currentUser directly as fallback — authStateProvider.future may
+  // never resolve if initialSession fired before this provider was watched.
+  final userAsync = await ref.watch(authStateProvider.future).timeout(
+    const Duration(seconds: 3),
+    onTimeout: () {
+      debugPrint('[Profile] authState timeout — falling back to currentUser');
+      return Supabase.instance.client.auth.currentUser;
+    },
+  );
+  debugPrint('[Profile] authState resolved, user: ${userAsync?.id}');
+  final user = userAsync;
+  if (user == null) {
+    debugPrint('[Profile] user is null — returning null');
+    return null;
+  }
+  debugPrint('[Profile] fetching from Supabase for ${user.id}');
 
   final client = ref.watch(supabaseClientProvider);
   final map = await client
@@ -88,11 +101,7 @@ final featureManagerProvider = Provider<FeatureManager?>((ref) {
   final businessType = ref.watch(businessTypeProvider);
   if (businessType == null) return null;
 
-  final base = businessType.isRestaurant
-      ? ['inventory']
-      : BusinessFeatures.retail;
-
-  final features = List<String>.from(base);
+  final features = <String>['inventory'];
 
   if (businessType.isRestaurant) {
     final config = ref.watch(businessConfigProvider);
@@ -100,6 +109,10 @@ final featureManagerProvider = Provider<FeatureManager?>((ref) {
       if (config.enableKitchenDisplay) features.add('kitchen');
       if (config.enableTableManagement) features.add('tables');
     }
+  } else {
+    // Retail features
+    features.add('barcode');
+    features.add('credits'); // retail always has credits — intentional
   }
 
   return FeatureManager(features);

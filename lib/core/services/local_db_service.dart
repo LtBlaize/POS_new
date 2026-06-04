@@ -36,7 +36,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 12;
+const _kDbVersion = 13;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -158,6 +158,7 @@ class LocalDbService {
         cost_at_sale REAL NOT NULL DEFAULT 0,
         quantity INTEGER NOT NULL,
         subtotal REAL NOT NULL,
+        notes TEXT,
         FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     ''');
@@ -299,6 +300,7 @@ class LocalDbService {
         sku TEXT,
         barcode TEXT,
         stock_quantity INTEGER NOT NULL DEFAULT 0,
+        cost_price REAL NOT NULL DEFAULT 0,
         is_active INTEGER NOT NULL DEFAULT 1,
         synced_at TEXT NOT NULL,
         FOREIGN KEY (product_id) REFERENCES products(id)
@@ -495,6 +497,25 @@ class LocalDbService {
         debugPrint('[LocalDb] v12: cost_at_sale already exists ($e)');
       }
     }
+
+    if (oldVersion < 13) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN notes TEXT',
+        );
+        debugPrint('[LocalDb] v13: notes added to order_items');
+      } catch (e) {
+        debugPrint('[LocalDb] v13: notes already exists ($e)');
+      }
+      try {
+        await db.execute(
+          'ALTER TABLE product_variants ADD COLUMN cost_price REAL NOT NULL DEFAULT 0',
+        );
+        debugPrint('[LocalDb] v13: cost_price added to product_variants');
+      } catch (e) {
+        debugPrint('[LocalDb] v13: cost_price already exists ($e)');
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -644,6 +665,7 @@ class LocalDbService {
                 'sku': v.sku,
                 'barcode': v.barcode,
                 'stock_quantity': v.stockQuantity,
+                'cost_price': v.costPrice,
                 'is_active': v.isActive ? 1 : 0,
                 'synced_at': now,
               },
@@ -670,6 +692,7 @@ class LocalDbService {
               'sku': v.sku,
               'barcode': v.barcode,
               'stock_quantity': v.stockQuantity,
+              'cost_price': v.costPrice,
               'is_active': v.isActive ? 1 : 0,
               'synced_at': now,
             },
@@ -757,6 +780,7 @@ class LocalDbService {
             'cost_at_sale': item.costAtSale,
             'quantity': item.quantity,
             'subtotal': item.total,
+            'notes': item.notes,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
@@ -822,6 +846,7 @@ class LocalDbService {
                   'cost_at_sale': item.costAtSale,
                   'quantity': item.quantity,
                   'subtotal': item.total,
+                  'notes': item.notes,
                 },
                 conflictAlgorithm: ConflictAlgorithm.replace,
               );
@@ -907,6 +932,7 @@ class LocalDbService {
         product: product,
         quantity: r['quantity'] as int,
         costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
+        notes: r['notes'] as String?,
       );
     }).toList();
   }

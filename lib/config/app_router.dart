@@ -60,6 +60,11 @@ class AppRouter {
     if (name == '/business-type') return _route(const BusinessTypeScreen());
     if (name == '/role-select')   return _route(const RoleSelectionScreen());
 
+    // /pending is the dedicated boot-wait route. Always serves _PendingPosScreen
+    // regardless of featureManager state — it will self-navigate to /pos once
+    // featureManagerProvider resolves.
+    if (name == '/pending') return _route(const _PendingPosScreen());
+
     if (featureManager == null) {
       final user = _ref.read(authStateProvider).value;
       if (user != null) {
@@ -108,20 +113,22 @@ class _PendingPosScreen extends ConsumerStatefulWidget {
 }
 
 class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
-  bool _navigated = false; // ← fires exactly once
+  bool _navigated = false;
 
   @override
   Widget build(BuildContext context) {
-    final featureManager = ref.watch(featureManagerProvider);
+    final profile = ref.watch(profileProvider);
 
-    if (featureManager != null && !_navigated) {
-      _navigated = true;
+    profile.whenData((p) {
+      if (_navigated) return;
+      // Profile resolved — navigate on next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
-        }
+        if (!mounted || _navigated) return;
+        _navigated = true;
+        debugPrint('[Pending] profile resolved: ${p?.businessId} → /pos');
+        Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
       });
-    }
+    });
 
     return const Scaffold(
       backgroundColor: Color(0xFF0F1117),
@@ -129,3 +136,12 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
     );
   }
 }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF0F1117),
+      body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+    );
+  }
+

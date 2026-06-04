@@ -29,7 +29,13 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:collection/collection.dart';
 import '../../core/models/product.dart';
 
-final _activeIndexProvider = StateProvider<int>((ref) => 0);
+// Scoped to the active business so switching businesses resets the tab.
+// Watches profileProvider so it invalidates automatically on business change.
+final _activeIndexProvider = StateProvider<int>((ref) {
+  // Depend on businessId — when it changes, this provider resets to 0.
+  ref.watch(profileProvider.select((p) => p.asData?.value?.businessId));
+  return 0;
+});
 
 // ── Layout mode ───────────────────────────────────────────────────────────────
 
@@ -771,19 +777,21 @@ class _AdaptiveSidebar extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    try {
-      await ref.read(authServiceProvider).logout();
-    } catch (e) {
-      debugPrint('[Logout] signOut error (continuing): $e');
-    }
-
-    // Then clear local state
+    // Clear local state first
     ref.read(cartProvider.notifier).clear();
     ref.read(activeStaffProvider.notifier).logout();
     ref.read(appLockedProvider.notifier).state = true;
 
-    if (context.mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    try {
+      await ref.read(authServiceProvider).logout();
+      // Navigation to /login is handled by MyApp's authStateProvider listener.
+      // Do NOT navigate here — double navigation crashes the widget tree.
+    } catch (e) {
+      debugPrint('[Logout] signOut error (continuing): $e');
+      // If signOut fails, navigate manually as fallback
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+      }
     }
   }
 

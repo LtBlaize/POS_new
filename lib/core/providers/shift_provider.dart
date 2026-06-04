@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/shift.dart';
 import '../services/shift_service.dart';
 import '../providers/staff_provider.dart';          // ← activeStaffProvider lives here
-import '../../features/auth/auth_provider.dart';    // ← profileProvider lives here
-
+import '../providers/app_context_provider.dart';
 // ── Current open shift for the active staff member ────────────────────────────
 
 final currentShiftProvider =
@@ -15,9 +14,7 @@ final currentShiftProvider =
 class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   @override
   Future<CashierShift?> build() async {
-    final profile = ref.watch(profileProvider).value;
-    if (profile == null) return null;
-    final businessId = profile.businessId;
+    final businessId = ref.watch(activeBusinessIdProvider);
     if (businessId == null) return null;
 
     final staff = ref.watch(activeStaffProvider);
@@ -32,11 +29,10 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   }
 
   Future<void> openShift({required double openingCash}) async {
-    final profile = await ref.read(profileProvider.future);
-    if (profile == null) return;
+    final businessId = ref.read(activeBusinessIdProvider);
+    if (businessId == null) return;
     final staff = ref.read(activeStaffProvider);
     if (staff == null) return;
-    final businessId = profile.businessId!;
 
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {

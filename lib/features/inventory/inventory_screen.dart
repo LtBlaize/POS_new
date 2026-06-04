@@ -10,7 +10,7 @@ import 'widgets/add_product_dialog.dart';
 import 'widgets/inventory_shared.dart';
 import 'widgets/inventory_filter.dart';
 import 'widgets/inventory_row.dart';
-
+import 'widgets/category_management_dialog.dart';
 // ── Filter state provider ─────────────────────────────────────────────────────
 
 final _filterProvider =
@@ -137,6 +137,20 @@ class InventoryScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () =>
+                            showCategoryManagementDialog(context),
+                        icon: const Icon(Icons.category_outlined,
+                            size: 18, color: AppColors.primary),
+                        tooltip: 'Manage Categories',
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              AppColors.primary.withOpacity(0.08),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
                       _ImportButton(),
                       const SizedBox(width: 4),
                       _ExportButton(),
@@ -198,6 +212,26 @@ class InventoryScreen extends ConsumerWidget {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            showCategoryManagementDialog(context),
+                        icon: const Icon(Icons.category_outlined,
+                            size: 15),
+                        label: const Text('Categories',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(
+                              color: AppColors.primary),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),

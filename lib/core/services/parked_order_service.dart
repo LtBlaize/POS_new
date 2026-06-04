@@ -12,9 +12,11 @@ import 'lan_server_service.dart';
 
 final parkedOrderServiceProvider =
     Provider<ParkedOrderService>((ref) => ParkedOrderService(ref));
+// ParkedOrderService is intentionally a thin shell.
+// All logic lives in ParkedOrderNotifier below.
+// Use parkedOrderProvider to access parked order state and actions.
 class ParkedOrderService {
   final Ref ref;
-
   ParkedOrderService(this.ref);
 }
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -96,14 +98,12 @@ class ParkedOrderNotifier extends StateNotifier<ParkedOrderState> {
     final cartNotifier = _ref.read(cartProvider.notifier);
 
     cartNotifier.clear();
-    for (final item in parked.items) {
-      for (var i = 0; i < item.quantity; i++) {
-        cartNotifier.addProduct(item.product);
-      }
-    }
-    cartNotifier.applyOrderDiscount(
-        parked.orderDiscountAmount, parked.orderDiscountType);
-    cartNotifier.setTip(parked.tipAmount);
+    cartNotifier.loadItems(
+      parked.items,
+      orderDiscountAmount: parked.orderDiscountAmount,
+      orderDiscountType: parked.orderDiscountType,
+      tipAmount: parked.tipAmount,
+    );
 
     await _deleteParked(parkedOrderId);
   }

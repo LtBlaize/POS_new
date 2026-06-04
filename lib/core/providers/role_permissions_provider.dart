@@ -38,10 +38,12 @@ const kDefaultPermissionsRetail = <String, List<String>>{
 typedef RolePermMap = Map<String, Set<String>>;
 
 class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
+  Map<String, dynamic>? _cachedRaw;
+
   Future<void> refresh() async {
-  state = const AsyncLoading();
-  state = AsyncData(await build());
-}
+    state = const AsyncLoading();
+    state = AsyncData(await build());
+  }
  @override
   Future<RolePermMap> build() async {
     final profile = await ref.watch(profileProvider.future);
@@ -60,6 +62,7 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
 
       final raw = row?['role_permissions'] as Map<String, dynamic>?;
       if (raw == null) return _defaults();
+      _cachedRaw = raw;
 
       final businessType = ref.read(businessTypeProvider);
       final isRestaurant = businessType?.isRestaurant ?? false;
@@ -155,6 +158,19 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     final perms = state.value ?? _defaults();
     return perms[role]?.contains(tab) ?? false;
   }
+
+  /// Returns capability flags for [role] from the already-cached JSONB,
+  /// avoiding a second Supabase query. Falls back to role defaults if the
+  /// capability sub-map isn't present (e.g. old config format).
+  RoleCapabilities capabilitiesFor(StaffRole role) {
+    if (role == StaffRole.owner) return RoleCapabilities.owner;
+    // _cachedRaw is set during build() — see below.
+    final roleData = _cachedRaw?[role.value];
+    if (roleData is Map<String, dynamic>) {
+      return RoleCapabilities.fromJson(roleData);
+    }
+    return RoleCapabilities.defaultFor(role);
+  }
 }
 
 final rolePermissionsProvider =
@@ -172,25 +188,17 @@ final activeRoleCapabilitiesProvider =
   if (staff == null) return RoleCapabilities.none;
   if (staff.role == StaffRole.owner) return RoleCapabilities.owner;
 
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return RoleCapabilities.none;
+  // Derive from the already-loaded rolePermissionsProvider — no extra
+  // Supabase query needed. rolePermissionsProvider has already fetched
+  // business_configs; we just need the capability sub-map for this role.
+  await ref.watch(rolePermissionsProvider.future);
 
-  final client = ref.read(supabaseClientProvider);
-  try {
-    final row = await client
-        .from('business_configs')
-        .select('role_permissions')
-        .eq('business_id', profile!.businessId!)
-        .maybeSingle();
-
-    final raw = row?['role_permissions'] as Map<String, dynamic>?;
-    final roleData = raw?[staff.role.value] as Map<String, dynamic>?;
-    if (roleData == null) return RoleCapabilities.defaultFor(staff.role);
-
-    return RoleCapabilities.fromJson(roleData);
-  } catch (_) {
-    return RoleCapabilities.defaultFor(staff.role);
-  }
+  // rolePermissionsProvider stores screen-level tabs, not capability flags.
+  // Capability flags live in the same JSONB under the role key but are a
+  // separate sub-map. Read them from the notifier's cached raw state so we
+  // avoid a second network call entirely.
+  final notifier = ref.read(rolePermissionsProvider.notifier);
+  return notifier.capabilitiesFor(staff.role);
 });
 
 class RoleCapabilities {

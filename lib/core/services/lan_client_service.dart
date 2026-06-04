@@ -41,6 +41,11 @@ class LanClientService {
     return ip == null ? null : 'ws://$ip:8080/ws';
   }
 
+  static String? _posKey;
+
+  /// Set at pairing time. Must match the key set on the server.
+  static void setPosKey(String key) => _posKey = key;
+
   // ── Public API ─────────────────────────────────────────────────────────────
 
   void connect({
@@ -71,7 +76,10 @@ class LanClientService {
       final res = await http
           .patch(
             Uri.parse('$base/orders/$orderId/status'),
-            headers: {'content-type': 'application/json'},
+            headers: {
+              'content-type': 'application/json',
+              'x-pos-key': _posKey ?? '',
+            },
             body: jsonEncode({'status': status}),
           )
           .timeout(const Duration(seconds: 4));

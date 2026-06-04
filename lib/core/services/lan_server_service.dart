@@ -68,6 +68,21 @@ class LanServerService {
 
   bool get isRunning => _server != null;
 
+  // Shared secret negotiated at pairing time and stored in SharedPreferences.
+  // Kitchen devices read this from the pairing QR code or manual entry.
+  static String? _posKey;
+
+  /// Call this once at boot with the key loaded from SharedPreferences.
+  static void setPosKey(String key) => _posKey = key;
+
+  /// Returns the current key, generating one if none exists yet.
+  static String getPosKey() => _posKey ??= _generateKey();
+
+  static String _generateKey() {
+    final rand = DateTime.now().millisecondsSinceEpoch ^ 0xDEADBEEF;
+    return rand.toRadixString(16).padLeft(8, '0');
+  }
+
   // ── WebSocket handler ──────────────────────────────────────────────────────
 
   Handler get _handleWs => webSocketHandler((WebSocketChannel ws, _) {
@@ -139,6 +154,12 @@ class LanServerService {
   }
 
   Future<Response> _updateOrderStatus(Request req, String orderId) async {
+    // Auth check — reject requests that don't carry the shared secret
+    final key = req.headers['x-pos-key'];
+    if (key == null || key != _posKey) {
+      return Response.forbidden(jsonEncode({'error': 'unauthorized'}),
+          headers: {'content-type': 'application/json'});
+    }
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final statusStr = body['status'] as String?;
@@ -187,6 +208,6 @@ class LanServerService {
   static const _corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-POS-Key',
   };
 }

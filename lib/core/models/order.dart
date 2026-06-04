@@ -3,7 +3,7 @@ import 'cart_item.dart';
 
 enum OrderType { walkIn, takeOut, delivery }
 enum OrderStatus { pending, preparing, ready, completed, cancelled }
-enum PaymentMethod { cash, card, gcash, maya }
+enum PaymentMethod { cash, card, gcash, maya, credit }
 
 extension OrderTypeX on OrderType {
   String get value => switch (this) {
@@ -41,11 +41,13 @@ extension PaymentMethodX on PaymentMethod {
         PaymentMethod.card => 'card',
         PaymentMethod.gcash => 'gcash',
         PaymentMethod.maya => 'maya',
+        PaymentMethod.credit => 'credit',
       };
   static PaymentMethod fromString(String v) => switch (v) {
         'card' => PaymentMethod.card,
         'gcash' => PaymentMethod.gcash,
         'maya' => PaymentMethod.maya,
+        'credit' => PaymentMethod.credit,
         _ => PaymentMethod.cash,
       };
 }

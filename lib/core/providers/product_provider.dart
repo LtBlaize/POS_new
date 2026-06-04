@@ -10,17 +10,17 @@ import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../providers/app_context_provider.dart';
 
 // ── Product list ──────────────────────────────────────────────────────────────
 
 final productListProvider = StreamProvider<List<Product>>((ref) async* {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) {
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) {
     yield [];
     return;
   }
 
-  final businessId = profile!.businessId!;
   final local = ref.read(localDbServiceProvider);
   final client = ref.watch(supabaseClientProvider);
 
@@ -175,11 +175,10 @@ class _AppLifecycleObserver extends WidgetsBindingObserver {
 // ── Category list ─────────────────────────────────────────────────────────────
 
 final categoryListProvider = FutureProvider<List<String>>((ref) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return [];
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return [];
 
   final client = ref.watch(supabaseClientProvider);
-  final businessId = profile!.businessId!;
 
   try {
     final rows = await client

@@ -167,6 +167,17 @@ class ShiftService {
     );
 
     final now = DateTime.now().toUtc();
+    // Read the running expense total from local DB
+    final d2 = await _db.db;
+    final expRows = await d2.query(
+      'cashier_shifts',
+      columns: ['expenses'],
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
+    final expenses =
+        (expRows.firstOrNull?['expenses'] as num? ?? 0).toDouble();
+
     final updates = {
       'status': 'closed',
       'closed_at': now.toIso8601String(),
@@ -178,6 +189,7 @@ class ShiftService {
       'other_sales': summary['other_sales'],
       'credit_given': summary['credit_given'],
       'credits_paid': summary['credits_paid'],
+      'expenses': expenses,
     };
 
     try {
@@ -202,6 +214,7 @@ class ShiftService {
       otherSales: summary['other_sales']!,
       creditGiven: summary['credit_given']!,
       creditsPaid: summary['credits_paid']!,
+      expenses: expenses,
     );
 
     
@@ -261,6 +274,9 @@ class ShiftService {
         case 'maya':
         case 'e_wallet':
           gcashSales += amount;
+        case 'credit':
+          creditGiven += amount;
+          totalSales -= amount; // credit sales are not collected cash
         default:
           otherSales += amount;
       }
@@ -268,7 +284,8 @@ class ShiftService {
 
     try {
       // ── Tally paid orders ──────────────────────────────────────────────────
-      final orders = await _supabase
+      // Fetch orders assigned to this staff member
+      final assignedOrders = await _supabase
           .from('orders')
           .select('total_amount, payment_method, status, paid_at')
           .eq('business_id', businessId)
@@ -276,7 +293,21 @@ class ShiftService {
           .gte('created_at', from.toUtc().toIso8601String())
           .lte('created_at', to.toUtc().toIso8601String());
 
-      for (final o in orders) {
+      for (final o in assignedOrders) {
+        tally(o);
+      }
+
+      // Also include orders with no cashier_id (owner-placed orders on older
+      // accounts that were created before the staff row existed)
+      final nullCashierOrders = await _supabase
+          .from('orders')
+          .select('total_amount, payment_method, status, paid_at')
+          .eq('business_id', businessId)
+          .isFilter('cashier_id', null)
+          .gte('created_at', from.toUtc().toIso8601String())
+          .lte('created_at', to.toUtc().toIso8601String());
+
+      for (final o in nullCashierOrders) {
         tally(o);
       }
 
@@ -315,7 +346,8 @@ class ShiftService {
 
       final rows = await d.rawQuery('''
         SELECT total_amount, payment_method, status, paid_at FROM orders
-        WHERE business_id = ? AND cashier_id = ?
+        WHERE business_id = ?
+          AND (cashier_id = ? OR cashier_id IS NULL)
           AND created_at >= ? AND created_at <= ?
       ''', [
         businessId,
@@ -382,6 +414,45 @@ class ShiftService {
         where: 'id = ?', whereArgs: [shiftId], limit: 1);
     if (rows.isEmpty) return null;
     return _shiftFromMap(rows.first);
+  }
+
+  // ── Log expense ────────────────────────────────────────────────────────────
+
+  Future<void> logExpense({
+    required String shiftId,
+    required String businessId,
+    required double amount,
+    required String description,
+  }) async {
+    // 1. Update local SQLite first so UI reflects change immediately
+    final d = await _db.db;
+    await d.rawUpdate(
+      'UPDATE cashier_shifts SET expenses = expenses + ? WHERE id = ?',
+      [amount, shiftId],
+    );
+
+    // 2. Sync to Supabase
+    try {
+      await _supabase.rpc('increment_shift_expenses', params: {
+        'p_shift_id': shiftId,
+        'p_amount': amount,
+      });
+    } catch (_) {
+      // Non-fatal — local value is correct, Supabase will be updated
+      // at shift close when the full summary is written.
+    }
+  }
+
+  Future<double> getExpenses(String shiftId) async {
+    final d = await _db.db;
+    final rows = await d.query(
+      'cashier_shifts',
+      columns: ['expenses'],
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.first['expenses'] as num? ?? 0).toDouble();
   }
 
   // ── Shift history ──────────────────────────────────────────────────────────

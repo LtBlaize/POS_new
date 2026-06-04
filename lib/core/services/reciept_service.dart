@@ -27,6 +27,44 @@ class ReceiptService {
         _isOnline = isOnline,
         _syncQueue = syncQueue;
 
+  Future<Map<String, dynamic>?> fetchReceiptForOrder(String orderId) async {
+    if (!_isOnline) return null;
+    try {
+      final rows = await _client
+          .from('receipts')
+          .select()
+          .eq('order_id', orderId)
+          .eq('is_voided', false)
+          .order('issued_at', ascending: false)
+          .limit(1);
+      if ((rows as List).isEmpty) return null;
+      return rows.first as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[Receipt] fetchReceiptForOrder failed: $e');
+      return null;
+    }
+  }
+
+  Future<void> markReprinted(String receiptId) async {
+    if (!_isOnline) return;
+    try {
+      // Read current count then increment — no RPC needed
+      final row = await _client
+          .from('receipts')
+          .select('reprint_count')
+          .eq('id', receiptId)
+          .single();
+      final current = (row['reprint_count'] as int? ?? 0);
+      await _client.from('receipts').update({
+        'reprint_count': current + 1,
+        'last_reprinted_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', receiptId);
+    } catch (_) {
+      // Non-fatal — reprint count is cosmetic
+    }
+  }
+
   Future<String> createReceipt({
     required Order order,
     required String businessName,

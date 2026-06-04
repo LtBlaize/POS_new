@@ -48,8 +48,10 @@ Future<void> main() async {
   // FIX 1: Only sign out on real auth errors (deleted account, revoked token).
   // Previously this caught ALL exceptions including network timeouts, which
   // caused the app to sign out users whenever the device was offline at boot.
-  final existingSession = Supabase.instance.client.auth.currentSession;
-  if (existingSession != null) {
+  
+
+final existingSession = Supabase.instance.client.auth.currentSession;
+if (existingSession != null) {
     try {
       await Supabase.instance.client.auth.refreshSession();
       debugPrint('[Boot] Session refreshed successfully');
@@ -87,6 +89,13 @@ Future<void> main() async {
   container.read(syncQueueServiceProvider).init();
 
   if (isPos) {
+    final savedKey = prefs.getString('pos_lan_key');
+    if (savedKey != null && savedKey.isNotEmpty) {
+      LanServerService.setPosKey(savedKey);
+    } else {
+      final newKey = LanServerService.getPosKey(); // generates one
+      await prefs.setString('pos_lan_key', newKey);
+    }
     await container.read(lanServerServiceProvider).start();
     if (!kIsWeb && Platform.isAndroid) await WakelockPlus.enable();
     final ip = await _getLocalIp();
@@ -110,8 +119,12 @@ Future<void> main() async {
     }
   }
 
+  // Always boot to /pending when a session exists.
+  // _PendingPosScreen watches featureManagerProvider and navigates to /pos
+  // once it resolves — eliminating the race between initialRoute and
+  // featureManagerProvider being null on the first frame.
   final String initialRoute =
-      Supabase.instance.client.auth.currentSession != null ? '/pos' : '/login';
+      Supabase.instance.client.auth.currentSession != null ? '/pending' : '/login';
 
   debugPrint('[Boot] savedRole: $savedRole  initialRoute: $initialRoute');
 
@@ -144,7 +157,19 @@ class _MyAppState extends ConsumerState<MyApp> {
     ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) async {
       if (!_initialEventSkipped) {
         _initialEventSkipped = true;
-        return;
+        debugPrint('[Auth] initial event: ${next.runtimeType} user: ${next.asData?.value?.id} route: ${widget.initialRoute}');
+        if (next.asData?.value != null && widget.initialRoute == '/pending') {
+          debugPrint('[Auth] cached session boot — falling through to signed-in handler');
+          // Fall through to normal signed-in handling below.
+        } else if (next.asData?.value == null && widget.initialRoute == '/pending') {
+          debugPrint('[Auth] cached session gone — going to /login');
+          router.navigatorKey.currentState
+              ?.pushNamedAndRemoveUntil('/login', (_) => false);
+          return;
+        } else {
+          debugPrint('[Auth] initial event skipped');
+          return;
+        }
       }
 
         final previousUser = previous?.asData?.value;

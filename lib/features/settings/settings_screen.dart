@@ -13,7 +13,7 @@ import '../../shared/widgets/app_colors.dart';
 import 'widgets/general_settings_section.dart';
 import 'widgets/lan_settings_section.dart';
 import 'widgets/printer_settings_section.dart';
-import 'widgets/staff_settings_section.dart';
+import 'widgets/staff_settings_section.dart' show StaffSettingsSection, OwnerPinSection;
 import 'widgets/table_settings_section.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -87,6 +87,12 @@ class SettingsScreen extends ConsumerWidget {
               // ── Printer — all POS roles ───────────────────────────────
               const SizedBox(height: 16),
               _SectionCard(child: const PrinterSettingsSection()),
+
+              // ── PIN change — owners only ──────────────────────────────
+              if (isOwner) ...[
+                const SizedBox(height: 16),
+                _SectionCard(child: const OwnerPinSection()),
+              ],
 
               // ── Staff management — owners only ────────────────────────
               if (isOwner) ...[

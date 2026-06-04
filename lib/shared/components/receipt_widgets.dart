@@ -97,6 +97,7 @@ class PayMethodChip extends StatelessWidget {
         PaymentMethod.card => 'Card',
         PaymentMethod.gcash => 'GCash',
         PaymentMethod.maya => 'Maya',
+        PaymentMethod.credit => 'Utang',
       };
 
   IconData get _icon => switch (method) {
@@ -104,6 +105,7 @@ class PayMethodChip extends StatelessWidget {
         PaymentMethod.card => Icons.credit_card_outlined,
         PaymentMethod.gcash => Icons.phone_android_outlined,
         PaymentMethod.maya => Icons.account_balance_wallet_outlined,
+        PaymentMethod.credit => Icons.receipt_long_outlined,
       };
 
   @override
@@ -217,5 +219,6 @@ String paymentLabel(PaymentMethod? method) => switch (method) {
       PaymentMethod.card => 'Card / POS',
       PaymentMethod.gcash => 'GCash',
       PaymentMethod.maya => 'Maya',
+      PaymentMethod.credit => 'Utang (Credit)',
       null => 'Unknown',
     };

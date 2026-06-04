@@ -3,7 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/credit.dart';
 import '../services/credit_service.dart';
-import '../../features/auth/auth_provider.dart';
+import '../providers/app_context_provider.dart';
 
 final creditCustomersProvider =
     AsyncNotifierProvider<CreditCustomersNotifier, List<CreditCustomer>>(
@@ -12,16 +12,14 @@ final creditCustomersProvider =
 class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
   @override
   Future<List<CreditCustomer>> build() async {
-    final profile = ref.watch(profileProvider).value;
-    if (profile == null) return [];
-    final businessId = profile.businessId;
+    final businessId = ref.watch(activeBusinessIdProvider);
     if (businessId == null) return [];
     return ref.read(creditServiceProvider).getCustomers(businessId);
   }
 
   String get _businessId {
-    final id = ref.read(profileProvider).value?.businessId;
-    if (id == null) throw Exception('No business linked to profile');
+    final id = ref.read(activeBusinessIdProvider);
+    if (id == null) throw Exception('No active business');
     return id;
   }
 

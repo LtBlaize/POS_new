@@ -102,13 +102,21 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           if (profileRow != null) {
             debugPrint(
                 '[Staff] No owner staff row — auto-creating for existing account...');
+            // Generate a random 6-digit PIN and hash it.
+            // The owner will be prompted to set a proper PIN on next login,
+            // but at least the hash is non-empty so PIN unlock works.
+            final tempPin = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
             await _client.from('staff_members').insert({
               'business_id': _businessId,
               'name': profileRow['full_name'] as String,
               'role': 'owner',
-              'pin_hash': '',
+              'pin_hash': StaffMember.hashPin(tempPin),
               'is_active': true,
             });
+            assert(() {
+              debugPrint('[Staff] Owner auto-created with temp PIN: $tempPin — owner must update this in Settings.');
+              return true;
+            }());
             return load(retrying: true);
           }
         } catch (e) {

@@ -22,6 +22,7 @@ class PaymentMethodRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: PaymentMethod.values
+          .where((m) => m != PaymentMethod.credit)
           .map((m) => Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -64,8 +65,9 @@ class PaymentMethodCard extends StatelessWidget {
           ),
         PaymentMethod.maya =>
           ('Maya', Icons.phone_android_outlined, CheckoutTheme.maya),
+        PaymentMethod.credit =>
+          ('Utang', Icons.receipt_long_outlined, CheckoutTheme.rose),
       };
-
   @override
   Widget build(BuildContext context) {
     final (label, icon, color) = _meta;

@@ -158,7 +158,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             voidedByStaffName: widget.authorisedStaff.name,
             businessId: widget.businessId,
             trackInventory: widget.item.product.trackInventory,
-            currentStock: widget.item.product.stockQuantity,
+            currentStock: widget.item.selectedVariant?.stockQuantity
+                ?? widget.item.product.stockQuantity,
+            variantId: widget.item.selectedVariant?.id,
           );
 
       // Audit log

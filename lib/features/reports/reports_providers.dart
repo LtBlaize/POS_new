@@ -9,6 +9,7 @@ import '../../core/services/shift_service.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../core/providers/app_context_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DAILY REPORT MODELS
@@ -222,9 +223,8 @@ final dateRangeProvider = StateProvider<DateRange>((ref) {
 final heatmapProvider =
     FutureProvider.family<WeeklyHeatmap, DateRange>((ref, range) async {
   if (range.isSingleDay) return WeeklyHeatmap.empty;
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return WeeklyHeatmap.empty;
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return WeeklyHeatmap.empty;
   final isOnline = ref.read(isOnlineProvider);
   if (!isOnline) return WeeklyHeatmap.empty;
 
@@ -286,9 +286,8 @@ final slowMoverThresholdProvider = StateProvider<int>((ref) => 3);
 final slowMoversProvider =
     FutureProvider.family<List<TopProduct>, ({DateRange range, int threshold})>(
         (ref, args) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return [];
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return [];
   final isOnline = ref.read(isOnlineProvider);
   if (!isOnline) return [];
 
@@ -368,12 +367,55 @@ final slowMoversProvider =
 
 final periodReportProvider =
     FutureProvider.family<DailyReport, DateRange>((ref, range) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return DailyReport.empty;
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return DailyReport.empty;
   final isOnline = ref.read(isOnlineProvider);
-  if (!isOnline) return DailyReport.empty.copyWith(isFromCache: true);
-
+  if (!isOnline) {
+    // For multi-day ranges, sum up cached daily rows
+    final local = ref.read(localDbServiceProvider);
+    final dateKey = (d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final cached = await local.getReports(
+      businessId,
+      fromDate: dateKey(range.start),
+      toDate: dateKey(range.end),
+    );
+    if (cached.isEmpty) return DailyReport.empty.copyWith(isFromCache: true);
+    double totalRevenue = 0;
+    int totalOrders = 0;
+    double totalCogs = 0;
+    final List<TopProduct> topProducts = [];
+    for (final row in cached) {
+      totalRevenue += (row['total_sales'] as num?)?.toDouble() ?? 0;
+      totalOrders += (row['order_count'] as int?) ?? 0;
+      final rawTop = (row['top_products'] as List? ?? []).cast<Map<String, dynamic>>();
+      for (final p in rawTop) {
+        totalCogs += (p['cogs'] as num?)?.toDouble() ?? 0;
+        topProducts.add(TopProduct(
+          p['name'] as String,
+          (p['qty'] as num).toInt(),
+          (p['revenue'] as num).toDouble(),
+          cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
+          grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
+          marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
+          category: p['category'] as String? ?? '',
+        ));
+      }
+    }
+    return DailyReport(
+      totalRevenue: totalRevenue,
+      totalOrders: totalOrders,
+      avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+      revenueByPayment: const {},
+      topProducts: topProducts,
+      hourlySales: List.generate(24, (h) => HourlySale(h, 0)),
+      completedOrders: totalOrders,
+      cancelledOrders: 0,
+      totalCogs: totalCogs,
+      grossProfit: totalRevenue - totalCogs,
+      isFromCache: true,
+    );
+  }
   try {
     final client = ref.watch(supabaseClientProvider);
     final start = DateTime(range.start.year, range.start.month, range.start.day)
@@ -400,10 +442,8 @@ final periodReportProvider =
 
 final dailyReportProvider =
     FutureProvider.family<DailyReport, DateTime>((ref, date) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return DailyReport.empty;
-
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return DailyReport.empty;
   final isOnline = ref.read(isOnlineProvider);
   final local = ref.read(localDbServiceProvider);
   final dateKey =
@@ -436,7 +476,15 @@ final dailyReportProvider =
       orderCount: report.totalOrders,
       avgOrderValue: report.avgOrderValue,
       topProducts: report.topProducts
-          .map((p) => {'name': p.name, 'qty': p.qty, 'revenue': p.revenue})
+          .map((p) => {
+                'name': p.name,
+                'qty': p.qty,
+                'revenue': p.revenue,
+                'cogs': p.cogs,
+                'gross_profit': p.grossProfit,
+                'margin_pct': p.marginPct,
+                'category': p.category,
+              })
           .toList(),
     );
 
@@ -448,9 +496,8 @@ final dailyReportProvider =
 
 final shiftReportProvider =
     FutureProvider.family<List<ShiftEntry>, DateTime>((ref, date) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return [];
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return [];
 
   final shiftService = ref.read(shiftServiceProvider);
 
@@ -580,6 +627,10 @@ Future<DailyReport> _loadFromCache(
               p['name'] as String,
               (p['qty'] as num).toInt(),
               (p['revenue'] as num).toDouble(),
+              cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
+              grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
+              marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
+              category: p['category'] as String? ?? '',
             ))
         .toList(),
     hourlySales: List.generate(24, (h) => HourlySale(h, 0)),
@@ -888,9 +939,8 @@ final auditFilterProvider = StateProvider<AuditFilter>(
 final auditLogProvider =
     FutureProvider.family<List<AuditLogEntry>, AuditFilter>(
         (ref, filter) async {
-  final profile = await ref.watch(profileProvider.future);
-  if (profile?.businessId == null) return [];
-  final businessId = profile!.businessId!;
+  final businessId = ref.watch(activeBusinessIdProvider);
+  if (businessId == null) return [];
   final isOnline = ref.read(isOnlineProvider);
   if (!isOnline) return [];
 

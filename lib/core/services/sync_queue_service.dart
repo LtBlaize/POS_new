@@ -10,9 +10,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:uuid/uuid.dart';
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../models/order.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -64,16 +66,17 @@ class SyncQueueService {
     required String tableName,
     required String recordId,
     required Map<String, dynamic> payload,
+    String? idempotencyKey,
   }) async {
+    final key = idempotencyKey ?? const Uuid().v4();
     await _local.enqueue(
       operation: operation,
       tableName: tableName,
       recordId: recordId,
-      payload: payload,
+      payload: {...payload, '_idempotency_key': key},
     );
     await _refreshCount();
   }
-
   Future<void> flushQueue() async {
     if (_syncInProgress) return;
     _syncInProgress = true;
@@ -90,6 +93,10 @@ class SyncQueueService {
         if (retries >= kMaxRetries) continue;
 
         try {
+          if (retries > 0) {
+            final backoffSeconds = 1 << retries; // 2, 4, 8, 16 seconds
+            await Future.delayed(Duration(seconds: backoffSeconds));
+          }
           await _replay(entry);
           await _local.dequeue(id);
           synced++;
@@ -213,6 +220,193 @@ class SyncQueueService {
           'notes': payload['notes'],
           'performed_at': payload['performed_at'],
         });
+
+      case 'insert_kitchen_ticket':
+        // Idempotency: skip if ticket already exists for this order
+        final existing = await _client
+            .from('kitchen_tickets')
+            .select('id')
+            .eq('order_id', payload['order_id'] as String)
+            .maybeSingle();
+        if (existing == null) {
+          await _client.from('kitchen_tickets').insert(payload);
+        }
+
+      case 'void_order_item':
+        // Idempotency: skip if void record already exists
+        final existingVoid = await _client
+            .from('void_order_items')
+            .select('id')
+            .eq('id', recordId)
+            .maybeSingle();
+        if (existingVoid == null) {
+          final voidPayload = Map<String, dynamic>.from(payload)
+            ..remove('track_inventory')
+            ..remove('current_stock')
+            ..remove('business_id');
+          await _client.from('void_order_items').insert(voidPayload);
+
+          await _client
+              .from('order_items')
+              .delete()
+              .eq('order_id', payload['order_id'] as String)
+              .eq('product_id', payload['product_id'] as String);
+        }
+
+      case 'adjust_variant_stock':
+        final existingVariantLog = await _client
+            .from('inventory_logs')
+            .select('id')
+            .eq('product_id', payload['product_id'] as String)
+            .eq('action', payload['action'] as String)
+            .eq('notes', payload['notes'] ?? '')
+            .maybeSingle();
+        if (existingVariantLog != null) {
+          debugPrint('[SyncQueue] adjust_variant_stock already applied, skipping');
+          break;
+        }
+        final variantRow = await _client
+            .from('product_variants')
+            .select('stock_quantity')
+            .eq('id', recordId)
+            .single();
+        final currentVariantStock = variantRow['stock_quantity'] as int;
+        final variantDelta = payload['quantity_change'] as int;
+        final newVariantStock = currentVariantStock + variantDelta;
+
+        await _client.from('product_variants').update({
+          'stock_quantity': newVariantStock,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', recordId);
+
+        await _client.from('inventory_logs').insert({
+          'business_id': payload['business_id'],
+          'product_id': payload['product_id'],
+          'action': payload['action'],
+          'quantity_change': variantDelta,
+          'quantity_before': currentVariantStock,
+          'quantity_after': newVariantStock,
+          'performed_by': payload['performed_by'],
+          'notes': payload['notes'],
+        });
+
+      case 'record_credit_payment':
+        // Idempotency: skip if payment transaction already exists
+        final existingPayment = await _client
+            .from('credit_transactions')
+            .select('id')
+            .eq('id', payload['payment_tx_id'] as String)
+            .maybeSingle();
+        if (existingPayment != null) {
+          debugPrint('[SyncQueue] record_credit_payment already synced, skipping');
+          break;
+        }
+
+        final customerId = payload['customer_id'] as String;
+        final amount = (payload['amount'] as num).toDouble();
+        final paymentTxId = payload['payment_tx_id'] as String;
+
+        // Insert payment transaction
+        await _client.from('credit_transactions').insert({
+          'id': paymentTxId,
+          'customer_id': customerId,
+          'business_id': payload['business_id'],
+          'type': 'payment',
+          'amount': amount,
+          'amount_remaining': 0,
+          'is_settled': true,
+          'note': payload['note'],
+          'created_at': payload['created_at'],
+        });
+
+        // FIFO settlement against unsettled credits
+        final unsettled = await _client
+            .from('credit_transactions')
+            .select()
+            .eq('customer_id', customerId)
+            .eq('type', 'credit')
+            .eq('is_settled', false)
+            .order('created_at', ascending: true);
+
+        double remaining = amount;
+        for (final row in unsettled as List) {
+          if (remaining <= 0) break;
+          final creditTxId = row['id'] as String;
+          final amtRemaining = (row['amount_remaining'] as num).toDouble();
+          final applied = remaining >= amtRemaining ? amtRemaining : remaining;
+          final newRemaining = amtRemaining - applied;
+          remaining -= applied;
+
+          await _client.from('credit_transactions').update({
+            'amount_remaining': newRemaining,
+            'is_settled': newRemaining == 0,
+            'settled_at': newRemaining == 0
+                ? DateTime.now().toIso8601String()
+                : null,
+          }).eq('id', creditTxId);
+
+          await _client.from('credit_settlements').insert({
+            'payment_tx_id': paymentTxId,
+            'credit_tx_id': creditTxId,
+            'amount_applied': applied,
+          });
+        }
+
+        // Update customer total_owed
+        await _client.rpc('decrement_credit_owed', params: {
+          'p_customer_id': customerId,
+          'p_amount': amount,
+        });
+
+      case 'void_order':
+        // Idempotency: skip if already cancelled
+        final orderRow = await _client
+            .from('orders')
+            .select('status')
+            .eq('id', payload['order_id'] as String)
+            .maybeSingle();
+        if (orderRow == null ||
+            orderRow['status'] == OrderStatus.cancelled.value) break;
+
+        final voidedAt = payload['voided_at'] as String;
+        final voidedById = payload['voided_by_staff_id'] as String;
+        final reason = payload['reason'] as String;
+
+        await _client.from('orders').update({
+          'status': 'cancelled',
+          'notes': reason,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', payload['order_id'] as String);
+
+        final items =
+            (payload['items'] as List).cast<Map<String, dynamic>>();
+        for (final item in items) {
+          await _client.from('void_order_items').insert({
+            'id': const Uuid().v4(),
+            'order_id': payload['order_id'],
+            'product_id': item['product_id'],
+            'product_name': item['product_name'],
+            'unit_price': item['unit_price'],
+            'quantity': item['quantity'],
+            'subtotal': item['subtotal'],
+            'reason': reason,
+            'voided_by_staff_id': voidedById,
+            'voided_by_staff_name': payload['voided_by_staff_name'],
+            'voided_at': voidedAt,
+          });
+        }
+
+        await _client
+            .from('receipts')
+            .update({
+              'is_voided': true,
+              'voided_at': voidedAt,
+              'voided_by': voidedById,
+              'void_reason': reason,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('order_id', payload['order_id'] as String)
+            .eq('is_voided', false);
 
       case 'add_staff':
         await _client.from('staff_members').insert(payload);

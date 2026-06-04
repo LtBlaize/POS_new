@@ -7,33 +7,27 @@ import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/credit.dart';
+import 'connectivity_service.dart';
 import 'local_db_service.dart';
 
 final creditServiceProvider = Provider<CreditService>((ref) {
   return CreditService(
     ref.watch(localDbServiceProvider),
     Supabase.instance.client,
+    ref,
   );
 });
 
 class CreditService {
   final LocalDbService _db;
   final SupabaseClient _supabase;
+  final Ref _ref;
 
-  const CreditService(this._db, this._supabase);
+  const CreditService(this._db, this._supabase, this._ref);
 
   String _uuid() => const Uuid().v4();
 
-  // ── Online check ───────────────────────────────────────────────────────────
-
-  Future<bool> _checkOnline() async {
-    try {
-      await _supabase.from('credit_transactions').select('id').limit(1);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  bool get _isOnline => _ref.read(isOnlineProvider);
 
   // ── Customers ──────────────────────────────────────────────────────────────
 
@@ -203,9 +197,7 @@ class CreditService {
     // Why check online here instead of using isOnlineProvider?
     // CreditService is a plain class with no Ref — it doesn't have access
     // to Riverpod providers. A lightweight probe is the cleanest option.
-    final isOnline = await _checkOnline();
-
-    if (!isOnline) {
+    if (!_isOnline) {
       // 1. Save payment locally so the cashier sees it immediately
       await _db.insertCreditTransaction(
         id: paymentTxId,

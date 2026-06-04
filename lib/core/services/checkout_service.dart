@@ -9,6 +9,7 @@ import '../providers/staff_provider.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../providers/app_context_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../features/settings/settings_provider.dart';
 import 'reciept_service.dart';
@@ -61,14 +62,16 @@ class CheckoutService {
     String? tableNumber,
     String? roomName,
   }) async {
-    final profile = _ref.read(profileProvider).asData?.value;
-    if (profile?.businessId == null) {
+    final businessId = _ref.read(activeBusinessIdProvider);
+    if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
+    final profile = _ref.read(profileProvider).asData?.value;
 
-    // Validate reference number for non-cash payments
+    // Validate reference number for non-cash, non-credit payments
     if (payNow &&
         paymentMethod != PaymentMethod.cash &&
+        paymentMethod != PaymentMethod.credit &&
         (referenceNumber == null || referenceNumber.trim().isEmpty)) {
       return CheckoutResult.error(
         'Please enter the ${_methodLabel(paymentMethod)} reference number.',
@@ -114,7 +117,7 @@ class CheckoutService {
             }
           } catch (e) {
             debugPrint('[Checkout] Stock check failed, using local cache: $e');
-            final cached = await local.getProducts(profile!.businessId!);
+            final cached = await local.getProducts(businessId);
             final p =
                 cached.where((p) => p.id == item.product.id).firstOrNull;
             if (p != null &&
@@ -128,7 +131,7 @@ class CheckoutService {
           }
         }
       } else {
-        final cached = await local.getProducts(profile!.businessId!);
+        final cached = await local.getProducts(businessId);
         for (final item in items) {
           if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
@@ -147,7 +150,7 @@ class CheckoutService {
       String? tableUuid;
       if (isRestaurant && selectedTableName != null) {
         tableUuid = await resolveTableUuid(
-          businessId: profile!.businessId!,
+          businessId: businessId,
           tableNumber: selectedTableName,
         );
         if (tableUuid == null && _isOnline) {
@@ -158,7 +161,7 @@ class CheckoutService {
 
       final orderType = _ref.read(cartProvider.notifier).orderType;
       order = await service.placeOrder(
-        businessId: profile!.businessId!,
+        businessId: businessId,
         items: items,
         tableId: tableUuid,
         notes: null,
@@ -176,19 +179,18 @@ class CheckoutService {
             final client = _ref.read(supabaseClientProvider);
             await client.from('kitchen_tickets').insert({
               'order_id': order.id,
-              'business_id': profile.businessId,
+              'business_id': businessId,
               'status': 'queued',
             });
           } catch (e) {
             debugPrint('[Checkout] Kitchen ticket online failed, queuing: $e');
-            // fall through to queue
             await _ref.read(syncQueueServiceProvider).enqueue(
               operation: 'insert_kitchen_ticket',
               tableName: 'kitchen_tickets',
               recordId: order.id,
               payload: {
                 'order_id': order.id,
-                'business_id': profile.businessId,
+                'business_id': businessId,
                 'status': 'queued',
               },
             );
@@ -200,7 +202,7 @@ class CheckoutService {
             recordId: order.id,
             payload: {
               'order_id': order.id,
-              'business_id': profile.businessId,
+              'business_id': businessId,
               'status': 'queued',
             },
           );
@@ -242,28 +244,13 @@ class CheckoutService {
     }
 
     // ── Receipt ─────────────────────────────────────────────────────────────
-    String businessName = 'My Business';
-    String? businessAddress;
-    String? businessPhone;
-    String? businessEmail;
-
-    if (_isOnline) {
-      try {
-        final client = _ref.read(supabaseClientProvider);
-        final businessRow = await client
-            .from('businesses')
-            .select('name, address, phone, email')
-            .eq('id', profile!.businessId!)
-            .maybeSingle();
-        businessName = businessRow?['name'] as String? ?? 'My Business';
-        businessAddress = businessRow?['address'] as String?;
-        businessPhone = businessRow?['phone'] as String?;
-        businessEmail = businessRow?['email'] as String?;
-      } catch (e) {
-        debugPrint(
-            '[Checkout] Business info fetch failed, using defaults: $e');
-      }
-    }
+    // Use the already-loaded business from profileProvider — avoids a
+    // redundant Supabase round-trip on every payment (#14).
+    final business = profile!.business;
+    String businessName = business?.name ?? 'My Business';
+    String? businessAddress = business?.address;
+    String? businessPhone = business?.phone;
+    String? businessEmail = business?.email;
 
     final paidOrder = order.copyWith(
       paymentMethod: paymentMethod,
@@ -279,7 +266,7 @@ class CheckoutService {
       businessPhone: businessPhone,
       businessEmail: businessEmail,
       taxRate: taxRate,
-      issuedBy: profile!.id,
+      issuedBy: profile.id,
       footerText: isRestaurant
           ? 'Thank you for dining with us!'
           : 'Thank you for shopping with us!',
@@ -322,6 +309,7 @@ class CheckoutService {
         PaymentMethod.maya => 'Maya',
         PaymentMethod.card => 'card',
         PaymentMethod.cash => 'cash',
+        PaymentMethod.credit => 'credit',
       };
 }
 

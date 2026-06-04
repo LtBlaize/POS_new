@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/shift.dart';
 import '../../core/providers/shift_provider.dart';
+import '../../core/services/shift_service.dart';
 
 class CloseShiftScreen extends ConsumerStatefulWidget {
   final VoidCallback onShiftClosed;
@@ -152,6 +153,11 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
               _SalesSummaryCard(shift: shift),
               const SizedBox(height: 20),
 
+              _SectionTitle(title: 'EXPENSES'),
+              const SizedBox(height: 10),
+              _ExpensesCard(shiftId: shift.id),
+              const SizedBox(height: 20),
+
               _SectionTitle(title: 'CASH RECONCILIATION'),
               const SizedBox(height: 10),
               _CashReconciliationCard(
@@ -163,7 +169,9 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
               const SizedBox(height: 20),
 
               _OverShortPreview(
-                expectedCash: shift.expectedCash,  // uses the model getter
+                expectedCash: shift.openingCash +
+                    shift.cashSales -
+                    shift.expenses,
                 actualCash: _actualCash,
               ),
               const SizedBox(height: 20),
@@ -536,12 +544,19 @@ class _CashReconciliationCard extends StatelessWidget {
             prefix: '+',
           ),
           const _Divider(),
-          // FIX: expenses placeholder removed from expected calculation
-          // since expenses is always 0 — showing it confuses the reconciliation.
-          // When expenses tab ships, add it back here.
+          if (shift.expenses > 0) ...[
+            _SummaryRow(
+              label: 'Expenses',
+              icon: Icons.remove_circle_outline,
+              value: shift.expenses,
+              color: const Color(0xFFE94560),
+              prefix: '−',
+            ),
+            const _Divider(),
+          ],
           _SummaryRow(
             label: 'Expected in Drawer',
-            value: shift.openingCash + shift.cashSales,
+            value: shift.openingCash + shift.cashSales - shift.expenses,
             color: Colors.white,
             isBold: true,
           ),
@@ -838,11 +853,15 @@ class _ShiftReceiptView extends StatelessWidget {
                     _ReceiptRow('Opening Cash', shift.openingCash),
                     _ReceiptRow('Cash Sales', shift.cashSales,
                         prefix: '+'),
+                    if (shift.expenses > 0)
+                      _ReceiptRow('Expenses', shift.expenses,
+                          color: const Color(0xFFE94560), prefix: '−'),
                     const SizedBox(height: 8),
-                    // FIX: expectedCash = openingCash + cashSales only
-                    // (expenses excluded until expenses tab ships)
-                    _ReceiptRow('Expected in Drawer',
-                        shift.openingCash + shift.cashSales,
+                    _ReceiptRow(
+                        'Expected in Drawer',
+                        shift.openingCash +
+                            shift.cashSales -
+                            shift.expenses,
                         bold: true),
                     _ReceiptRow(
                         'Actual Cash Count',
@@ -933,6 +952,205 @@ class _ShiftReceiptView extends StatelessWidget {
 }
 
 // ── Shared small widgets ──────────────────────────────────────────────────────
+
+// ── Expenses Card ─────────────────────────────────────────────────────────────
+
+class _ExpensesCard extends ConsumerStatefulWidget {
+  final String shiftId;
+  const _ExpensesCard({required this.shiftId});
+
+  @override
+  ConsumerState<_ExpensesCard> createState() => _ExpensesCardState();
+}
+
+class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
+  final _amountCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  double _totalExpenses = 0;
+  bool _adding = false;
+  bool _saving = false;
+
+  static const _surface = Color(0xFF1A1F35);
+  static const _accent = Color(0xFFE94560);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExpenses();
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadExpenses() async {
+    final service = ref.read(shiftServiceProvider);
+    final total = await service.getExpenses(widget.shiftId);
+    if (mounted) setState(() => _totalExpenses = total);
+  }
+
+  Future<void> _save() async {
+    final amount =
+        double.tryParse(_amountCtrl.text.replaceAll(',', ''));
+    if (amount == null || amount <= 0) return;
+    final desc = _descCtrl.text.trim();
+    if (desc.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      await ref.read(shiftServiceProvider).logExpense(
+            shiftId: widget.shiftId,
+            businessId: '',
+            amount: amount,
+            description: desc,
+          );
+      _amountCtrl.clear();
+      _descCtrl.clear();
+      await _loadExpenses();
+      if (mounted) setState(() => _adding = false);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.receipt_long_outlined,
+                  size: 16, color: Color(0xFFE94560)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Total Expenses: ₱${NumberFormat('#,##0.00').format(_totalExpenses)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => _adding = !_adding),
+                icon: Icon(
+                    _adding ? Icons.close : Icons.add, size: 14),
+                label: Text(_adding ? 'Cancel' : 'Add',
+                    style: const TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                    foregroundColor: _accent,
+                    padding: EdgeInsets.zero),
+              ),
+            ],
+          ),
+          if (_adding) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: TextField(
+                    controller: _amountCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                            decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[\d.]')),
+                    ],
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.2),
+                          fontSize: 13),
+                      prefixText: '₱ ',
+                      prefixStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.4)),
+                      filled: true,
+                      fillColor: _surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _descCtrl,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Description (e.g. Ice, Supplies)',
+                      hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.2),
+                          fontSize: 13),
+                      filled: true,
+                      fillColor: _surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _save(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFE94560)))
+                    : GestureDetector(
+                        onTap: _save,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _accent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.check,
+                              color: _accent, size: 18),
+                        ),
+                      ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'This amount will be deducted from expected cash in drawer.',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.25),
+                  fontSize: 11),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _SectionTitle extends StatelessWidget {
   final String title;

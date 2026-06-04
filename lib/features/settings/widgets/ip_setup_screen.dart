@@ -25,6 +25,8 @@ import '../../../main.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../../core/providers/lan_orders_notifier.dart';
+import '../../../core/services/lan_server_service.dart';
+import '../../../core/services/lan_client_service.dart';
 
 class IpSetupScreen extends ConsumerStatefulWidget {
   const IpSetupScreen({super.key});
@@ -95,7 +97,16 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
     if (_probing || _probeSuccess) return;
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
-    final ip = raw.replaceFirst('pos://', '').trim();
+    // Format: pos://192.168.1.x?key=abc123
+    final uri = Uri.tryParse(raw);
+    final ip = uri != null
+        ? '${uri.host}${uri.port != 0 ? ':${uri.port}' : ''}'
+        : raw.replaceFirst('pos://', '').split('?').first.trim();
+    final key = uri?.queryParameters['key'];
+    if (key != null && key.isNotEmpty) {
+      LanServerService.setPosKey(key);
+      LanClientService.setPosKey(key);
+    }
     if (_isValidIp(ip)) _connectToIp(ip);
   }
 
@@ -220,7 +231,7 @@ class _PosQrDisplay extends StatelessWidget {
                     border: Border.all(color: AppColors.divider),
                   ),
                   child: QrImageView(
-                    data: 'pos://$ip',
+                    data: 'pos://$ip?key=${LanServerService.getPosKey()}',
                     version: QrVersions.auto,
                     size: 220,
                     eyeStyle: const QrEyeStyle(

@@ -223,11 +223,11 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       }
       final tableState = ref.read(tableProvider);
       return _isRestaurant
-          ? RestaurantReceiptView(
+          ?   RestaurantReceiptView(
               order: _completedOrder!,
               tendered: _savedTendered,
               change: _savedChange,
-              onDone: () => Navigator.of(context).pop(),
+              onDone: () => Navigator.of(context).pop(_completedOrder),
               showKitchenBanner: widget.existingOrderId == null,
               tableNumber: tableState.selectedTableName,
               roomName: null,
@@ -767,11 +767,11 @@ class _UtangButton extends ConsumerWidget {
               final checkoutResult =
                   await ref.read(checkoutServiceProvider).placeOrder(
                         context: context,
-                        payNow: false,
+                        payNow: true,
                         isRestaurant: isRestaurant,
                         hasKitchen: featureManager.hasFeature('kitchen'),
                         existingOrderId: existingOrderId,
-                        paymentMethod: PaymentMethod.cash,
+                        paymentMethod: PaymentMethod.credit,
                         tendered: 0,
                         change: 0,
                         subtotal: subtotal,
@@ -812,7 +812,7 @@ class _UtangButton extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Text('Utang recorded for ${result.customer.name}'),
                   ]),
-                  backgroundColor: CheckoutTheme.rose,
+                  backgroundColor: CheckoutTheme.mint,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -968,23 +968,24 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
     // Load capability from JSONB — not a hardcoded role check
     final caps = ref.read(activeRoleCapabilitiesProvider).valueOrNull;
 
-    // Cap the discount at the role's maximum
     final maxPct = caps?.maxDiscountPercent ?? 0;
-    if (_type == DiscountType.percentage && maxPct < 100) {
-      if (value > maxPct) {
-        final approved = await requireManagerOverride(
-          context: context,
-          ref: ref,
-          action: 'Apply ${value.toStringAsFixed(0)}% discount (limit: $maxPct%)',
-        );
-        if (approved == null) return;
-      }
+    final needsOverride = caps?.requiresManagerForDiscount ?? true;
+    bool overrideDone = false;
+
+    // Check 1: value exceeds the role's percentage cap
+    if (_type == DiscountType.percentage && maxPct < 100 && value > maxPct) {
+      final approved = await requireManagerOverride(
+        context: context,
+        ref: ref,
+        action: 'Apply ${value.toStringAsFixed(0)}% discount (limit: $maxPct%)',
+      );
+      if (approved == null) return;
+      overrideDone = true;
     }
 
-    // Require override if role is configured to need one
-    final needsOverride = caps?.requiresManagerForDiscount ?? true;
-    if (needsOverride && (caps?.maxDiscountPercent ?? 0) >= (
-        _type == DiscountType.percentage ? value : 100)) {
+    // Check 2: role always requires override for any discount — but only
+    // fire if check 1 didn't already prompt the manager
+    if (!overrideDone && needsOverride) {
       final approved = await requireManagerOverride(
         context: context,
         ref: ref,
