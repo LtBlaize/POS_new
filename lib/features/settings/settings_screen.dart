@@ -7,6 +7,8 @@ import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
 import '../../core/services/feature_manager.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../core/providers/cart_provider.dart';
+import '../../features/auth/pin_lock_overlay.dart';
 import '../../main.dart';
 import '../../shared/widgets/app_colors.dart';
 
@@ -31,16 +33,18 @@ class SettingsScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFFF4F5F7),
         appBar: _appBar(),
         body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _SectionCard(child: const LanSettingsSection()),
-            const SizedBox(height: 16),
-            _SectionCard(child: const PrinterSettingsSection()),
-            const SizedBox(height: 16),
-            _SectionCard(child: _ChangeRoleSection()),
-            const SizedBox(height: 32),
-          ],
-        ),
+        padding: const EdgeInsets.all(16),
+        children: [
+          _SectionCard(child: const LanSettingsSection()),
+          const SizedBox(height: 16),
+          _SectionCard(child: const PrinterSettingsSection()),
+          const SizedBox(height: 16),
+          _SectionCard(child: _ChangeRoleSection()),
+          const SizedBox(height: 16),
+          _LogoutSection(),
+          const SizedBox(height: 32),
+        ], 
+      ),
       );
     }
 
@@ -103,6 +107,10 @@ class SettingsScreen extends ConsumerWidget {
               // ── Device role — always at the bottom ───────────────────
               const SizedBox(height: 16),
               _SectionCard(child: _ChangeRoleSection()),
+
+              // ── Logout ────────────────────────────────────────────────
+              const SizedBox(height: 16),
+              _LogoutSection(),
 
               const SizedBox(height: 32),
             ],
@@ -245,8 +253,94 @@ class _ChangeRoleSection extends ConsumerWidget {
   }
 }
 
-// ── Section card wrapper ──────────────────────────────────────────────────────
+// ── Logout section ────────────────────────────────────────────────────────────
 
+class _LogoutSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.shade100),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Log out?'),
+              content:
+                  const Text('You will be returned to the login screen.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Colors.red),
+                  child: const Text('Log out'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true) return;
+
+          ref.read(cartProvider.notifier).clear();
+          ref.read(activeStaffProvider.notifier).logout();
+          ref.read(appLockedProvider.notifier).state = true;
+
+          try {
+            await ref.read(authServiceProvider).logout();
+          } catch (e) {
+            debugPrint('[Settings logout] error: $e');
+            if (context.mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                  context, '/login', (_) => false);
+            }
+          }
+        },
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.logout_rounded,
+                    size: 18, color: Colors.red.shade600),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Log out',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade600,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: Colors.red.shade300),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Section card wrapper ──────────────────────────────────────────────────────
 class _SectionCard extends StatelessWidget {
   final Widget child;
   const _SectionCard({required this.child});

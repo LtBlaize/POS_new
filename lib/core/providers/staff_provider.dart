@@ -106,11 +106,13 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
             // The owner will be prompted to set a proper PIN on next login,
             // but at least the hash is non-empty so PIN unlock works.
             final tempPin = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+            final tempSalt = StaffMember.generateSalt();
             await _client.from('staff_members').insert({
               'business_id': _businessId,
               'name': profileRow['full_name'] as String,
               'role': 'owner',
-              'pin_hash': StaffMember.hashPin(tempPin),
+              'pin_hash': StaffMember.hashPin(tempPin, tempSalt),
+              'pin_salt': tempSalt,
               'is_active': true,
             });
             assert(() {
@@ -142,12 +144,14 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   }) async {
     if (_businessId == null) return;
 
+    final salt = StaffMember.generateSalt();
     final member = StaffMember(
       id: '',
       businessId: _businessId,
       name: name,
       role: role,
-      pinHash: StaffMember.hashPin(pin),
+      pinHash: StaffMember.hashPin(pin, salt),
+      pinSalt: salt,
       isActive: true,
     );
 
@@ -169,7 +173,8 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           businessId: _businessId,
           name: name,
           role: role,
-          pinHash: StaffMember.hashPin(pin),
+          pinHash: StaffMember.hashPin(pin, salt),
+          pinSalt: salt,
           isActive: true,
         ),
       ]);
@@ -188,7 +193,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
       'updated_at': DateTime.now().toIso8601String(),
     };
     if (newPin != null && newPin.isNotEmpty) {
-      data['pin_hash'] = StaffMember.hashPin(newPin);
+      final salt = StaffMember.generateSalt();
+      data['pin_hash'] = StaffMember.hashPin(newPin, salt);
+      data['pin_salt'] = salt;
     }
 
     if (_isOnline) {

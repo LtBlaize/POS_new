@@ -202,8 +202,48 @@ class _PortraitShell extends ConsumerWidget {
         screens: screens,
         activeIndex: activeIndex,
         onSelect: onSelect,
+        onLock: () {
+          ref.read(activeStaffProvider.notifier).logout();
+          ref.read(appLockedProvider.notifier).state = true;
+        },
+        onLogout: () => _doLogout(context, ref),
       ),
     );
+  }
+
+  Future<void> _doLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will be returned to the login screen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    ref.read(cartProvider.notifier).clear();
+    ref.read(activeStaffProvider.notifier).logout();
+    ref.read(appLockedProvider.notifier).state = true;
+
+    try {
+      await ref.read(authServiceProvider).logout();
+    } catch (e) {
+      debugPrint('[Logout] signOut error (continuing): $e');
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+      }
+    }
   }
 
   void _showCartSheet(BuildContext context) {
@@ -593,13 +633,16 @@ class _BottomNav extends StatelessWidget {
   final List<_ScreenEntry> screens;
   final int activeIndex;
   final ValueChanged<int> onSelect;
+  final VoidCallback onLock;
+  final VoidCallback onLogout;
 
   const _BottomNav({
     required this.screens,
     required this.activeIndex,
     required this.onSelect,
+    required this.onLock,
+    required this.onLogout,
   });
-
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFE94560);
@@ -621,50 +664,102 @@ class _BottomNav extends StatelessWidget {
         child: SizedBox(
           height: 60,
           child: Row(
-            children: screens.asMap().entries.map((entry) {
-              final i = entry.key;
-              final screen = entry.value;
-              final isActive = activeIndex == i;
+            children: [
+              ...screens.asMap().entries.map((entry) {
+                final i = entry.key;
+                final screen = entry.value;
+                final isActive = activeIndex == i;
 
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onSelect(i),
-                  behavior: HitTestBehavior.opaque,
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onSelect(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? accent.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(
+                            screen.icon,
+                            size: 22,
+                            color: isActive ? accent : Colors.grey.shade400,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          screen.label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: isActive
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: isActive ? accent : Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+
+              // ── Divider ───────────────────────────────────────────────
+              Container(
+                width: 1,
+                height: 32,
+                color: Colors.grey.shade200,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+              ),
+
+              // ── Lock ──────────────────────────────────────────────────
+              GestureDetector(
+                onTap: onLock,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 48,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? accent.withOpacity(0.1)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Icon(
-                          screen.icon,
-                          size: 22,
-                          color: isActive ? accent : Colors.grey.shade400,
-                        ),
-                      ),
+                      Icon(Icons.lock_outline_rounded,
+                          size: 20, color: Colors.grey.shade400),
                       const SizedBox(height: 2),
-                      Text(
-                        screen.label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isActive
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: isActive ? accent : Colors.grey.shade400,
-                        ),
-                      ),
+                      Text('Lock',
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.grey.shade400)),
                     ],
                   ),
                 ),
-              );
-            }).toList(),
+              ),
+
+              // ── Logout ────────────────────────────────────────────────
+              GestureDetector(
+                onTap: onLogout,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 52,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.logout_rounded,
+                          size: 20, color: Colors.grey.shade400),
+                      const SizedBox(height: 2),
+                      Text('Logout',
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.grey.shade400)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 4),
+            ],
           ),
         ),
       ),

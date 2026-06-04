@@ -22,6 +22,7 @@ final syncCompleteProvider = StateProvider<DateTime?>((ref) => null);
 
 final syncQueueServiceProvider = Provider<SyncQueueService>((ref) {
   final service = SyncQueueService(ref);
+  service.init();
   ref.onDispose(service.dispose);
   return service;
 });
@@ -50,6 +51,14 @@ class SyncQueueService {
       }
     });
     _refreshCount();
+    // Flush any queued entries that survived the last session
+    Future.microtask(() async {
+      final isOnline = _ref.read(isOnlineProvider);
+      if (isOnline) {
+        debugPrint('[SyncQueue] Online at startup — flushing queue');
+        await flushQueue();
+      }
+    });
   }
 
   void dispose() {

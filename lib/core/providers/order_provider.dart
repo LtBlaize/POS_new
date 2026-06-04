@@ -18,6 +18,17 @@ import '../providers/app_context_provider.dart';
 import 'product_provider.dart';
 
 
+// ── Cache invalidation signal ─────────────────────────────────────────────────
+// Add an order ID here to force its items to be re-fetched on the next
+// realtime emission. Used by voidOrderItem and voidOrder.
+
+final _invalidatedOrderIdsProvider = StateProvider<Set<String>>((ref) => {});
+
+void invalidateOrderCache(Ref ref, String orderId) {
+  final notifier = ref.read(_invalidatedOrderIdsProvider.notifier);
+  notifier.state = {...notifier.state, orderId};
+}
+
 // ── Live / cached order stream ────────────────────────────────────────────────
 
 final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
@@ -27,6 +38,17 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
     return;
   }
   final local = ref.read(localDbServiceProvider);
+  // Item cache: avoid re-fetching items for orders that haven't changed.
+  final itemCache = <String, List<CartItem>>{};
+
+  // Watch invalidation signals — evict specific orders when voided/updated.
+  ref.listen<Set<String>>(_invalidatedOrderIdsProvider, (_, invalidated) {
+    for (final id in invalidated) {
+      itemCache.remove(id);
+    }
+    // Clear the signal after processing
+    ref.read(_invalidatedOrderIdsProvider.notifier).state = {};
+  });
 
   final cached = await local.getOrders(businessId);
   if (cached.isNotEmpty) yield cached;
@@ -45,23 +67,39 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
 
   final client = ref.watch(supabaseClientProvider);
 
+  // Limit to last 30 days — older orders are in local cache / reports.
+  final cutoff = DateTime.now()
+      .subtract(const Duration(days: 30))
+      .toUtc()
+      .toIso8601String();
+
   yield* client
       .from('orders')
       .stream(primaryKey: ['id'])
       .eq('business_id', businessId)
       .order('created_at', ascending: false)
       .asyncMap((rows) async {
-        if (rows.isEmpty) return <Order>[];
+        // Filter to last 30 days client-side since .stream() doesn't
+        // support .gte() date filters directly.
+        final filtered = (rows as List)
+            .where((r) => (r['created_at'] as String).compareTo(cutoff) >= 0)
+            .toList();
+        if (filtered.isEmpty) return <Order>[];
 
-        final orderIds = rows.map((r) => r['id'] as String).toList();
+        final orderIds = filtered.map((r) => r['id'] as String).toList();
 
-        final allItemRows = await client
-            .from('order_items')
-            .select(
-                '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
-            .inFilter('order_id', orderIds);
+        // Only fetch items for orders not already in cache.
+        final uncachedIds = orderIds
+            .where((id) => !itemCache.containsKey(id))
+            .toList();
 
-        final itemsByOrder = <String, List<CartItem>>{};
+        if (uncachedIds.isNotEmpty) {
+          final allItemRows = await client
+              .from('order_items')
+              .select(
+                  '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
+              .inFilter('order_id', uncachedIds);
+
           for (final item in allItemRows as List) {
             final orderId = item['order_id'] as String;
             final pMap =
@@ -71,7 +109,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
               'category': '',
               'business_id': pMap['business_id'] ?? '',
             });
-            itemsByOrder
+            itemCache
                 .putIfAbsent(orderId, () => [])
                 .add(CartItem(
                     product: product,
@@ -79,11 +117,15 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                     costAtSale: (item['cost_price'] as num?)?.toDouble() ?? 0,
                     notes: item['notes'] as String?));
           }
+        }
 
-        final orders = rows.map((row) {
+        // Evict orders no longer in the stream window to prevent unbounded growth.
+        itemCache.removeWhere((id, _) => !orderIds.contains(id));
+
+        final orders = filtered.map((row) {
           final orderId = row['id'] as String;
           return Order.fromMap(
-              row, items: itemsByOrder[orderId] ?? []);
+              row, items: itemCache[orderId] ?? []);
         }).toList();
 
         await local.upsertOrders(orders);
@@ -437,6 +479,9 @@ class OrderService {
       voidedByStaffName: voidedByStaffName,
     );
 
+    // 1b. Invalidate item cache so the stream re-fetches this order's items.
+    invalidateOrderCache(_ref, orderId);
+
     // 2. Reverse inventory if the product tracks stock.
     if (trackInventory) {
       try {
@@ -589,6 +634,9 @@ class OrderService {
 
     // 1. Cancel locally
     await _local.markOrderStatus(orderId, OrderStatus.cancelled);
+
+    // 1b. Invalidate item cache for this order.
+    invalidateOrderCache(_ref, orderId);
 
     // 2. Reverse inventory for all items
     try {

@@ -14,6 +14,8 @@ import '../../shared/widgets/app_colors.dart';
 import 'widgets/void_item_dialog.dart';
 import '../../core/models/cart_item.dart';
 import '../../core/services/reciept_service.dart';
+import '../../core/services/local_db_service.dart';
+import '../../core/providers/app_context_provider.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
@@ -75,10 +77,34 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         loading: () =>
             const Center(child: CircularProgressIndicator()),
         error: (e, _) {
-          final cached =
-              ref.read(ordersStreamProvider).asData?.value ?? [];
-          if (cached.isNotEmpty) {
-            return _buildTabViews(cached);
+          final businessId = ref.read(activeBusinessIdProvider);
+          if (businessId != null) {
+            return FutureBuilder<List<Order>>(
+              future: ref.read(localDbServiceProvider).getOrders(businessId),
+              builder: (context, snap) {
+                final cached = snap.data ?? [];
+                if (cached.isNotEmpty) return _buildTabViews(cached);
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_outlined,
+                          size: 48, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      Text('Error: $e',
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => ref.invalidate(ordersStreamProvider),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
           }
           return Center(
             child: Column(
@@ -91,8 +117,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                     style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
-                  onPressed: () =>
-                      ref.invalidate(ordersStreamProvider),
+                  onPressed: () => ref.invalidate(ordersStreamProvider),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
@@ -190,26 +215,33 @@ class _OrderCard extends ConsumerWidget {
   const _OrderCard(
       {super.key, required this.order, required this.featureManager});
 
-  Color _accentColor(OrderStatus s, {bool isPaid = false}) =>
-      switch (s) {
-        OrderStatus.pending => const Color(0xFFF59E0B),
+  Color _accentColor(OrderStatus s, {bool isPaid = false}) {
+    final hasKitchen = featureManager.hasFeature('kitchen');
+    return switch (s) {
+        OrderStatus.pending => (isPaid && !hasKitchen)
+            ? const Color(0xFF6B7280)
+            : const Color(0xFFF59E0B),
         OrderStatus.preparing => const Color(0xFF3B82F6),
         OrderStatus.ready => const Color(0xFF10B981),
         OrderStatus.completed =>
           isPaid ? const Color(0xFF6B7280) : const Color(0xFFEF4444),
         OrderStatus.cancelled => const Color(0xFF9CA3AF),
       };
+  }
 
-  String _statusLabel(OrderStatus s, {bool isPaid = false}) =>
-      switch (s) {
-        OrderStatus.pending =>
-          isPaid ? 'Paid · In Queue' : 'Unpaid · Pending',
-        OrderStatus.preparing => 'Preparing',
-        OrderStatus.ready => 'Ready to serve',
-        OrderStatus.completed =>
-          isPaid ? 'Paid · Completed' : 'Served · Unpaid',
-        OrderStatus.cancelled => 'Cancelled',
-      };
+  String _statusLabel(OrderStatus s, {bool isPaid = false}) {
+    final hasKitchen = featureManager.hasFeature('kitchen');
+    return switch (s) {
+      OrderStatus.pending => isPaid
+          ? (hasKitchen ? 'Paid · In Queue' : 'Completed')
+          : 'Unpaid · Pending',
+      OrderStatus.preparing => 'Preparing',
+      OrderStatus.ready => 'Ready to serve',
+      OrderStatus.completed =>
+        isPaid ? 'Paid · Completed' : 'Served · Unpaid',
+      OrderStatus.cancelled => 'Cancelled',
+    };
+  }
 
   /// Void item is only shown for active (unpaid, non-cancelled) orders.
   bool get _canVoid =>

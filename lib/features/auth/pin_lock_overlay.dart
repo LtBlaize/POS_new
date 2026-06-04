@@ -233,12 +233,15 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
       HapticFeedback.lightImpact();
       ref.read(activeStaffProvider.notifier).login(staff);
       ref.read(rolePermissionsProvider.notifier).refresh();
-      // Audit staff login
       ref.read(auditServiceProvider).log(
         actionType:  AuditAction.staffLogin,
         description: '${staff.name} logged in (${staff.role.label})',
         metadata:    {'role': staff.role.value},
       );
+      // Silently upgrade legacy unsalted PIN to PBKDF2 on first login
+      if (staff.needsPinUpgrade) {
+        _upgradePinHash(staff, _pin);
+      }
       widget.onUnlocked();
     } else {
       HapticFeedback.heavyImpact();
@@ -246,6 +249,21 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
         _error = true;
         _pin = '';
       });
+    }
+  }
+
+  Future<void> _upgradePinHash(StaffMember staff, String pin) async {
+    try {
+      final salt = StaffMember.generateSalt();
+      final newHash = StaffMember.hashPin(pin, salt);
+      await Supabase.instance.client
+          .from('staff_members')
+          .update({'pin_hash': newHash, 'pin_salt': salt})
+          .eq('id', staff.id);
+      debugPrint('[PIN] Upgraded PIN hash for ${staff.name}');
+    } catch (e) {
+      // Non-fatal — legacy hash still works until next login
+      debugPrint('[PIN] PIN upgrade failed (non-fatal): $e');
     }
   }
 

@@ -118,9 +118,9 @@ class _ProductCardState extends ConsumerState<ProductCard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Gradient band (fixed height) ───────────────────────
+              // ── Gradient band (proportional height) ────────────────
               SizedBox(
-                height: 90,
+                height: 75,
                 child: Stack(
                   children: [
                     Container(
@@ -186,61 +186,68 @@ class _ProductCardState extends ConsumerState<ProductCard>
               ),
 
               // ── Info section (fills remaining space) ───────────────
-              // Use Expanded so the column gets a definite height,
-              // then spaceBetween to pin name top and price bottom.
-              // No Spacer needed — Spacer inside a bounded column is
-              // fine but Spacer inside mainAxisSize:max can overflow
-              // when the parent gives less height than the content needs.
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Product name — clipped to 2 lines max
-                      Text(
-                        liveProduct.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          height: 1.3,
-                        ),
-                      ),
-
-                      // Price + add button pinned to bottom
-                      Row(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // When available height is very tight (< 36px),
+                      // skip the name and show only the price row.
+                      final showName = constraints.maxHeight >= 36;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisSize: MainAxisSize.max,
                         children: [
-                          Flexible(
-                            child: Text(
-                              '₱${liveProduct.price.toStringAsFixed(0)}',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: gradColors.first,
+                          if (showName)
+                            Flexible(
+                              child: Text(
+                                liveProduct.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                  height: 1.3,
+                                ),
                               ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: gradColors.first.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Icon(
-                              Icons.add_rounded,
-                              size: 13,
-                              color: gradColors.first,
-                            ),
+
+                          // Price + add button — always visible
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '₱${liveProduct.price.toStringAsFixed(0)}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: gradColors.first,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      gradColors.first.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(
+                                  Icons.add_rounded,
+                                  size: 13,
+                                  color: gradColors.first,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),

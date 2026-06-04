@@ -36,7 +36,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 13;
+const _kDbVersion = 14;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -495,6 +495,17 @@ class LocalDbService {
         debugPrint('[LocalDb] v12: cost_at_sale added to order_items');
       } catch (e) {
         debugPrint('[LocalDb] v12: cost_at_sale already exists ($e)');
+      }
+    }
+
+    if (oldVersion < 14) {
+      try {
+        await db.execute(
+          'ALTER TABLE staff_members ADD COLUMN pin_salt TEXT',
+        );
+        debugPrint('[LocalDb] v14: pin_salt added to staff_members');
+      } catch (e) {
+        debugPrint('[LocalDb] v14: pin_salt already exists ($e)');
       }
     }
 
@@ -1152,6 +1163,7 @@ class LocalDbService {
               'name': m.name,
               'role': m.role.value,
               'pin_hash': m.pinHash,
+              'pin_salt': m.pinSalt,
               'is_active': m.isActive ? 1 : 0,
               'synced_at': now,
             },
@@ -1178,6 +1190,7 @@ class LocalDbService {
                 orElse: () => StaffRole.cashier,
               ),
               pinHash: r['pin_hash'] as String,
+              pinSalt: r['pin_salt'] as String?,
               isActive: (r['is_active'] as int) == 1,
             ))
         .toList();

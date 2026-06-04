@@ -1,7 +1,5 @@
 // lib/features/auth/auth_provider.dart
-import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,6 +8,7 @@ import '../../core/models/business.dart';
 import '../../config/business_config.dart';
 import '../../core/services/feature_manager.dart';
 import '../../features/settings/settings_provider.dart';
+import '../../core/models/staff.dart';
 
 
 // Simple static flag — set BEFORE signUp(), cleared after completeRegistration()
@@ -138,9 +137,12 @@ class AuthService {
   // If you need stronger protection in future, swap to bcrypt via
   // the `bcrypt` pub package. For now SHA-256 + constant-time compare
   // is a secure baseline.
-  String hashPin(String pin) {
-    final bytes = utf8.encode(pin.trim());
-    return sha256.convert(bytes).toString();
+  /// Hashes a new PIN with a fresh random salt.
+  /// Returns a record with both hash and salt to store separately.
+  ({String hash, String salt}) hashPin(String pin) {
+    final salt = StaffMember.generateSalt();
+    final hash = StaffMember.hashPin(pin, salt);
+    return (hash: hash, salt: salt);
   }
 
   /// Verifies a user-entered PIN against a stored SHA-256 hash.
@@ -246,11 +248,13 @@ class AuthService {
 
       // 3. Owner as staff member — PIN is hashed, never stored as plain text
       debugPrint('[Auth] Inserting owner staff member...');
+      final pinResult = hashPin(ownerPin);
       await _client.from('staff_members').insert({
         'business_id': businessId,
         'name': fullName,
         'role': 'owner',
-        'pin_hash': hashPin(ownerPin),   // ✅ always hashed
+        'pin_hash': pinResult.hash,
+        'pin_salt': pinResult.salt,
         'is_active': true,
       });
       debugPrint('[Auth] Owner staff member inserted.');

@@ -95,109 +95,103 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   ),
                 ],
                 const Spacer(),
-                // ── Split bill button ────────────────────────
-                GestureDetector(
-                  onTap: items.isEmpty
-                      ? null
-                      : () => showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (_) => SplitBillDialog(
-                              featureManager: widget.featureManager,
+                // ── Right-side actions — icon-only to prevent overflow ──
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Split
+                    Tooltip(
+                      message: 'Split bill between guests',
+                      child: GestureDetector(
+                        onTap: items.isEmpty
+                            ? null
+                            : () => showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (_) => SplitBillDialog(
+                                    featureManager: widget.featureManager,
+                                  ),
+                                ),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          margin: const EdgeInsets.only(right: 4),
+                          decoration: BoxDecoration(
+                            color: items.isEmpty
+                                ? AppColors.divider.withOpacity(0.3)
+                                : AppColors.success.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: items.isEmpty
+                                    ? AppColors.divider
+                                    : AppColors.success.withOpacity(0.3)),
+                          ),
+                          child: Icon(
+                            Icons.call_split_outlined,
+                            size: 14,
+                            color: items.isEmpty
+                                ? AppColors.textSecondary.withOpacity(0.3)
+                                : AppColors.success,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Hold
+                    Tooltip(
+                      message: 'Park / hold this order',
+                      child: GestureDetector(
+                        onTap: items.isEmpty
+                            ? null
+                            : () => _showParkDialog(context),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          margin: const EdgeInsets.only(right: 4),
+                          decoration: BoxDecoration(
+                            color: items.isEmpty
+                                ? AppColors.divider.withOpacity(0.3)
+                                : AppColors.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: items.isEmpty
+                                    ? AppColors.divider
+                                    : AppColors.primary.withOpacity(0.3)),
+                          ),
+                          child: Icon(
+                            Icons.pause_outlined,
+                            size: 14,
+                            color: items.isEmpty
+                                ? AppColors.textSecondary.withOpacity(0.3)
+                                : AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Clear
+                    if (items.isNotEmpty)
+                      Tooltip(
+                        message: 'Clear cart',
+                        child: GestureDetector(
+                          onTap: cartNotifier.clear,
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: AppColors.danger.withOpacity(0.2)),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline,
+                              size: 14,
+                              color: AppColors.danger,
                             ),
                           ),
-                  child: Tooltip(
-                    message: 'Split bill between guests',
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: items.isEmpty
-                            ? AppColors.divider.withOpacity(0.3)
-                            : AppColors.success.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: items.isEmpty
-                                ? AppColors.divider
-                                : AppColors.success.withOpacity(0.3)),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.call_split_outlined,
-                              size: 11,
-                              color: items.isEmpty
-                                  ? AppColors.textSecondary.withOpacity(0.3)
-                                  : AppColors.success),
-                          const SizedBox(width: 3),
-                          Text('Split',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: items.isEmpty
-                                      ? AppColors.textSecondary.withOpacity(0.3)
-                                      : AppColors.success)),
-                        ],
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-                // ── Hold button ──────────────────────────────
-                GestureDetector(
-                  onTap: items.isEmpty
-                      ? null
-                      : () => _showParkDialog(context),
-                  child: Tooltip(
-                    message: 'Park / hold this order',
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: items.isEmpty
-                            ? AppColors.divider.withOpacity(0.3)
-                            : AppColors.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: items.isEmpty
-                                ? AppColors.divider
-                                : AppColors.primary.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.pause_outlined,
-                              size: 11,
-                              color: items.isEmpty
-                                  ? AppColors.textSecondary.withOpacity(0.3)
-                                  : AppColors.primary),
-                          const SizedBox(width: 3),
-                          Text('Hold',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: items.isEmpty
-                                      ? AppColors.textSecondary
-                                          .withOpacity(0.3)
-                                      : AppColors.primary)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (items.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: cartNotifier.clear,
-                    icon: const Icon(Icons.delete_outline,
-                        size: 14, color: AppColors.danger),
-                    label: const Text('Clear',
-                        style:
-                            TextStyle(fontSize: 12, color: AppColors.danger)),
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4)),
-                  ),
               ],
             ),
           ),
