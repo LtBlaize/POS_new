@@ -193,12 +193,12 @@ class Sidebar extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? AppColors.accent.withOpacity(0.15)
+                        ? AppColors.accent.withValues(alpha:0.15)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                     border: isActive
                         ? Border.all(
-                            color: AppColors.accent.withOpacity(0.4))
+                            color: AppColors.accent.withValues(alpha:0.4))
                         : null,
                   ),
                   child: Column(
@@ -211,7 +211,7 @@ class Sidebar extends ConsumerWidget {
                             item.icon,
                             color: isActive
                                 ? AppColors.accent
-                                : AppColors.textOnDark.withOpacity(0.5),
+                                : AppColors.textOnDark.withValues(alpha:0.5),
                             size: 24,
                           ),
                           if (hasBadge)
@@ -235,7 +235,7 @@ class Sidebar extends ConsumerWidget {
                         style: TextStyle(
                           color: isActive
                               ? AppColors.accent
-                              : AppColors.textOnDark.withOpacity(0.5),
+                              : AppColors.textOnDark.withValues(alpha:0.5),
                           fontSize: 9,
                         ),
                       ),
@@ -249,6 +249,7 @@ class Sidebar extends ConsumerWidget {
           const Spacer(),
           const OfflineBanner(),
 
+          if (ref.watch(activeStaffTabsProvider).contains('settings'))
           Tooltip(
             message: 'Log out',
             preferBelow: false,
@@ -266,14 +267,14 @@ class Sidebar extends ConsumerWidget {
                   children: [
                     Icon(
                       Icons.logout_rounded,
-                      color: AppColors.textOnDark.withOpacity(0.5),
+                      color: AppColors.textOnDark.withValues(alpha:0.5),
                       size: 24,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Logout',
                       style: TextStyle(
-                        color: AppColors.textOnDark.withOpacity(0.5),
+                        color: AppColors.textOnDark.withValues(alpha:0.5),
                         fontSize: 9,
                       ),
                     ),

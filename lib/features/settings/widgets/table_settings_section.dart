@@ -202,7 +202,7 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
             label: const Text('Edit Floor Plan'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -243,12 +243,12 @@ class _TableChip extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isOccupied
-            ? AppColors.danger.withOpacity(0.08)
+            ? AppColors.danger.withValues(alpha:0.08)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isOccupied
-              ? AppColors.danger.withOpacity(0.3)
+              ? AppColors.danger.withValues(alpha:0.3)
               : AppColors.divider,
         ),
       ),

@@ -9,23 +9,25 @@ import '../../features/auth/auth_provider.dart';
 final receiptServiceProvider = Provider<ReceiptService>((ref) {
   return ReceiptService(
     client: ref.watch(supabaseClientProvider),
-    isOnline: ref.read(isOnlineProvider),
+    ref: ref,
     syncQueue: ref.read(syncQueueServiceProvider),
   );
 });
 
 class ReceiptService {
   final dynamic _client;
-  final bool _isOnline;
+  final Ref _ref;
   final SyncQueueService _syncQueue;
 
   ReceiptService({
     required dynamic client,
-    required bool isOnline,
+    required Ref ref,
     required SyncQueueService syncQueue,
   })  : _client = client,
-        _isOnline = isOnline,
+        _ref = ref,
         _syncQueue = syncQueue;
+
+  bool get _isOnline => _ref.read(isOnlineProvider);
 
   Future<Map<String, dynamic>?> fetchReceiptForOrder(String orderId) async {
     if (!_isOnline) return null;

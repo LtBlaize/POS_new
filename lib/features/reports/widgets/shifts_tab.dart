@@ -43,7 +43,7 @@ class _ShiftsTabState extends State<ShiftsTab> {
           children: [
             Icon(Icons.people_alt_outlined,
                 size: 48,
-                color: AppColors.textSecondary.withOpacity(0.2)),
+                color: AppColors.textSecondary.withValues(alpha:0.2)),
             const SizedBox(height: 16),
             const Text(
               'No shifts for this day',
@@ -145,7 +145,7 @@ class DaySummaryCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -159,7 +159,7 @@ class DaySummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.summarize_outlined,
@@ -179,7 +179,7 @@ class DaySummaryCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: amber.withOpacity(0.1),
+                  color: amber.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -280,14 +280,14 @@ class ShiftCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isExpanded
-              ? AppColors.primary.withOpacity(0.4)
+              ? AppColors.primary.withValues(alpha:0.4)
               : AppColors.divider,
           width: isExpanded ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
             color:
-                Colors.black.withOpacity(isExpanded ? 0.06 : 0.03),
+                Colors.black.withValues(alpha:isExpanded ? 0.06 : 0.03),
             blurRadius: isExpanded ? 12 : 4,
             offset: const Offset(0, 2),
           ),
@@ -308,7 +308,7 @@ class ShiftCard extends StatelessWidget {
                       CircleAvatar(
                         radius: 20,
                         backgroundColor:
-                            AppColors.primary.withOpacity(0.08),
+                            AppColors.primary.withValues(alpha:0.08),
                         child: Text(
                           shift.staffName[0].toUpperCase(),
                           style: const TextStyle(
@@ -346,10 +346,10 @@ class ShiftCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
+                          color: statusColor.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: statusColor.withOpacity(0.3)),
+                              color: statusColor.withValues(alpha:0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,

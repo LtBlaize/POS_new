@@ -1,5 +1,6 @@
 // lib/core/services/shift_service.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
@@ -197,11 +198,16 @@ class ShiftService {
           .from('cashier_shifts')
           .update(updates)
           .eq('id', shiftId);
-    } catch (_) {}
+      debugPrint('[ShiftClose] Supabase update OK for $shiftId');
+    } catch (e) {
+      debugPrint('[ShiftClose] Supabase update FAILED: $e');
+    }
 
     final d = await _db.db;
-    await d.update('cashier_shifts', updates,
+    final rowsAffected = await d.update('cashier_shifts', updates,
         where: 'id = ?', whereArgs: [shiftId]);
+    debugPrint('[ShiftClose] SQLite rows affected: $rowsAffected for $shiftId');
+
 
     final closed = shift.copyWith(
       status: ShiftStatus.closed,
@@ -217,7 +223,7 @@ class ShiftService {
       expenses: expenses,
     );
 
-    
+    debugPrint('[ShiftClose] Closed shift: ${closed.id}');
 
     return closed;
   }

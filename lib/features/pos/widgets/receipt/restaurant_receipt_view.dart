@@ -76,9 +76,9 @@ class RestaurantReceiptView extends StatelessWidget {
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                       decoration: BoxDecoration(
-                        color: _gold.withOpacity(0.15),
+                        color: _gold.withValues(alpha:0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _gold.withOpacity(0.4), width: 1),
+                        border: Border.all(color: _gold.withValues(alpha:0.4), width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -127,7 +127,7 @@ class RestaurantReceiptView extends StatelessWidget {
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color:
-                            const Color(0xFF856404).withOpacity(0.12),
+                            const Color(0xFF856404).withValues(alpha:0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -170,7 +170,7 @@ class RestaurantReceiptView extends StatelessWidget {
                                           width: 24,
                                           height: 24,
                                           decoration: BoxDecoration(
-                                            color: _dark.withOpacity(
+                                            color: _dark.withValues(alpha:
                                                 0.07),
                                             borderRadius:
                                                 BorderRadius.circular(
@@ -220,10 +220,10 @@ class RestaurantReceiptView extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: _dark.withOpacity(0.03),
+                        color: _dark.withValues(alpha:0.03),
                         borderRadius: BorderRadius.circular(10),
                         border:
-                            Border.all(color: _dark.withOpacity(0.08)),
+                            Border.all(color: _dark.withValues(alpha:0.08)),
                       ),
                       child: Column(
                         children: [
@@ -291,11 +291,11 @@ class RestaurantReceiptView extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.06),
+                        color: AppColors.success.withValues(alpha:0.06),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color:
-                                AppColors.success.withOpacity(0.2)),
+                                AppColors.success.withValues(alpha:0.2)),
                       ),
                       child: Column(
                         children: [

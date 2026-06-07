@@ -375,7 +375,9 @@ class SyncQueueService {
             .eq('id', payload['order_id'] as String)
             .maybeSingle();
         if (orderRow == null ||
-            orderRow['status'] == OrderStatus.cancelled.value) break;
+            orderRow['status'] == OrderStatus.cancelled.value) {
+          break;
+        }
 
         final voidedAt = payload['voided_at'] as String;
         final voidedById = payload['voided_by_staff_id'] as String;

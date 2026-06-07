@@ -89,9 +89,9 @@ class StatPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -102,7 +102,7 @@ class StatPill extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label,
               style:
-                  TextStyle(fontSize: 11, color: color.withOpacity(0.8))),
+                  TextStyle(fontSize: 11, color: color.withValues(alpha:0.8))),
         ],
       ),
     );
@@ -134,10 +134,10 @@ class InventoryFilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? c.withOpacity(0.1) : AppColors.surface,
+          color: selected ? c.withValues(alpha:0.1) : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? c.withOpacity(0.5) : AppColors.divider,
+            color: selected ? c.withValues(alpha:0.5) : AppColors.divider,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -177,9 +177,9 @@ class RemovableChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -193,7 +193,7 @@ class RemovableChip extends StatelessWidget {
           GestureDetector(
             onTap: onRemove,
             child: Icon(Icons.close_rounded,
-                size: 14, color: AppColors.primary.withOpacity(0.7)),
+                size: 14, color: AppColors.primary.withValues(alpha:0.7)),
           ),
         ],
       ),
@@ -241,7 +241,7 @@ class StepperButton extends StatelessWidget {
           color: !enabled
               ? AppColors.divider
               : positive
-                  ? AppColors.primary.withOpacity(0.08)
+                  ? AppColors.primary.withValues(alpha:0.08)
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(7),
           border: Border.all(color: AppColors.divider),
@@ -249,7 +249,7 @@ class StepperButton extends StatelessWidget {
         child: Icon(icon,
             size: 14,
             color: !enabled
-                ? AppColors.textSecondary.withOpacity(0.3)
+                ? AppColors.textSecondary.withValues(alpha:0.3)
                 : positive
                     ? AppColors.primary
                     : AppColors.textSecondary),
@@ -280,7 +280,7 @@ class PriceField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-            color: AppColors.textSecondary.withOpacity(0.5), fontSize: 12),
+            color: AppColors.textSecondary.withValues(alpha:0.5), fontSize: 12),
         prefixText: '₱ ',
         prefixStyle: const TextStyle(
             fontSize: 13,

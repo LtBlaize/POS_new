@@ -114,6 +114,7 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
     }
 
     final shift = await ref.read(currentShiftProvider.future);
+    debugPrint('[ShiftGate] shift after unlock: ${shift?.id} status: ${shift?.status}');
     if (!mounted) return;
     if (shift == null) {
       setState(() => _showShiftGate = true);
@@ -167,7 +168,7 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
                     Text(
                       'This device will lock in a moment...',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withValues(alpha:0.4),
                           fontSize: 13),
                     ),
                   ],
@@ -226,7 +227,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
-  void _verify() {
+  Future<void> _verify() async {
     final staff = widget.selectedStaff;
     if (staff == null) return;
     if (staff.checkPin(_pin)) {
@@ -242,6 +243,8 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
       if (staff.needsPinUpgrade) {
         _upgradePinHash(staff, _pin);
       }
+      ref.invalidate(currentShiftProvider);
+      await ref.read(currentShiftProvider.future);
       widget.onUnlocked();
     } else {
       HapticFeedback.heavyImpact();
@@ -365,14 +368,13 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
               await Supabase.instance.client.auth.resetPasswordForEmail(
                 Supabase.instance.client.auth.currentUser?.email ?? '',
               );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Reset email sent.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Reset email sent.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _PinScreenState._accent,
@@ -456,7 +458,7 @@ class _SideBySideLayout extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               border: Border(
-                right: BorderSide(color: Colors.white.withOpacity(0.06)),
+                right: BorderSide(color: Colors.white.withValues(alpha:0.06)),
               ),
             ),
             child: staffPanel,
@@ -512,7 +514,7 @@ class _StaffPanel extends StatelessWidget {
                 BorderRadius.circular(_isPhone ? 10 : 14),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFE94560).withOpacity(0.4),
+                color: const Color(0xFFE94560).withValues(alpha:0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -536,7 +538,7 @@ class _StaffPanel extends StatelessWidget {
         Text(
           'Select your profile to continue',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.4),
+            color: Colors.white.withValues(alpha:0.4),
             fontSize: _isPhone ? 12 : 13,
           ),
         ),
@@ -552,7 +554,7 @@ class _StaffPanel extends StatelessWidget {
             child: Text(
               'No staff found.\nPlease contact the owner.',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
+                color: Colors.white.withValues(alpha:0.4),
                 fontSize: 13,
               ),
             ),
@@ -673,7 +675,7 @@ class _PinPanel extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.touch_app_outlined,
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha:0.15),
                     size: _isPhone ? 36 : 48,
                   ),
                   const SizedBox(height: 16),
@@ -681,7 +683,7 @@ class _PinPanel extends StatelessWidget {
                     'Select a profile\nto enter your PIN',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.25),
+                      color: Colors.white.withValues(alpha:0.25),
                       fontSize: _isPhone ? 13 : 14,
                     ),
                   ),
@@ -701,7 +703,7 @@ class _PinPanel extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color:
-                            roleColor(selected!.role).withOpacity(0.3),
+                            roleColor(selected!.role).withValues(alpha:0.3),
                       ),
                     ),
                     child: Row(
@@ -710,7 +712,7 @@ class _PinPanel extends StatelessWidget {
                         CircleAvatar(
                           radius: _isPhone ? 14 : 18,
                           backgroundColor:
-                              roleColor(selected!.role).withOpacity(0.2),
+                              roleColor(selected!.role).withValues(alpha:0.2),
                           child: Text(
                             selected!.name[0].toUpperCase(),
                             style: TextStyle(
@@ -736,7 +738,7 @@ class _PinPanel extends StatelessWidget {
                               selected!.role.label,
                               style: TextStyle(
                                 color: roleColor(selected!.role)
-                                    .withOpacity(0.8),
+                                    .withValues(alpha:0.8),
                                 fontSize: _isPhone ? 10 : 11,
                               ),
                             ),
@@ -766,12 +768,12 @@ class _PinPanel extends StatelessWidget {
                               ? Colors.red
                               : filled
                                   ? roleColor(selected!.role)
-                                  : Colors.white.withOpacity(0.15),
+                                  : Colors.white.withValues(alpha:0.15),
                           boxShadow: filled && !error
                               ? [
                                   BoxShadow(
                                     color: roleColor(selected!.role)
-                                        .withOpacity(0.5),
+                                        .withValues(alpha:0.5),
                                     blurRadius: 8,
                                   )
                                 ]
@@ -802,7 +804,7 @@ class _PinPanel extends StatelessWidget {
                           : Text(
                               'Enter your 4-digit PIN',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.25),
+                                color: Colors.white.withValues(alpha:0.25),
                                 fontSize: _isPhone ? 10 : 11,
                               ),
                             ),
@@ -824,7 +826,7 @@ class _PinPanel extends StatelessWidget {
                     child: Text(
                       'Forgot PIN?',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha:0.3),
                         fontSize: _isPhone ? 11 : 12,
                       ),
                     ),
@@ -884,7 +886,7 @@ class _StaffAvatar extends StatelessWidget {
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                          color: color.withOpacity(0.4),
+                          color: color.withValues(alpha:0.4),
                           blurRadius: 12,
                         )
                       ]
@@ -893,7 +895,7 @@ class _StaffAvatar extends StatelessWidget {
               child: CircleAvatar(
                 radius: radius,
                 backgroundColor:
-                    color.withOpacity(selected ? 0.9 : 0.15),
+                    color.withValues(alpha:selected ? 0.9 : 0.15),
                 child: Text(
                   staff.name[0].toUpperCase(),
                   style: TextStyle(
@@ -913,7 +915,7 @@ class _StaffAvatar extends StatelessWidget {
               style: TextStyle(
                 color: selected
                     ? Colors.white
-                    : Colors.white.withOpacity(0.45),
+                    : Colors.white.withValues(alpha:0.45),
                 fontSize: nameSize,
                 fontWeight:
                     selected ? FontWeight.w700 : FontWeight.w400,
@@ -1026,18 +1028,18 @@ class _NumKeyState extends State<_NumKey> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: _pressed
-              ? Colors.white.withOpacity(0.18)
-              : Colors.white.withOpacity(0.07),
+              ? Colors.white.withValues(alpha:0.18)
+              : Colors.white.withValues(alpha:0.07),
           border: Border.all(
             color:
-                Colors.white.withOpacity(_pressed ? 0.2 : 0.06),
+                Colors.white.withValues(alpha:_pressed ? 0.2 : 0.06),
           ),
         ),
         child: Center(
           child: widget.isDelete
               ? Icon(
                   Icons.backspace_outlined,
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha:0.6),
                   size: widget.size * 0.3,
                 )
               : Text(

@@ -219,11 +219,11 @@ class _PhoneCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color:
-              isLow ? AppColors.danger.withOpacity(0.25) : AppColors.divider,
+              isLow ? AppColors.danger.withValues(alpha:0.25) : AppColors.divider,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha:0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -257,7 +257,7 @@ class _PhoneCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             fontFamily: 'monospace',
-                            color: AppColors.textSecondary.withOpacity(0.7),
+                            color: AppColors.textSecondary.withValues(alpha:0.7),
                           ),
                         ),
                       ],
@@ -306,9 +306,9 @@ class _PhoneCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: stockColor.withOpacity(0.1),
+                    color: stockColor.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: stockColor.withOpacity(0.3)),
+                    border: Border.all(color: stockColor.withValues(alpha:0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -438,7 +438,7 @@ class _TableRow extends StatelessWidget {
     final isLow = entry.isLowStock;
 
     return Container(
-      color: isLow ? AppColors.danger.withOpacity(0.03) : null,
+      color: isLow ? AppColors.danger.withValues(alpha:0.03) : null,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
@@ -475,7 +475,7 @@ class _TableRow extends StatelessWidget {
                               fontSize: 11,
                               fontFamily: 'monospace',
                               color:
-                                  AppColors.textSecondary.withOpacity(0.7)),
+                                  AppColors.textSecondary.withValues(alpha:0.7)),
                         ),
                     ],
                   ),

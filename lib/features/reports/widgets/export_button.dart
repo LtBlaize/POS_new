@@ -166,7 +166,7 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
             border: Border.all(
               color: enabled
                   ? AppColors.divider
-                  : AppColors.divider.withOpacity(0.4),
+                  : AppColors.divider.withValues(alpha:0.4),
             ),
             borderRadius: BorderRadius.circular(8),
             color: Colors.white,
@@ -189,7 +189,7 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
                   size: 16,
                   color: enabled
                       ? AppColors.textSecondary
-                      : AppColors.textSecondary.withOpacity(0.3),
+                      : AppColors.textSecondary.withValues(alpha:0.3),
                 ),
         ),
       ),

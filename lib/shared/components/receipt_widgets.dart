@@ -117,7 +117,7 @@ class PayMethodChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color:
-              selected ? accentColor.withOpacity(0.08) : AppColors.surface,
+              selected ? accentColor.withValues(alpha:0.08) : AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? accentColor : AppColors.divider,

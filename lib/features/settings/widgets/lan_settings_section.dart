@@ -217,7 +217,7 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
             label: Text(_testing ? 'Testing...' : 'Test connection'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
               padding:

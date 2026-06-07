@@ -373,7 +373,7 @@ final periodReportProvider =
   if (!isOnline) {
     // For multi-day ranges, sum up cached daily rows
     final local = ref.read(localDbServiceProvider);
-    final dateKey = (d) =>
+    String dateKey(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final cached = await local.getReports(
       businessId,

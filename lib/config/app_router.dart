@@ -137,11 +137,5 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
   }
 }
 
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF0F1117),
-      body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
-    );
-  }
+  
 

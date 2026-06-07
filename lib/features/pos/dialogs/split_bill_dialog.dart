@@ -154,8 +154,10 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
     final allDone = _completedOrders.length == _splitCount &&
         _completedOrders.every((o) => o != null);
 
-    if (allDone) return _AllDoneView(orders: _completedOrders.cast<Order>(),
+    if (allDone) {
+      return _AllDoneView(orders: _completedOrders.cast<Order>(),
         onDone: () => Navigator.of(context).pop());
+    }
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -260,7 +262,9 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
 
     if (result != null) {
       setState(() {
-        while (_completedOrders.length <= index) _completedOrders.add(null);
+        while (_completedOrders.length <= index) {
+          _completedOrders.add(null);
+        }
         _completedOrders[index] = result;
         // Advance to next unpaid split
         for (int i = 0; i < _splitCount; i++) {
@@ -298,9 +302,9 @@ class _SplitHeader extends StatelessWidget {
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.15),
+              color: AppColors.primary.withValues(alpha:0.15),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.3)),
             ),
             child: Icon(Icons.call_split_outlined,
                 color: AppColors.primary, size: 18),
@@ -427,14 +431,14 @@ class _SplitTabs extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.primary.withOpacity(0.15)
+                    ? AppColors.primary.withValues(alpha:0.15)
                     : const Color(0xFF1E1E30),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isPaid
-                      ? AppColors.success.withOpacity(0.5)
+                      ? AppColors.success.withValues(alpha:0.5)
                       : isSelected
-                          ? AppColors.primary.withOpacity(0.5)
+                          ? AppColors.primary.withValues(alpha:0.5)
                           : const Color(0xFF2A2A3E),
                   width: isSelected ? 1.5 : 1,
                 ),
@@ -566,7 +570,7 @@ class _AssignRow extends StatelessWidget {
           Container(
             width: 24, height: 24,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.15),
+              color: AppColors.primary.withValues(alpha:0.15),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
@@ -690,10 +694,10 @@ class _SplitFooter extends StatelessWidget {
             child: _isPaid
                 ? Container(
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
+                      color: AppColors.success.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                          color: AppColors.success.withOpacity(0.3)),
+                          color: AppColors.success.withValues(alpha:0.3)),
                     ),
                     alignment: Alignment.center,
                     child: const Row(

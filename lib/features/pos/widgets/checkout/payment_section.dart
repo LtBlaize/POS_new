@@ -80,10 +80,10 @@ class PaymentMethodCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : CheckoutTheme.card,
+          color: selected ? color.withValues(alpha:0.12) : CheckoutTheme.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? color.withOpacity(0.6) : CheckoutTheme.border,
+            color: selected ? color.withValues(alpha:0.6) : CheckoutTheme.border,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -136,7 +136,7 @@ class TenderedDisplay extends StatelessWidget {
         border: Border.all(
           color: hasAmount
               ? (isShort
-                  ? CheckoutTheme.rose.withOpacity(0.4)
+                  ? CheckoutTheme.rose.withValues(alpha:0.4)
                   : CheckoutTheme.mintBorder)
               : CheckoutTheme.border,
         ),

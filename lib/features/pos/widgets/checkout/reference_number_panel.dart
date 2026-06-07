@@ -64,7 +64,7 @@ class ReferenceNumberPanel extends StatelessWidget {
           decoration: BoxDecoration(
             color: dim,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: accent.withOpacity(0.25)),
+            border: Border.all(color: accent.withValues(alpha:0.25)),
           ),
           child: Row(
             children: [
@@ -77,7 +77,7 @@ class ReferenceNumberPanel extends StatelessWidget {
                     'Amount to collect',
                     style: TextStyle(
                       fontSize: 11,
-                      color: accent.withOpacity(0.7),
+                      color: accent.withValues(alpha:0.7),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -97,7 +97,7 @@ class ReferenceNumberPanel extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
+                  color: accent.withValues(alpha:0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -128,7 +128,7 @@ class ReferenceNumberPanel extends StatelessWidget {
             color: CheckoutTheme.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: hasValue ? accent.withOpacity(0.5) : CheckoutTheme.border,
+              color: hasValue ? accent.withValues(alpha:0.5) : CheckoutTheme.border,
               width: hasValue ? 1.5 : 1,
             ),
           ),

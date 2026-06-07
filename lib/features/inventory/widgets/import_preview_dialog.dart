@@ -165,9 +165,9 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                         const SizedBox(height: 8),
                         Container(
                           decoration: BoxDecoration(
-                            color: AppColors.danger.withOpacity(0.04),
+                            color: AppColors.danger.withValues(alpha:0.04),
                             border: Border.all(
-                                color: AppColors.danger.withOpacity(0.2)),
+                                color: AppColors.danger.withValues(alpha:0.2)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
@@ -311,8 +311,8 @@ class _PreviewRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: row.isUpdate
-                    ? AppColors.info.withOpacity(0.1)
-                    : AppColors.success.withOpacity(0.1),
+                    ? AppColors.info.withValues(alpha:0.1)
+                    : AppColors.success.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -392,9 +392,9 @@ class _SummaryPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

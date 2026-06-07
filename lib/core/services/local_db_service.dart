@@ -36,7 +36,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 14;
+const _kDbVersion = 16;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -141,6 +141,7 @@ class LocalDbService {
         change_amount REAL,
         reference_number TEXT,
         notes TEXT,
+        tip_amount REAL NOT NULL DEFAULT 0,
         paid_at TEXT,
         created_at TEXT NOT NULL,
         is_offline INTEGER NOT NULL DEFAULT 0,
@@ -159,6 +160,7 @@ class LocalDbService {
         quantity INTEGER NOT NULL,
         subtotal REAL NOT NULL,
         notes TEXT,
+        variant_id TEXT,
         FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     ''');
@@ -498,17 +500,6 @@ class LocalDbService {
       }
     }
 
-    if (oldVersion < 14) {
-      try {
-        await db.execute(
-          'ALTER TABLE staff_members ADD COLUMN pin_salt TEXT',
-        );
-        debugPrint('[LocalDb] v14: pin_salt added to staff_members');
-      } catch (e) {
-        debugPrint('[LocalDb] v14: pin_salt already exists ($e)');
-      }
-    }
-
     if (oldVersion < 13) {
       try {
         await db.execute(
@@ -525,6 +516,38 @@ class LocalDbService {
         debugPrint('[LocalDb] v13: cost_price added to product_variants');
       } catch (e) {
         debugPrint('[LocalDb] v13: cost_price already exists ($e)');
+      }
+    }
+
+    if (oldVersion < 14) {
+      try {
+        await db.execute(
+          'ALTER TABLE staff_members ADD COLUMN pin_salt TEXT',
+        );
+        debugPrint('[LocalDb] v14: pin_salt added to staff_members');
+      } catch (e) {
+        debugPrint('[LocalDb] v14: pin_salt already exists ($e)');
+      }
+    }
+    if (oldVersion < 15) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN variant_id TEXT',
+        );
+        debugPrint('[LocalDb] v15: variant_id added to order_items');
+      } catch (e) {
+        debugPrint('[LocalDb] v15: variant_id already exists ($e)');
+      }
+    }
+
+    if (oldVersion < 16) {
+      try {
+        await db.execute(
+          'ALTER TABLE orders ADD COLUMN tip_amount REAL NOT NULL DEFAULT 0',
+        );
+        debugPrint('[LocalDb] v16: tip_amount added to orders');
+      } catch (e) {
+        debugPrint('[LocalDb] v16: tip_amount already exists ($e)');
       }
     }
   }
@@ -770,6 +793,7 @@ class LocalDbService {
           'change_amount': order.changeAmount,
           'reference_number': order.referenceNumber,
           'notes': order.notes,
+          'tip_amount': order.tipAmount,
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
           'is_offline': 1,
@@ -792,6 +816,7 @@ class LocalDbService {
             'quantity': item.quantity,
             'subtotal': item.total,
             'notes': item.notes,
+            'variant_id': item.selectedVariant?.id,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
@@ -831,6 +856,7 @@ class LocalDbService {
                 'change_amount': order.changeAmount,
                 'reference_number': order.referenceNumber,
                 'notes': order.notes,
+                'tip_amount': order.tipAmount,
                 'paid_at': order.paidAt?.toIso8601String(),
                 'created_at': order.createdAt.toIso8601String(),
                 'is_offline': 0,
@@ -858,6 +884,7 @@ class LocalDbService {
                   'quantity': item.quantity,
                   'subtotal': item.total,
                   'notes': item.notes,
+                  'variant_id': item.selectedVariant?.id,
                 },
                 conflictAlgorithm: ConflictAlgorithm.replace,
               );
@@ -939,11 +966,20 @@ class LocalDbService {
         name: r['product_name'] as String,
         price: (r['unit_price'] as num).toDouble(),
       );
+      final variantId = r['variant_id'] as String?;
+      final selectedVariant = variantId != null
+          ? ProductVariant(
+              id: variantId,
+              productId: r['product_id'] as String,
+              name: '',
+            )
+          : null;
       return CartItem(
         product: product,
         quantity: r['quantity'] as int,
         costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
         notes: r['notes'] as String?,
+        selectedVariant: selectedVariant,
       );
     }).toList();
   }
@@ -960,6 +996,7 @@ class LocalDbService {
         subtotal: (row['subtotal'] as num).toDouble(),
         taxAmount: (row['tax_amount'] as num).toDouble(),
         discountAmount: (row['discount_amount'] as num).toDouble(),
+        tipAmount: (row['tip_amount'] as num?)?.toDouble() ?? 0.0,
         totalAmount: (row['total_amount'] as num).toDouble(),
         paymentMethod: row['payment_method'] != null
             ? PaymentMethodX.fromString(row['payment_method'] as String)

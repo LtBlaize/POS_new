@@ -12,7 +12,7 @@ import '../../features/auth/auth_provider.dart';
 import '../providers/app_context_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../features/settings/settings_provider.dart';
-import 'reciept_service.dart';
+import 'receipt_service.dart';
 import 'thermal_print_service.dart';
 import '../services/sync_queue_service.dart'; 
 

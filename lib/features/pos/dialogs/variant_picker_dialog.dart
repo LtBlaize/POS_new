@@ -85,7 +85,7 @@ class _VariantPickerDialogState extends State<VariantPickerDialog> {
                         Text(
                           'Select a variant',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.75),
+                              color: Colors.white.withValues(alpha:0.75),
                               fontSize: 12),
                         ),
                       ],
@@ -163,7 +163,7 @@ class _VariantPickerDialogState extends State<VariantPickerDialog> {
                           horizontal: 12, vertical: 8),
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.06),
+                        color: AppColors.primary.withValues(alpha:0.06),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(

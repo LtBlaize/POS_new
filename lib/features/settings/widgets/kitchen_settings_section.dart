@@ -55,15 +55,15 @@ class KitchenModeSelector extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.06),
+              color: AppColors.primary.withValues(alpha:0.06),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.info_outline_rounded,
-                    size: 14, color: AppColors.primary.withOpacity(0.7)),
+                    size: 14, color: AppColors.primary.withValues(alpha:0.7)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -72,7 +72,7 @@ class KitchenModeSelector extends ConsumerWidget {
                         : 'Go to Settings → LAN Connection on the kitchen tablet and enter this device\'s IP address.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.primary.withOpacity(0.8),
+                      color: AppColors.primary.withValues(alpha:0.8),
                       height: 1.4,
                     ),
                   ),
@@ -118,7 +118,7 @@ class _ModeCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.primary.withOpacity(0.07)
+              ? AppColors.primary.withValues(alpha:0.07)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
@@ -149,7 +149,7 @@ class _ModeCard extends StatelessWidget {
                     border: Border.all(
                       color: selected
                           ? AppColors.primary
-                          : AppColors.textSecondary.withOpacity(0.4),
+                          : AppColors.textSecondary.withValues(alpha:0.4),
                       width: 1.5,
                     ),
                   ),

@@ -78,7 +78,7 @@ class _AuditLogTabState extends ConsumerState<AuditLogTab> {
                       Icon(Icons.history_rounded,
                           size: 48,
                           color:
-                              AppColors.textSecondary.withOpacity(0.2)),
+                              AppColors.textSecondary.withValues(alpha:0.2)),
                       const SizedBox(height: 16),
                       const Text('No audit entries found',
                           style: TextStyle(
@@ -161,12 +161,12 @@ class _FilterBar extends StatelessWidget {
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: active
-                            ? AppColors.primary.withOpacity(0.1)
+                            ? AppColors.primary.withValues(alpha:0.1)
                             : AppColors.surface,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: active
-                              ? AppColors.primary.withOpacity(0.4)
+                              ? AppColors.primary.withValues(alpha:0.4)
                               : AppColors.divider,
                         ),
                       ),
@@ -255,10 +255,10 @@ class _FilterBar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withOpacity(0.08),
+                      color: AppColors.danger.withValues(alpha:0.08),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: AppColors.danger.withOpacity(0.3)),
+                          color: AppColors.danger.withValues(alpha:0.3)),
                     ),
                     child: const Text('Clear',
                         style: TextStyle(
@@ -327,12 +327,12 @@ class _DateRangeButton extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: hasRange
-              ? AppColors.info.withOpacity(0.08)
+              ? AppColors.info.withValues(alpha:0.08)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: hasRange
-                ? AppColors.info.withOpacity(0.4)
+                ? AppColors.info.withValues(alpha:0.4)
                 : AppColors.divider,
           ),
         ),
@@ -470,7 +470,7 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(_iconFor(entry.actionType),
@@ -489,7 +489,7 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: color.withOpacity(0.1),
+                                color: color.withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(label,

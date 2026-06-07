@@ -24,6 +24,7 @@ import '../../settings/settings_provider.dart';
 import '../../auth/manager_override_dialog.dart';
 import '../../../core/services/audit_service.dart';
 import '../../../core/providers/role_permissions_provider.dart';
+import '../../../core/services/credit_service.dart';
 
 // ── Payment method selector ───────────────────────────────────────────────────
 
@@ -378,7 +379,7 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
             border: Border.all(color: CheckoutTheme.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withValues(alpha:0.6),
                 blurRadius: 60,
                 offset: const Offset(0, 20),
               ),
@@ -719,7 +720,7 @@ class _NoTableBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      color: const Color(0xffffb54712),
+      color: const Color(0xFFFFB547),
       child: const Row(
         children: [
           Icon(Icons.table_restaurant_outlined,
@@ -802,6 +803,21 @@ class _UtangButton extends ConsumerWidget {
                 return;
               }
 
+              // Record the credit debt against the selected customer
+              if (checkoutResult.order != null) {
+                try {
+                  await ref.read(creditServiceProvider).addCredit(
+                    customerId: result.customer.id,
+                    businessId: result.customer.businessId,
+                    amount: subtotal,
+                    orderId: checkoutResult.order!.id,
+                    note: 'Utang — order #${checkoutResult.order!.orderNumber}',
+                  );
+                } catch (e) {
+                  debugPrint('[Utang] Credit record failed: $e');
+                }
+              }
+
               onDone();
 
               if (context.mounted) {
@@ -826,7 +842,7 @@ class _UtangButton extends ConsumerWidget {
         decoration: BoxDecoration(
           color: CheckoutTheme.roseDim,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: CheckoutTheme.rose.withOpacity(0.3)),
+          border: Border.all(color: CheckoutTheme.rose.withValues(alpha:0.3)),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -879,12 +895,12 @@ class _DiscountButtonState extends ConsumerState<_DiscountButton> {
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
         decoration: BoxDecoration(
           color: hasDiscount
-              ? CheckoutTheme.rose.withOpacity(0.08)
+              ? CheckoutTheme.rose.withValues(alpha:0.08)
               : CheckoutTheme.elevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: hasDiscount
-                ? CheckoutTheme.rose.withOpacity(0.4)
+                ? CheckoutTheme.rose.withValues(alpha:0.4)
                 : CheckoutTheme.border,
           ),
         ),
@@ -987,6 +1003,7 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
     // fire if check 1 didn't already prompt the manager
     if (!overrideDone && needsOverride) {
       final approved = await requireManagerOverride(
+        // ignore: use_build_context_synchronously
         context: context,
         ref: ref,
         action: 'Apply ${_type == DiscountType.percentage ? '${value.toStringAsFixed(0)}%' : '₱${value.toStringAsFixed(2)}'} discount',
@@ -1232,7 +1249,7 @@ class _OrderTypeChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? CheckoutTheme.mint.withOpacity(0.12)
+                ? CheckoutTheme.mint.withValues(alpha:0.12)
                 : CheckoutTheme.card,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
@@ -1285,7 +1302,7 @@ class _TypeChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color: selected
-              ? CheckoutTheme.mint.withOpacity(0.12)
+              ? CheckoutTheme.mint.withValues(alpha:0.12)
               : CheckoutTheme.card,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
@@ -1326,7 +1343,7 @@ class _TipSection extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
         decoration: BoxDecoration(
           color: hasTip
-              ? CheckoutTheme.mint.withOpacity(0.08)
+              ? CheckoutTheme.mint.withValues(alpha:0.08)
               : CheckoutTheme.elevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
@@ -1480,7 +1497,7 @@ class _TipSheetState extends State<_TipSheet> {
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? CheckoutTheme.mint.withOpacity(0.12)
+                              ? CheckoutTheme.mint.withValues(alpha:0.12)
                               : CheckoutTheme.card,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(

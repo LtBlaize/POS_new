@@ -238,6 +238,8 @@ class _PortraitShell extends ConsumerWidget {
 
     try {
       await ref.read(authServiceProvider).logout();
+      // Navigation to /login is handled by MyApp's authStateProvider listener.
+      // Do NOT navigate here — double navigation crashes the widget tree.
     } catch (e) {
       debugPrint('[Logout] signOut error (continuing): $e');
       if (context.mounted) {
@@ -350,6 +352,12 @@ class _POSMainState extends ConsumerState<_POSMain> {
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
 
+    // If a text field has focus, let all keystrokes through unmodified.
+    // Hardware barcode scanners are not used when typing in search/input fields.
+    final focus = FocusManager.instance.primaryFocus;
+    final isTextField = focus?.context?.widget is EditableText;
+    if (isTextField) return false;
+
     final now = DateTime.now();
     final gap = now.difference(_lastKeyTime).inMilliseconds;
     _lastKeyTime = now;
@@ -360,13 +368,17 @@ class _POSMainState extends ConsumerState<_POSMain> {
       final barcode = _barcodeBuffer.toString().trim();
       _barcodeBuffer.clear();
       if (barcode.isNotEmpty) _handleBarcode(barcode);
-      return true; // consume — never bleeds into text fields
+      return barcode.isNotEmpty; // only consume if we actually handled a barcode
     }
 
     final char = event.character;
     if (char != null && char.isNotEmpty) {
-      _barcodeBuffer.write(char);
-      return true; // consume scanner chars so they don't type into fields
+      // Only buffer if characters are arriving fast (scanner cadence < 100ms).
+      // Slow typing (gap >= 50ms) is a human — don't consume.
+      if (gap < 50 || _barcodeBuffer.isNotEmpty) {
+        _barcodeBuffer.write(char);
+        return true;
+      }
     }
 
     return false;
@@ -594,7 +606,7 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
                 decoration: InputDecoration(
                   hintText: 'Search products or scan barcode…',
                   hintStyle: TextStyle(
-                      color: AppColors.textSecondary.withOpacity(0.7),
+                      color: AppColors.textSecondary.withValues(alpha:0.7),
                       fontSize: 13),
                   border: InputBorder.none,
                   isDense: true,
@@ -629,7 +641,7 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
 
 // ── Bottom nav ────────────────────────────────────────────────────────────────
 
-class _BottomNav extends StatelessWidget {
+class _BottomNav extends ConsumerWidget {
   final List<_ScreenEntry> screens;
   final int activeIndex;
   final ValueChanged<int> onSelect;
@@ -644,7 +656,7 @@ class _BottomNav extends StatelessWidget {
     required this.onLogout,
   });
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     const accent = Color(0xFFE94560);
 
     return Container(
@@ -653,7 +665,7 @@ class _BottomNav extends StatelessWidget {
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha:0.06),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
@@ -683,7 +695,7 @@ class _BottomNav extends StatelessWidget {
                               horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
                             color: isActive
-                                ? accent.withOpacity(0.1)
+                                ? accent.withValues(alpha:0.1)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -739,6 +751,7 @@ class _BottomNav extends StatelessWidget {
               ),
 
               // ── Logout ────────────────────────────────────────────────
+              if (ref.watch(activeStaffTabsProvider).contains('settings'))
               GestureDetector(
                 onTap: onLogout,
                 behavior: HitTestBehavior.opaque,
@@ -787,7 +800,7 @@ class _CartFAB extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F3460).withOpacity(0.35),
+              color: const Color(0xFF0F3460).withValues(alpha:0.35),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -800,7 +813,7 @@ class _CartFAB extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Center(
@@ -896,9 +909,9 @@ class _AdaptiveSidebar extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => CloseShiftScreen(
           onShiftClosed: () {
-            Navigator.pop(context);
             ref.read(activeStaffProvider.notifier).logout();
             ref.read(appLockedProvider.notifier).state = true;
+            Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
           },
           onCancel: () => Navigator.pop(context),
         ),
@@ -942,9 +955,9 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 height: compact ? 26 : 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _roleColor(activeStaff.role).withOpacity(0.2),
+                  color: _roleColor(activeStaff.role).withValues(alpha:0.2),
                   border: Border.all(
-                    color: _roleColor(activeStaff.role).withOpacity(0.6),
+                    color: _roleColor(activeStaff.role).withValues(alpha:0.6),
                     width: 1.5,
                   ),
                 ),
@@ -986,12 +999,12 @@ class _AdaptiveSidebar extends ConsumerWidget {
                             vertical: compact ? 8 : 12),
                         decoration: BoxDecoration(
                           color: isActive
-                              ? accent.withOpacity(0.15)
+                              ? accent.withValues(alpha:0.15)
                               : Colors.transparent,
                           borderRadius:
                               BorderRadius.circular(compact ? 8 : 10),
                           border: isActive
-                              ? Border.all(color: accent.withOpacity(0.4))
+                              ? Border.all(color: accent.withValues(alpha:0.4))
                               : null,
                         ),
                         child: Column(
@@ -1001,7 +1014,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                               screen.icon,
                               color: isActive
                                   ? accent
-                                  : Colors.white.withOpacity(0.4),
+                                  : Colors.white.withValues(alpha:0.4),
                               size: compact ? 20 : 24,
                             ),
                             if (!compact) ...[
@@ -1012,7 +1025,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                                   fontSize: 9,
                                   color: isActive
                                       ? accent
-                                      : Colors.white.withOpacity(0.4),
+                                      : Colors.white.withValues(alpha:0.4),
                                 ),
                               ),
                             ],
@@ -1042,7 +1055,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                     child: Column(children: [
                       Icon(
                         Icons.lock_clock_outlined,
-                        color: const Color(0xFFE94560).withOpacity(0.8),
+                        color: const Color(0xFFE94560).withValues(alpha:0.8),
                         size: compact ? 18 : 22,
                       ),
                       if (!compact) ...[
@@ -1051,7 +1064,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                           'Close',
                           style: TextStyle(
                             fontSize: 9,
-                            color: const Color(0xFFE94560).withOpacity(0.8),
+                            color: const Color(0xFFE94560).withValues(alpha:0.8),
                           ),
                         ),
                       ],
@@ -1077,7 +1090,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 child: Column(children: [
                   Icon(
                     Icons.lock_outline_rounded,
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha:0.4),
                     size: compact ? 18 : 22,
                   ),
                   if (!compact) ...[
@@ -1086,7 +1099,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                       'Lock',
                       style: TextStyle(
                         fontSize: 9,
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha:0.4),
                       ),
                     ),
                   ],
@@ -1095,6 +1108,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
             ),
           ),
 
+          if (ref.watch(activeStaffTabsProvider).contains('settings'))
           Tooltip(
             message: 'Log out',
             child: GestureDetector(
@@ -1108,7 +1122,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 child: Column(children: [
                   Icon(
                     Icons.logout_rounded,
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha:0.4),
                     size: compact ? 18 : 22,
                   ),
                   if (!compact) ...[
@@ -1117,7 +1131,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
                       'Logout',
                       style: TextStyle(
                         fontSize: 9,
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha:0.4),
                       ),
                     ),
                   ],

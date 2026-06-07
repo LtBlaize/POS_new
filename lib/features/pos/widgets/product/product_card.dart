@@ -103,13 +103,13 @@ class _ProductCardState extends ConsumerState<ProductCard>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: inCart > 0
-                  ? AppColors.primary.withOpacity(0.4)
+                  ? AppColors.primary.withValues(alpha:0.4)
                   : AppColors.divider,
               width: inCart > 0 ? 1.5 : 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha:0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -148,7 +148,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                                   style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.white.withOpacity(0.4),
+                                    color: Colors.white.withValues(alpha:0.4),
                                   ),
                                 ),
                         ),
@@ -166,7 +166,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
+                                color: Colors.black.withValues(alpha:0.15),
                                 blurRadius: 4,
                               ),
                             ],
@@ -234,7 +234,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   color:
-                                      gradColors.first.withOpacity(0.08),
+                                      gradColors.first.withValues(alpha:0.08),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Icon(

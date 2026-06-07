@@ -122,10 +122,10 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _accent.withOpacity(0.1),
+                      color: _accent.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(10),
                       border:
-                          Border.all(color: _accent.withOpacity(0.3)),
+                          Border.all(color: _accent.withValues(alpha:0.3)),
                     ),
                     child: Text(_error!,
                         style: const TextStyle(
@@ -193,7 +193,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
       ),
       child: Column(
         children: [
@@ -202,7 +202,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: _accent.withOpacity(0.12),
+              color: _accent.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(Icons.storefront_rounded,
@@ -229,7 +229,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
           Text(
             DateFormat('EEEE, MMMM d · h:mm a').format(now),
             style: TextStyle(
-                color: Colors.white.withOpacity(0.35), fontSize: 12),
+                color: Colors.white.withValues(alpha:0.35), fontSize: 12),
           ),
         ],
       ),
@@ -242,7 +242,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +250,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
           Text(
             'OPENING CASH FUND',
             style: TextStyle(
-                color: Colors.white.withOpacity(0.35),
+                color: Colors.white.withValues(alpha:0.35),
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2),
@@ -262,7 +262,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
               Text(
                 '₱',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha:0.4),
                     fontSize: 28,
                     fontWeight: FontWeight.w300),
               ),
@@ -296,12 +296,12 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Divider(color: Colors.white.withOpacity(0.06)),
+          Divider(color: Colors.white.withValues(alpha:0.06)),
           const SizedBox(height: 4),
           Text(
             'Tap bills below to add quickly, or type manually',
             style: TextStyle(
-                color: Colors.white.withOpacity(0.25), fontSize: 11),
+                color: Colors.white.withValues(alpha:0.25), fontSize: 11),
           ),
         ],
       ),
@@ -342,7 +342,7 @@ class _DenomButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: _surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.08)),
         ),
         child: Center(
           child: Text(

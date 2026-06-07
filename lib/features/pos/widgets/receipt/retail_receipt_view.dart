@@ -56,14 +56,14 @@ class RetailReceiptView extends StatelessWidget {
                     Text(
                       'Receipt #${order.orderNumber.toString().padLeft(6, '0')}',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
+                          color: Colors.white.withValues(alpha:0.75),
                           fontSize: 12),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       formatDateTime(order.createdAt),
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
+                          color: Colors.white.withValues(alpha:0.6),
                           fontSize: 11),
                     ),
                   ],

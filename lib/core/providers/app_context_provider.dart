@@ -15,6 +15,6 @@ final activeBusinessIdProvider = Provider<String?>((ref) {
   return profile.when(
     data: (p) => p?.businessId,
     loading: () => null,
-    error: (_, __) => null,
+    error: (_, _) => null,
   );
 }); 

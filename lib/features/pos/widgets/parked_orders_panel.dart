@@ -43,7 +43,7 @@ class ParkedOrdersPanel extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.15),
+                      color: AppColors.warning.withValues(alpha:0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text('${state.orders.length}',
@@ -68,13 +68,13 @@ class ParkedOrdersPanel extends ConsumerWidget {
                             Icon(Icons.inbox_outlined,
                                 size: 36,
                                 color: AppColors.textSecondary
-                                    .withOpacity(0.25)),
+                                    .withValues(alpha:0.25)),
                             const SizedBox(height: 8),
                             Text('No parked orders',
                                 style: TextStyle(
                                     fontSize: 13,
                                     color: AppColors.textSecondary
-                                        .withOpacity(0.5))),
+                                        .withValues(alpha:0.5))),
                           ],
                         ),
                       )
@@ -144,7 +144,7 @@ class _ParkedOrderCard extends ConsumerWidget {
             _timeAgo(order.parkedAt),
             style: TextStyle(
                 fontSize: 10,
-                color: AppColors.textSecondary.withOpacity(0.6)),
+                color: AppColors.textSecondary.withValues(alpha:0.6)),
           ),
           const SizedBox(height: 10),
           Row(

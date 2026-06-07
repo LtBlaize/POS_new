@@ -569,7 +569,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(
-              color: AppColors.textSecondary.withOpacity(0.5),
+              color: AppColors.textSecondary.withValues(alpha:0.5),
               fontSize: 13),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -691,7 +691,7 @@ class _NewCategoryField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'New category name',
               hintStyle: TextStyle(
-                  color: AppColors.textSecondary.withOpacity(0.5),
+                  color: AppColors.textSecondary.withValues(alpha:0.5),
                   fontSize: 13),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -744,11 +744,11 @@ class _SendToKitchenToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: value
-            ? Colors.orange.withOpacity(0.05)
+            ? Colors.orange.withValues(alpha:0.05)
             : AppColors.surface,
         border: Border.all(
           color: value
-              ? Colors.orange.withOpacity(0.3)
+              ? Colors.orange.withValues(alpha:0.3)
               : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
@@ -800,11 +800,11 @@ class _TrackInventoryToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: value
-            ? AppColors.primary.withOpacity(0.05)
+            ? AppColors.primary.withValues(alpha:0.05)
             : AppColors.surface,
         border: Border.all(
           color: value
-              ? AppColors.primary.withOpacity(0.3)
+              ? AppColors.primary.withValues(alpha:0.3)
               : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
@@ -896,7 +896,7 @@ class _VariantsSectionState extends State<_VariantsSection> {
       decoration: BoxDecoration(
         border: Border.all(
           color: _expanded
-              ? AppColors.primary.withOpacity(0.3)
+              ? AppColors.primary.withValues(alpha:0.3)
               : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
@@ -961,7 +961,7 @@ class _VariantsSectionState extends State<_VariantsSection> {
                   'No variants yet. Add one below.',
                   style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary.withOpacity(0.7)),
+                      color: AppColors.textSecondary.withValues(alpha:0.7)),
                 ),
               )
             else
@@ -1231,7 +1231,7 @@ class _VariantRowState extends State<_VariantRow> {
                   'Final price: ₱${resolvedPrice.toStringAsFixed(2)}',
                   style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.primary.withOpacity(0.8),
+                      color: AppColors.primary.withValues(alpha:0.8),
                       fontWeight: FontWeight.w500),
                 ),
               ],
@@ -1265,7 +1265,7 @@ class _VariantRowState extends State<_VariantRow> {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-                color: AppColors.textSecondary.withOpacity(0.5),
+                color: AppColors.textSecondary.withValues(alpha:0.5),
                 fontSize: 12),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

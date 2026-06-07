@@ -206,10 +206,10 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A2E),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha:0.6),
               blurRadius: 40,
               offset: const Offset(0, 16),
             ),
@@ -245,10 +245,10 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.danger.withOpacity(0.12),
+              color: AppColors.danger.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(10),
               border:
-                  Border.all(color: AppColors.danger.withOpacity(0.3)),
+                  Border.all(color: AppColors.danger.withValues(alpha:0.3)),
             ),
             child: Icon(Icons.remove_circle_outline,
                 color: AppColors.danger, size: 18),
@@ -267,7 +267,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
                     ? 'Manager / Owner PIN required'
                     : 'Select a void reason',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.45),
+                    color: Colors.white.withValues(alpha:0.45),
                     fontSize: 11),
               ),
             ],
@@ -279,11 +279,11 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha:0.06),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(Icons.close,
-                  color: Colors.white.withOpacity(0.4), size: 16),
+                  color: Colors.white.withValues(alpha:0.4), size: 16),
             ),
           ),
         ],
@@ -297,9 +297,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.danger.withOpacity(0.07),
+        color: AppColors.danger.withValues(alpha:0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withOpacity(0.2)),
+        border: Border.all(color: AppColors.danger.withValues(alpha:0.2)),
       ),
       child: Row(
         children: [
@@ -307,7 +307,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: AppColors.danger.withOpacity(0.15),
+              color: AppColors.danger.withValues(alpha:0.15),
               borderRadius: BorderRadius.circular(7),
             ),
             child: Center(
@@ -329,7 +329,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
           Text(
             '₱${item.total.toStringAsFixed(2)}',
             style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
+                color: Colors.white.withValues(alpha:0.6),
                 fontSize: 13,
                 fontWeight: FontWeight.w600),
           ),
@@ -349,7 +349,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
           Text(
             'Enter PIN for ${widget.authorisedStaff.name}',
             style: TextStyle(
-                color: Colors.white.withOpacity(0.55), fontSize: 12),
+                color: Colors.white.withValues(alpha:0.55), fontSize: 12),
           ),
           const SizedBox(height: 16),
           // PIN dots
@@ -367,11 +367,11 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
                       ? (_pinError != null
                           ? AppColors.danger
                           : AppColors.primary)
-                      : Colors.white.withOpacity(0.12),
+                      : Colors.white.withValues(alpha:0.12),
                   border: Border.all(
                     color: filled
                         ? Colors.transparent
-                        : Colors.white.withOpacity(0.2),
+                        : Colors.white.withValues(alpha:0.2),
                   ),
                 ),
               );
@@ -436,7 +436,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
                 backgroundColor: AppColors.danger,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor:
-                    AppColors.danger.withOpacity(0.3),
+                    AppColors.danger.withValues(alpha:0.3),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -472,13 +472,13 @@ class _ReasonTile extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.danger.withOpacity(0.12)
-              : Colors.white.withOpacity(0.04),
+              ? AppColors.danger.withValues(alpha:0.12)
+              : Colors.white.withValues(alpha:0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected
-                ? AppColors.danger.withOpacity(0.45)
-                : Colors.white.withOpacity(0.08),
+                ? AppColors.danger.withValues(alpha:0.45)
+                : Colors.white.withValues(alpha:0.08),
           ),
         ),
         child: Row(
@@ -488,7 +488,7 @@ class _ReasonTile extends StatelessWidget {
                   style: TextStyle(
                       color: selected
                           ? Colors.white
-                          : Colors.white.withOpacity(0.6),
+                          : Colors.white.withValues(alpha:0.6),
                       fontSize: 13,
                       fontWeight: selected
                           ? FontWeight.w700
@@ -577,16 +577,16 @@ class _PinKey extends StatelessWidget {
     Color bg;
     Color fg;
     if (disabled) {
-      bg = Colors.white.withOpacity(0.04);
-      fg = Colors.white.withOpacity(0.2);
+      bg = Colors.white.withValues(alpha:0.04);
+      fg = Colors.white.withValues(alpha:0.2);
     } else if (primary) {
-      bg = AppColors.primary.withOpacity(0.15);
+      bg = AppColors.primary.withValues(alpha:0.15);
       fg = AppColors.primary;
     } else if (secondary) {
-      bg = Colors.white.withOpacity(0.06);
-      fg = Colors.white.withOpacity(0.5);
+      bg = Colors.white.withValues(alpha:0.06);
+      fg = Colors.white.withValues(alpha:0.5);
     } else {
-      bg = Colors.white.withOpacity(0.07);
+      bg = Colors.white.withValues(alpha:0.07);
       fg = Colors.white;
     }
 
@@ -602,7 +602,7 @@ class _PinKey extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.07)),
         ),
         child: Center(
           child: Text(label,

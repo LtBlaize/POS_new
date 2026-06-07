@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -15,6 +16,7 @@ import 'event_bus.dart';
 import 'local_db_service.dart';
 import 'connectivity_service.dart';
 import 'sync_queue_service.dart';
+
 
 final lanServerServiceProvider = Provider<LanServerService>((ref) {
   final s = LanServerService(ref);   // pass ref instead of just localDb
@@ -79,8 +81,7 @@ class LanServerService {
   static String getPosKey() => _posKey ??= _generateKey();
 
   static String _generateKey() {
-    final rand = DateTime.now().millisecondsSinceEpoch ^ 0xDEADBEEF;
-    return rand.toRadixString(16).padLeft(8, '0');
+    return const Uuid().v4();
   }
 
   // ── WebSocket handler ──────────────────────────────────────────────────────
@@ -123,6 +124,13 @@ class LanServerService {
           headers: {'content-type': 'application/json'});
 
   Future<Response> _getPendingOrders(Request req) async {
+    final key = req.headers['x-pos-key'];
+    if (key == null || key != _posKey) {
+      return Response.forbidden(
+        '{"error":"unauthorized"}',
+        headers: {'content-type': 'application/json'},
+      );
+    }
     try {
       final businessId = req.url.queryParameters['business_id'] ?? '';
       final orders = await _local.getOrders(businessId);

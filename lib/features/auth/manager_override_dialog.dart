@@ -138,10 +138,10 @@ class _ManagerOverrideDialogState
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A2E),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha:0.6),
               blurRadius: 40,
               offset: const Offset(0, 16),
             ),
@@ -163,10 +163,10 @@ class _ManagerOverrideDialogState
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.12),
+                      color: AppColors.warning.withValues(alpha:0.12),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppColors.warning.withOpacity(0.3)),
+                          color: AppColors.warning.withValues(alpha:0.3)),
                     ),
                     child: Icon(Icons.admin_panel_settings_outlined,
                         color: AppColors.warning, size: 18),
@@ -184,7 +184,7 @@ class _ManagerOverrideDialogState
                         Text(
                           widget.action,
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.45),
+                              color: Colors.white.withValues(alpha:0.45),
                               fontSize: 11),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -199,11 +199,11 @@ class _ManagerOverrideDialogState
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha:0.06),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(Icons.close,
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withValues(alpha:0.4),
                           size: 16),
                     ),
                   ),
@@ -219,7 +219,7 @@ class _ManagerOverrideDialogState
                   Text(
                     'Enter Manager or Owner PIN',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
+                        color: Colors.white.withValues(alpha:0.55),
                         fontSize: 12),
                   ),
                   const SizedBox(height: 16),
@@ -240,11 +240,11 @@ class _ManagerOverrideDialogState
                               ? (_error != null
                                   ? AppColors.danger
                                   : AppColors.warning)
-                              : Colors.white.withOpacity(0.12),
+                              : Colors.white.withValues(alpha:0.12),
                           border: Border.all(
                             color: filled
                                 ? Colors.transparent
-                                : Colors.white.withOpacity(0.2),
+                                : Colors.white.withValues(alpha:0.2),
                           ),
                         ),
                       );
@@ -335,16 +335,16 @@ class _PinKey extends StatelessWidget {
     Color bg;
     Color fg;
     if (disabled || onTap == null) {
-      bg = Colors.white.withOpacity(0.04);
-      fg = Colors.white.withOpacity(0.2);
+      bg = Colors.white.withValues(alpha:0.04);
+      fg = Colors.white.withValues(alpha:0.2);
     } else if (primary) {
-      bg = AppColors.warning.withOpacity(0.15);
+      bg = AppColors.warning.withValues(alpha:0.15);
       fg = AppColors.warning;
     } else if (secondary) {
-      bg = Colors.white.withOpacity(0.06);
-      fg = Colors.white.withOpacity(0.5);
+      bg = Colors.white.withValues(alpha:0.06);
+      fg = Colors.white.withValues(alpha:0.5);
     } else {
-      bg = Colors.white.withOpacity(0.07);
+      bg = Colors.white.withValues(alpha:0.07);
       fg = Colors.white;
     }
 
@@ -357,7 +357,7 @@ class _PinKey extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.07)),
         ),
         child: Center(
           child: Text(label,

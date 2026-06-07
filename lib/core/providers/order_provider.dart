@@ -854,18 +854,3 @@ class OrderService {
     }
   }
 }
-
-// ── DEAD CODE — do not use ────────────────────────────────────────────────────
-// Kitchen uses kitchenStateProvider.
-// POS uses orderServiceProvider.
-// This stub exists for backward compat only.
-
-class OrderNotifier extends StateNotifier<List<Order>> {
-  OrderNotifier() : super([]);
-  void updateStatus(String orderId, String status) {}
-  void removeOrder(String orderId) {}
-}
-
-final orderProvider = StateNotifierProvider<OrderNotifier, List<Order>>(
-  (ref) => OrderNotifier(),
-);

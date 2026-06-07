@@ -162,7 +162,7 @@ class _NumpadKeyState extends State<NumpadKey>
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: widget.isBackspace
-                  ? CheckoutTheme.rose.withOpacity(0.25)
+                  ? CheckoutTheme.rose.withValues(alpha:0.25)
                   : CheckoutTheme.border,
             ),
           ),

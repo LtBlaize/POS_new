@@ -27,7 +27,7 @@ class BusinessTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.08) : AppColors.surface,
+          color: isSelected ? AppColors.primary.withValues(alpha:0.08) : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppColors.primary : AppColors.border,
@@ -41,7 +41,7 @@ class BusinessTypeCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : AppColors.border.withOpacity(0.3),
+                color: isSelected ? AppColors.primary : AppColors.border.withValues(alpha:0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

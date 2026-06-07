@@ -600,7 +600,7 @@ class TypeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -632,7 +632,7 @@ class DateNavButton extends StatelessWidget {
         child: Icon(icon,
             size: 16,
             color: onTap == null
-                ? AppColors.textSecondary.withOpacity(0.3)
+                ? AppColors.textSecondary.withValues(alpha:0.3)
                 : AppColors.textSecondary),
       ),
     );
@@ -732,12 +732,12 @@ class _PresetChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? AppColors.primary.withOpacity(0.1)
+              ? AppColors.primary.withValues(alpha:0.1)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: active
-                ? AppColors.primary.withOpacity(0.4)
+                ? AppColors.primary.withValues(alpha:0.4)
                 : AppColors.divider,
           ),
         ),

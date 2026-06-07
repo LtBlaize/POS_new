@@ -45,7 +45,7 @@ class FilterButton extends StatelessWidget {
         tooltip: 'Filters',
         style: IconButton.styleFrom(
           backgroundColor: _hasFilter
-              ? AppColors.primary.withOpacity(0.08)
+              ? AppColors.primary.withValues(alpha:0.08)
               : AppColors.surface,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8)),
@@ -438,12 +438,12 @@ class SortButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: _isDefault
               ? AppColors.surface
-              : AppColors.primary.withOpacity(0.08),
+              : AppColors.primary.withValues(alpha:0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _isDefault
                 ? AppColors.divider
-                : AppColors.primary.withOpacity(0.3),
+                : AppColors.primary.withValues(alpha:0.3),
           ),
         ),
         child: Row(

@@ -145,7 +145,7 @@ class InventoryScreen extends ConsumerWidget {
                         tooltip: 'Manage Categories',
                         style: IconButton.styleFrom(
                           backgroundColor:
-                              AppColors.primary.withOpacity(0.08),
+                              AppColors.primary.withValues(alpha:0.08),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
@@ -290,7 +290,7 @@ class InventoryScreen extends ConsumerWidget {
                                       'Search by name, category or barcode…',
                                   hintStyle: TextStyle(
                                       color: AppColors.textSecondary
-                                          .withOpacity(0.6),
+                                          .withValues(alpha:0.6),
                                       fontSize: 13),
                                   border: InputBorder.none,
                                   isDense: true,
@@ -329,7 +329,7 @@ class InventoryScreen extends ConsumerWidget {
                               size: 18, color: AppColors.danger),
                           style: IconButton.styleFrom(
                             backgroundColor:
-                                AppColors.danger.withOpacity(0.07),
+                                AppColors.danger.withValues(alpha:0.07),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                           ),
@@ -357,7 +357,7 @@ class InventoryScreen extends ConsumerWidget {
           // ── Low stock banner ───────────────────────────────────────
           if (lowCount > 0)
             Container(
-              color: AppColors.danger.withOpacity(0.06),
+              color: AppColors.danger.withValues(alpha:0.06),
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Row(
@@ -365,7 +365,7 @@ class InventoryScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withOpacity(0.1),
+                      color: AppColors.danger.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.warning_amber_rounded,
@@ -385,7 +385,7 @@ class InventoryScreen extends ConsumerWidget {
 
           if (inventoryState.error != null)
             Container(
-              color: AppColors.danger.withOpacity(0.08),
+              color: AppColors.danger.withValues(alpha:0.08),
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Row(
@@ -411,20 +411,20 @@ class InventoryScreen extends ConsumerWidget {
           // ── Results count ─────────────────────────────────────────
           if (filter.hasActiveFilters)
             Container(
-              color: AppColors.primary.withOpacity(0.04),
+              color: AppColors.primary.withValues(alpha:0.04),
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
               child: Row(
                 children: [
                   Icon(Icons.filter_list_rounded,
                       size: 14,
-                      color: AppColors.primary.withOpacity(0.7)),
+                      color: AppColors.primary.withValues(alpha:0.7)),
                   const SizedBox(width: 6),
                   Text(
                     'Showing ${filtered.length} of ${entries.length} products',
                     style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.primary.withOpacity(0.7),
+                        color: AppColors.primary.withValues(alpha:0.7),
                         fontWeight: FontWeight.w500),
                   ),
                 ],
@@ -440,7 +440,7 @@ class InventoryScreen extends ConsumerWidget {
                       children: [
                         Icon(Icons.inventory_2_outlined,
                             size: 48,
-                            color: AppColors.textSecondary.withOpacity(0.3)),
+                            color: AppColors.textSecondary.withValues(alpha:0.3)),
                         const SizedBox(height: 12),
                         Text(
                           filter.hasActiveFilters
@@ -563,21 +563,23 @@ class _ImportButtonState extends ConsumerState<_ImportButton> {
     }
   }
 
-  Future<void> _commit(preview) async {
+  Future<void> _commit(ImportPreview preview) async {
     final service = ref.read(importServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text('Importing…'), duration: Duration(seconds: 60)),
     );
 
     final result = await service.commit(preview);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    messenger.hideCurrentSnackBar();
 
     if (result.success) {
       await ref.read(inventoryProvider.notifier).refresh();
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             '✓ ${result.inserted} added, ${result.updated} updated',
@@ -586,7 +588,7 @@ class _ImportButtonState extends ConsumerState<_ImportButton> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Import error: ${result.error}'),
           backgroundColor: AppColors.danger,

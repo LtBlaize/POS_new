@@ -33,7 +33,7 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
       children: [
         if (widget.editMode && _dirty)
           Container(
-            color: AppColors.warning.withOpacity(0.1),
+            color: AppColors.warning.withValues(alpha:0.1),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
@@ -177,15 +177,17 @@ class _TableWidgetState extends State<_TableWidget> {
 
   Color get _bgColor {
     if (widget.isSelected) return AppColors.primary;
-    if (widget.table.status == TableStatus.occupied)
-      return AppColors.danger.withOpacity(0.15);
+    if (widget.table.status == TableStatus.occupied) {
+      return AppColors.danger.withValues(alpha: 0.15);
+    }
     return Colors.white;
   }
 
   Color get _borderColor {
     if (widget.isSelected) return AppColors.primary;
-    if (widget.table.status == TableStatus.occupied)
-      return AppColors.danger.withOpacity(0.6);
+    if (widget.table.status == TableStatus.occupied) {
+      return AppColors.danger.withValues(alpha: 0.6);
+    }
     return AppColors.divider;
   }
 
@@ -212,7 +214,7 @@ class _TableWidgetState extends State<_TableWidget> {
           border: Border.all(color: _borderColor, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha:0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -226,7 +228,7 @@ class _TableWidgetState extends State<_TableWidget> {
                   ? Icons.people_outlined
                   : Icons.table_restaurant_outlined,
               size: 20,
-              color: _textColor.withOpacity(0.7),
+              color: _textColor.withValues(alpha:0.7),
             ),
             const SizedBox(height: 4),
             Text(
@@ -246,7 +248,7 @@ class _TableWidgetState extends State<_TableWidget> {
                       : 'Free',
               style: TextStyle(
                   fontSize: 9,
-                  color: _textColor.withOpacity(0.7)),
+                  color: _textColor.withValues(alpha:0.7)),
             ),
           ],
         ),
@@ -288,7 +290,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.divider.withOpacity(0.5)
+      ..color = AppColors.divider.withValues(alpha:0.5)
       ..strokeWidth = 0.5;
 
     const step = 40.0;

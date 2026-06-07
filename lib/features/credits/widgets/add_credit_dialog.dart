@@ -143,7 +143,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: _accent.withOpacity(0.15),
+                          color: _accent.withValues(alpha:0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(Icons.receipt_long_outlined,
@@ -163,16 +163,16 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: _accent.withOpacity(0.08),
+                      color: _accent.withValues(alpha:0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _accent.withOpacity(0.25)),
+                      border: Border.all(color: _accent.withValues(alpha:0.25)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Amount to Credit',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.55),
+                                color: Colors.white.withValues(alpha:0.55),
                                 fontSize: 13)),
                         Text('₱${widget.amount.toStringAsFixed(2)}',
                             style: const TextStyle(
@@ -220,15 +220,15 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                             decoration: InputDecoration(
                               hintText: 'Search by name or phone…',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha:0.3),
                                   fontSize: 13),
                               prefixIcon: Icon(Icons.search,
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha:0.3),
                                   size: 18),
                               suffixIcon: _searchCtrl.text.isNotEmpty
                                   ? IconButton(
                                       icon: Icon(Icons.close,
-                                          color: Colors.white.withOpacity(0.3),
+                                          color: Colors.white.withValues(alpha:0.3),
                                           size: 16),
                                       onPressed: () =>
                                           setState(() => _searchCtrl.clear()),
@@ -259,7 +259,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                 color: _card,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                    color: Colors.white.withOpacity(0.08)),
+                                    color: Colors.white.withValues(alpha:0.08)),
                               ),
                               child: ListView.separated(
                                 shrinkWrap: true,
@@ -268,7 +268,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                 itemCount: filtered.length,
                                 separatorBuilder: (_, _) => Divider(
                                     height: 1,
-                                    color: Colors.white.withOpacity(0.06)),
+                                    color: Colors.white.withValues(alpha:0.06)),
                                 itemBuilder: (_, i) {
                                   final c = filtered[i];
                                   return InkWell(
@@ -282,7 +282,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                           CircleAvatar(
                                             radius: 16,
                                             backgroundColor:
-                                                _accent.withOpacity(0.15),
+                                                _accent.withValues(alpha:0.15),
                                             child: Text(
                                               c.name[0].toUpperCase(),
                                               style: const TextStyle(
@@ -306,7 +306,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                                 Text(c.phone,
                                                     style: TextStyle(
                                                         color: Colors.white
-                                                            .withOpacity(0.35),
+                                                            .withValues(alpha:0.35),
                                                         fontSize: 11)),
                                               ],
                                             ),
@@ -345,7 +345,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                 child: Text(
                                   'No customer found — fill in below to create new',
                                   style: TextStyle(
-                                      color: Colors.white.withOpacity(0.3),
+                                      color: Colors.white.withValues(alpha:0.3),
                                       fontSize: 12),
                                 ),
                               ),
@@ -409,7 +409,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white54,
                         side: BorderSide(
-                            color: Colors.white.withOpacity(0.12)),
+                            color: Colors.white.withValues(alpha:0.12)),
                         padding:
                             const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -469,13 +469,13 @@ class _SelectedChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1F35),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _accent.withOpacity(0.35)),
+        border: Border.all(color: _accent.withValues(alpha:0.35)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: _accent.withOpacity(0.15),
+            backgroundColor: _accent.withValues(alpha:0.15),
             child: Text(
               customer.name[0].toUpperCase(),
               style: const TextStyle(
@@ -496,7 +496,7 @@ class _SelectedChip extends StatelessWidget {
                         fontWeight: FontWeight.w600)),
                 Text(customer.phone,
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.35),
+                        color: Colors.white.withValues(alpha:0.35),
                         fontSize: 11)),
               ],
             ),
@@ -507,7 +507,7 @@ class _SelectedChip extends StatelessWidget {
               children: [
                 Text('Current balance',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.35),
+                        color: Colors.white.withValues(alpha:0.35),
                         fontSize: 10)),
                 Text('₱${customer.totalOwed.toStringAsFixed(2)}',
                     style: const TextStyle(
@@ -522,7 +522,7 @@ class _SelectedChip extends StatelessWidget {
           IconButton(
             onPressed: onClear,
             icon: Icon(Icons.close,
-                color: Colors.white.withOpacity(0.3), size: 16),
+                color: Colors.white.withValues(alpha:0.3), size: 16),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -559,7 +559,7 @@ class _Field extends StatelessWidget {
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.4)),
         filled: true,
         fillColor: const Color(0xFF1A1F35),
         border: OutlineInputBorder(

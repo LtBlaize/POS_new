@@ -460,7 +460,7 @@ class _EmptyKitchen extends StatelessWidget {
           Icon(
             Icons.kitchen_outlined,
             size: 48,
-            color: AppColors.textSecondary.withOpacity(0.25),
+            color: AppColors.textSecondary.withValues(alpha:0.25),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -508,7 +508,7 @@ class _KitchenColumn extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.08),
+                color: color.withValues(alpha:0.08),
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(13)),
                 border: Border(bottom: BorderSide(color: AppColors.divider)),
@@ -541,7 +541,7 @@ class _KitchenColumn extends StatelessWidget {
                       child: Text('No orders',
                           style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.textSecondary.withOpacity(0.4))))
+                              color: AppColors.textSecondary.withValues(alpha:0.4))))
                   : ListView.separated(
                       padding: const EdgeInsets.all(10),
                       itemCount: orders.length,
@@ -701,7 +701,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                       Container(
                         width: 20, height: 20,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: Center(
@@ -798,7 +798,7 @@ class _KitchenStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha:0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -808,7 +808,7 @@ class _KitchenStat extends StatelessWidget {
                   color: color, fontWeight: FontWeight.w800, fontSize: 14)),
           const SizedBox(width: 5),
           Text(label,
-              style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
+              style: TextStyle(color: color.withValues(alpha:0.8), fontSize: 11)),
         ],
       ),
     );

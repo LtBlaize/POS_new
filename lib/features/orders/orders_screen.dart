@@ -13,7 +13,7 @@ import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
 import 'widgets/void_item_dialog.dart';
 import '../../core/models/cart_item.dart';
-import '../../core/services/reciept_service.dart';
+import '../../core/services/receipt_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/providers/app_context_provider.dart';
 
@@ -279,7 +279,7 @@ class _OrderCard extends ConsumerWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -323,10 +323,10 @@ class _OrderCard extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 9, vertical: 3),
                           decoration: BoxDecoration(
-                            color: accent.withOpacity(0.1),
+                            color: accent.withValues(alpha:0.1),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: accent.withOpacity(0.3)),
+                                color: accent.withValues(alpha:0.3)),
                           ),
                           child: Text(
                             _statusLabel(order.status,
@@ -361,7 +361,7 @@ class _OrderCard extends ConsumerWidget {
                                   width: 20,
                                   height: 20,
                                   decoration: BoxDecoration(
-                                    color: accent.withOpacity(0.1),
+                                    color: accent.withValues(alpha:0.1),
                                     borderRadius:
                                         BorderRadius.circular(5),
                                   ),
@@ -570,10 +570,10 @@ class _VoidItemButton extends ConsumerWidget {
           width: 26,
           height: 26,
           decoration: BoxDecoration(
-            color: AppColors.danger.withOpacity(0.08),
+            color: AppColors.danger.withValues(alpha:0.08),
             borderRadius: BorderRadius.circular(7),
             border:
-                Border.all(color: AppColors.danger.withOpacity(0.25)),
+                Border.all(color: AppColors.danger.withValues(alpha:0.25)),
           ),
           child: Icon(Icons.remove_circle_outline,
               size: 14, color: AppColors.danger),
@@ -706,9 +706,9 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
         padding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.08),
+          color: Colors.red.withValues(alpha:0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.red.withOpacity(0.25)),
+          border: Border.all(color: Colors.red.withValues(alpha:0.25)),
         ),
         child: const Text(
           'Void Order',
@@ -827,7 +827,7 @@ class _ReceiptPreviewDialog extends StatelessWidget {
         ? DateTime.parse(receipt['issued_at'] as String).toLocal()
         : order.createdAt;
 
-    String _fmt(DateTime dt) {
+    String fmt(DateTime dt) {
       final h = dt.hour > 12
           ? dt.hour - 12
           : dt.hour == 0
@@ -874,7 +874,7 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.2),
+                        color: Colors.orange.withValues(alpha:0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -932,7 +932,7 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                   // Order info
                   _ReceiptLine('Order #',
                       '${order.orderNumber}'),
-                  _ReceiptLine('Date', _fmt(issuedAt)),
+                  _ReceiptLine('Date', fmt(issuedAt)),
                   if (order.paymentMethod != null)
                     _ReceiptLine('Payment',
                         order.paymentMethod!.value.toUpperCase()),
@@ -1030,19 +1030,16 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        final nav = Navigator.of(context);
+                        final messenger = ScaffoldMessenger.of(context);
                         await onPrint();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
-                            const SnackBar(
-                              content:
-                                  Text('Receipt sent to printer'),
-                              backgroundColor:
-                                  Color(0xFF10B981),
-                            ),
-                          );
-                        }
+                        nav.pop();
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Receipt sent to printer'),
+                            backgroundColor: Color(0xFF10B981),
+                          ),
+                        );
                       },
                       icon: const Icon(Icons.print_outlined,
                           size: 16),

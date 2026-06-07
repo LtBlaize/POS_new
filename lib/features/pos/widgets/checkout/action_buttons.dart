@@ -198,7 +198,7 @@ class _ConfirmButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: enabled
               ? [BoxShadow(
-                  color: CheckoutTheme.mint.withOpacity(0.30),
+                  color: CheckoutTheme.mint.withValues(alpha:0.30),
                   blurRadius: 20,
                   offset: const Offset(0, 6),
                 )]
@@ -296,10 +296,10 @@ class _PrintBillButton extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xffffb54712),
+          color: const Color(0xFFFFB547),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: disabled ? CheckoutTheme.border : amber.withOpacity(0.5),
+            color: disabled ? CheckoutTheme.border : amber.withValues(alpha:0.5),
           ),
         ),
         alignment: Alignment.center,

@@ -1,5 +1,6 @@
 // lib/core/providers/shift_provider.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/shift.dart';
 import '../services/shift_service.dart';
@@ -34,6 +35,7 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     final staff = ref.read(activeStaffProvider);
     if (staff == null) return;
 
+    ref.invalidateSelf();
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       return ref.read(shiftServiceProvider).openShift(
@@ -51,6 +53,7 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   }) async {
     final currentShift = state.value;
     if (currentShift == null) return null;
+    debugPrint('[ShiftClose] Closing shift: ${currentShift.id}');
 
     final closed = await ref.read(shiftServiceProvider).closeShift(
           shiftId: currentShift.id,

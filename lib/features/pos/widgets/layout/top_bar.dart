@@ -35,7 +35,7 @@ class TopBar extends ConsumerWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -99,7 +99,7 @@ class TopBar extends ConsumerWidget {
                             ? 'Search…'
                             : 'Search products or scan barcode…',
                         hintStyle: TextStyle(
-                            color: AppColors.textSecondary.withOpacity(0.7),
+                            color: AppColors.textSecondary.withValues(alpha:0.7),
                             fontSize: isCompact ? 12 : 13),
                         border: InputBorder.none,
                         isDense: true,

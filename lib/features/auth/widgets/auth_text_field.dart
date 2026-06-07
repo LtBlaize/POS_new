@@ -51,7 +51,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
           style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: widget.hint,
-            hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
+            hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha:0.5)),
             prefixIcon: widget.prefixIcon != null
                 ? Icon(widget.prefixIcon, size: 20, color: AppColors.textSecondary)
                 : null,

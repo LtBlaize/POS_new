@@ -52,6 +52,7 @@ final authStateProvider = StreamProvider<User?>((ref) {
           event.event == AuthChangeEvent.signedIn      ||
           event.event == AuthChangeEvent.signedOut     ||
           event.event == AuthChangeEvent.initialSession ||
+          // ignore: deprecated_member_use
           event.event == AuthChangeEvent.userDeleted)
       .map((event) => event.session?.user)
       // Deduplicate: only emit when the user ID actually changes.
@@ -143,12 +144,6 @@ class AuthService {
     final salt = StaffMember.generateSalt();
     final hash = StaffMember.hashPin(pin, salt);
     return (hash: hash, salt: salt);
-  }
-
-  /// Verifies a user-entered PIN against a stored SHA-256 hash.
-  /// Use this in your staff PIN login / pin_lock_overlay.dart.
-  bool verifyPin(String inputPin, String storedHash) {
-    return hashPin(inputPin) == storedHash;
   }
 
   // ── Login ───────────────────────────────────────────────────────────────────

@@ -63,7 +63,7 @@ class KitchenSentView extends StatelessWidget {
                   Text(
                     'Customer will pay later',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.55), fontSize: 12),
+                        color: Colors.white.withValues(alpha:0.55), fontSize: 12),
                   ),
                   if (tableId != null) ...[
                     const SizedBox(height: 10),
@@ -71,10 +71,10 @@ class KitchenSentView extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 5),
                       decoration: BoxDecoration(
-                        color: _gold.withOpacity(0.15),
+                        color: _gold.withValues(alpha:0.15),
                         borderRadius: BorderRadius.circular(20),
                         border:
-                            Border.all(color: _gold.withOpacity(0.4)),
+                            Border.all(color: _gold.withValues(alpha:0.4)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -120,7 +120,7 @@ class KitchenSentView extends StatelessWidget {
                                     width: 22,
                                     height: 22,
                                     decoration: BoxDecoration(
-                                      color: _dark.withOpacity(0.07),
+                                      color: _dark.withValues(alpha:0.07),
                                       borderRadius:
                                           BorderRadius.circular(6),
                                     ),

@@ -253,7 +253,7 @@ class _RolePermissionsCard extends ConsumerWidget {
                 return ExpansionTile(
                   leading: CircleAvatar(
                     radius: 14,
-                    backgroundColor: color.withOpacity(0.15),
+                    backgroundColor: color.withValues(alpha:0.15),
                     child: Text(
                       role.label[0],
                       style: TextStyle(
@@ -400,7 +400,7 @@ class _StaffTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: color.withOpacity(0.15),
+            backgroundColor: color.withValues(alpha:0.15),
             child: Text(
               staff.name[0].toUpperCase(),
               style: TextStyle(
@@ -422,7 +422,7 @@ class _StaffTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(staff.role.label,
@@ -695,7 +695,7 @@ class OwnerPinSection extends ConsumerWidget {
             label: const Text('Change PIN'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),

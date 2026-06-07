@@ -166,7 +166,10 @@ class LanClientService {
     if (base == null) return;
     try {
       final res = await http
-          .get(Uri.parse('$base/orders/pending?business_id=$businessId'))
+          .get(
+            Uri.parse('$base/orders/pending?business_id=$businessId'),
+            headers: {'x-pos-key': _posKey ?? ''},
+          )
           .timeout(const Duration(seconds: 3));
       if (res.statusCode == 200) {
         final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();

@@ -55,9 +55,9 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                       margin: const EdgeInsets.only(left: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.12),
+                        color: AppColors.warning.withValues(alpha:0.12),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -74,7 +74,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   message: 'Barcode scanner ready',
                   child: Icon(Icons.qr_code_scanner_rounded,
                       size: 14,
-                      color: AppColors.primary.withOpacity(0.5)),
+                      color: AppColors.primary.withValues(alpha:0.5)),
                 ),
                 if (items.isNotEmpty) ...[
                   const SizedBox(width: 8),
@@ -82,7 +82,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -118,19 +118,19 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                           margin: const EdgeInsets.only(right: 4),
                           decoration: BoxDecoration(
                             color: items.isEmpty
-                                ? AppColors.divider.withOpacity(0.3)
-                                : AppColors.success.withOpacity(0.08),
+                                ? AppColors.divider.withValues(alpha:0.3)
+                                : AppColors.success.withValues(alpha:0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                                 color: items.isEmpty
                                     ? AppColors.divider
-                                    : AppColors.success.withOpacity(0.3)),
+                                    : AppColors.success.withValues(alpha:0.3)),
                           ),
                           child: Icon(
                             Icons.call_split_outlined,
                             size: 14,
                             color: items.isEmpty
-                                ? AppColors.textSecondary.withOpacity(0.3)
+                                ? AppColors.textSecondary.withValues(alpha:0.3)
                                 : AppColors.success,
                           ),
                         ),
@@ -149,19 +149,19 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                           margin: const EdgeInsets.only(right: 4),
                           decoration: BoxDecoration(
                             color: items.isEmpty
-                                ? AppColors.divider.withOpacity(0.3)
-                                : AppColors.primary.withOpacity(0.08),
+                                ? AppColors.divider.withValues(alpha:0.3)
+                                : AppColors.primary.withValues(alpha:0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                                 color: items.isEmpty
                                     ? AppColors.divider
-                                    : AppColors.primary.withOpacity(0.3)),
+                                    : AppColors.primary.withValues(alpha:0.3)),
                           ),
                           child: Icon(
                             Icons.pause_outlined,
                             size: 14,
                             color: items.isEmpty
-                                ? AppColors.textSecondary.withOpacity(0.3)
+                                ? AppColors.textSecondary.withValues(alpha:0.3)
                                 : AppColors.primary,
                           ),
                         ),
@@ -177,10 +177,10 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                             width: 30,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: AppColors.danger.withOpacity(0.06),
+                              color: AppColors.danger.withValues(alpha:0.06),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                  color: AppColors.danger.withOpacity(0.2)),
+                                  color: AppColors.danger.withValues(alpha:0.2)),
                             ),
                             child: const Icon(
                               Icons.delete_outline,
@@ -206,19 +206,19 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                         Icon(Icons.shopping_cart_outlined,
                             size: 40,
                             color:
-                                AppColors.textSecondary.withOpacity(0.25)),
+                                AppColors.textSecondary.withValues(alpha:0.25)),
                         const SizedBox(height: 10),
                         Text('Cart is empty',
                             style: TextStyle(
                                 fontSize: 13,
                                 color: AppColors.textSecondary
-                                    .withOpacity(0.5))),
+                                    .withValues(alpha:0.5))),
                         const SizedBox(height: 6),
                         Text('Scan a barcode to add items',
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary
-                                    .withOpacity(0.35))),
+                                    .withValues(alpha:0.35))),
                       ],
                     ),
                   )
@@ -423,7 +423,7 @@ class _StepBtn extends StatelessWidget {
         height: 24,
         decoration: BoxDecoration(
           color: positive
-              ? AppColors.primary.withOpacity(0.08)
+              ? AppColors.primary.withValues(alpha:0.08)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: AppColors.divider),

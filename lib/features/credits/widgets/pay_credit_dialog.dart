@@ -73,7 +73,7 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _green.withOpacity(0.15),
+                    color: _green.withValues(alpha:0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.payments_outlined,
@@ -90,7 +90,7 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                             fontWeight: FontWeight.w700)),
                     Text(widget.customer.name,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.45),
+                            color: Colors.white.withValues(alpha:0.45),
                             fontSize: 12)),
                   ],
                 ),
@@ -111,7 +111,7 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                 children: [
                   Text('Current Balance',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.5), fontSize: 13)),
+                          color: Colors.white.withValues(alpha:0.5), fontSize: 13)),
                   Text('₱${owed.toStringAsFixed(2)}',
                       style: const TextStyle(
                           color: Color(0xFFE94560),
@@ -163,7 +163,7 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white54,
-                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                      side: BorderSide(color: Colors.white.withValues(alpha:0.12)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -229,7 +229,7 @@ class _Field extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         prefixText: prefix,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.4)),
         prefixStyle: const TextStyle(color: Colors.white),
         filled: true,
         fillColor: const Color(0xFF1A1F35),

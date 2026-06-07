@@ -92,7 +92,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                           Text(
                             '${customers.length} customers · $withBalance with balance',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
+                                color: Colors.white.withValues(alpha:0.4),
                                 fontSize: 12),
                           ),
                           const SizedBox(height: 16),
@@ -102,10 +102,10 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
-                              color: _accent.withOpacity(0.08),
+                              color: _accent.withValues(alpha:0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                  color: _accent.withOpacity(0.2)),
+                                  color: _accent.withValues(alpha:0.2)),
                             ),
                             child: Row(
                               mainAxisAlignment:
@@ -114,7 +114,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                                 Text('Total Outstanding',
                                     style: TextStyle(
                                         color:
-                                            Colors.white.withOpacity(0.55),
+                                            Colors.white.withValues(alpha:0.55),
                                         fontSize: 12)),
                                 Text(
                                   '₱${_fmt(totalOwed)}',
@@ -137,10 +137,10 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                             decoration: InputDecoration(
                               hintText: 'Search name or phone…',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withOpacity(0.25),
+                                  color: Colors.white.withValues(alpha:0.25),
                                   fontSize: 13),
                               prefixIcon: Icon(Icons.search,
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha:0.3),
                                   size: 18),
                               filled: true,
                               fillColor: _card,
@@ -167,7 +167,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                                     : 'No results',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                    color: Colors.white.withOpacity(0.25),
+                                    color: Colors.white.withValues(alpha:0.25),
                                     fontSize: 13),
                               ),
                             )
@@ -204,11 +204,11 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                         children: [
                           Icon(Icons.person_search_outlined,
                               size: 48,
-                              color: Colors.white.withOpacity(0.1)),
+                              color: Colors.white.withValues(alpha:0.1)),
                           const SizedBox(height: 12),
                           Text('Select a customer to view details',
                               style: TextStyle(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha:0.2),
                                   fontSize: 13)),
                         ],
                       ),
@@ -254,12 +254,12 @@ class _CustomerTile extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFFE94560).withOpacity(0.12)
+              ? const Color(0xFFE94560).withValues(alpha:0.12)
               : const Color(0xFF1A1F35),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected
-                ? const Color(0xFFE94560).withOpacity(0.4)
+                ? const Color(0xFFE94560).withValues(alpha:0.4)
                 : Colors.transparent,
           ),
         ),
@@ -268,8 +268,8 @@ class _CustomerTile extends StatelessWidget {
             CircleAvatar(
               radius: 20,
               backgroundColor: hasBalance
-                  ? const Color(0xFFE94560).withOpacity(0.15)
-                  : const Color(0xFF10B981).withOpacity(0.15),
+                  ? const Color(0xFFE94560).withValues(alpha:0.15)
+                  : const Color(0xFF10B981).withValues(alpha:0.15),
               child: Text(
                 customer.name[0].toUpperCase(),
                 style: TextStyle(
@@ -293,7 +293,7 @@ class _CustomerTile extends StatelessWidget {
                           fontWeight: FontWeight.w600)),
                   Text(customer.phone,
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.35),
+                          color: Colors.white.withValues(alpha:0.35),
                           fontSize: 11)),
                 ],
               ),
@@ -348,14 +348,14 @@ class _CustomerDetail extends ConsumerWidget {
               color: const Color(0xFF141827),
               border: Border(
                 bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.06)),
+                    color: Colors.white.withValues(alpha:0.06)),
               ),
             ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: _accent.withOpacity(0.15),
+                  backgroundColor: _accent.withValues(alpha:0.15),
                   child: Text(
                     customer.name[0].toUpperCase(),
                     style: const TextStyle(
@@ -376,7 +376,7 @@ class _CustomerDetail extends ConsumerWidget {
                               fontWeight: FontWeight.w800)),
                       Text(customer.phone,
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.4),
+                              color: Colors.white.withValues(alpha:0.4),
                               fontSize: 13)),
                     ],
                   ),
@@ -388,7 +388,7 @@ class _CustomerDetail extends ConsumerWidget {
                   children: [
                     Text('Balance',
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha:0.4),
                             fontSize: 11)),
                     Text(
                       '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
@@ -447,7 +447,7 @@ class _CustomerDetail extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
             child: Text('Transaction History',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha:0.5),
                     fontSize: 11,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w600)),
@@ -465,7 +465,7 @@ class _CustomerDetail extends ConsumerWidget {
                   ? Center(
                       child: Text('No transactions yet',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha:0.2),
                               fontSize: 13)))
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(
@@ -512,7 +512,7 @@ class _TxTile extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -532,12 +532,12 @@ class _TxTile extends StatelessWidget {
                 if (tx.note != null)
                   Text(tx.note!,
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.35),
+                          color: Colors.white.withValues(alpha:0.35),
                           fontSize: 11)),
                 Text(
                   DateFormat('MMM d, y · h:mm a').format(tx.createdAt),
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.25),
+                      color: Colors.white.withValues(alpha:0.25),
                       fontSize: 10),
                 ),
               ],
