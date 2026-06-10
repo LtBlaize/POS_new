@@ -281,8 +281,7 @@ class CheckoutService {
       }
     }
 
-    // ✅ NEW: Auto print receipt
-    // ✅ Auto print receipt
+    // Auto print receipt
     try {
       await ThermalPrintService.printReceipt(
         order: paidOrder,

@@ -215,7 +215,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
             .insert({
               ...data,
               'business_id': profile!.businessId,
-              'is_available': true,
+              'is_available': !_trackInventory || (int.tryParse(_stockController.text) ?? 0) > 0,
               'is_active': true,
             })
             .select('id')

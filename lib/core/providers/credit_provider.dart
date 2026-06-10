@@ -73,5 +73,5 @@ class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
 final creditTransactionsProvider =
     FutureProvider.family<List<CreditTransaction>, String>(
         (ref, customerId) async {
-  return ref.read(creditServiceProvider).getTransactions(customerId);
+  return ref.watch(creditServiceProvider).getTransactions(customerId);
 });

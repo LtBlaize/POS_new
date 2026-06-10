@@ -241,7 +241,7 @@ class OrderService {
           'business_id': businessId,
           'table_id': tableId,
           'cashier_id': cashierId,
-          'order_type': tableId != null ? 'dine_in' : orderType.value,
+          'order_type': tableId != null ? 'walk_in' : orderType.value,
           'status': 'pending',
           'subtotal': subtotal,
           'tax_amount': taxAmount,
@@ -342,7 +342,7 @@ class OrderService {
         'business_id': businessId,
         'table_id': tableId,
         'cashier_id': cashierId,
-        'order_type': tableId != null ? 'dine_in' : orderType.value,
+        'order_type': tableId != null ? 'walk_in' : orderType.value,
         'status': 'pending',
         'subtotal': subtotal,
         'tax_amount': taxAmount,
@@ -539,7 +539,8 @@ class OrderService {
             .from('order_items')
             .delete()
             .eq('order_id', orderId)
-            .eq('product_id', productId);
+            .eq('product_id', productId)
+            .limit(1);
 
         // Fetch remaining items to decide order fate
         final remaining = await _client

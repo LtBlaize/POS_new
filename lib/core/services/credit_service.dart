@@ -169,6 +169,8 @@ class CreditService {
         'business_id': businessId,
         'type': 'credit',
         'amount': amount,
+        'amount_remaining': amount,
+        'is_settled': 0,
         'note': note,
         'order_id': orderId,
         'created_at': txRow['created_at'],
@@ -317,11 +319,14 @@ class CreditService {
       await _supabase.from('credit_settlements').insert(settlements);
     }
 
-    // 6. Update customer total_owed
-    await _supabase.rpc('decrement_credit_owed', params: {
-      'p_customer_id': customerId,
-      'p_amount': amount,
-    });
+    // 6. Update customer total_owed — only deduct what was actually applied
+    final actuallyApplied = amount - remaining;
+    if (actuallyApplied > 0) {
+      await _supabase.rpc('decrement_credit_owed', params: {
+        'p_customer_id': customerId,
+        'p_amount': actuallyApplied,
+      });
+    }
 
     // 7. Mirror payment to SQLite
     final d = await _db.db;

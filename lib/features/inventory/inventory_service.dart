@@ -183,13 +183,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           .eq('is_active', true)
           .order('name');
 
-      final config = await _client
-          .from('business_configs')
-          .select('low_stock_threshold')
-          .eq('business_id', _businessId)
-          .maybeSingle();
-
-      final threshold = (config?['low_stock_threshold'] as int?) ?? 5;
+      final threshold = _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
 
       final products = (rows as List)
           .map((row) => Product.fromMap(row as Map<String, dynamic>))

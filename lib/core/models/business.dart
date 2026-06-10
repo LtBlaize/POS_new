@@ -1,7 +1,5 @@
 // lib/core/models/business.dart
 
-// ── BusinessType enum ─────────────────────────────────────────────────────────
-
 enum BusinessType {
   restaurant('restaurant'),
   retail('retail'),
@@ -31,8 +29,6 @@ enum BusinessType {
   bool get isRetail => this == BusinessType.retail;
 }
 
-// ── SubscriptionPlan enum ─────────────────────────────────────────────────────
-
 enum SubscriptionPlan {
   free('free'),
   basic('basic'),
@@ -52,9 +48,10 @@ enum SubscriptionPlan {
         SubscriptionPlan.basic   => 'Basic',
         SubscriptionPlan.premium => 'Premium',
       };
-}
 
-// ── Business model ────────────────────────────────────────────────────────────
+  bool get isPaid =>
+      this == SubscriptionPlan.basic || this == SubscriptionPlan.premium;
+}
 
 class Business {
   final String id;
@@ -70,6 +67,8 @@ class Business {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? trialStartedAt;
+  final DateTime? trialEndsAt;
 
   const Business({
     required this.id,
@@ -85,7 +84,24 @@ class Business {
     this.isActive = true,
     required this.createdAt,
     required this.updatedAt,
+    this.trialStartedAt,
+    this.trialEndsAt,
   });
+
+  // ── Trial state ─────────────────────────────────────────────────────────────
+
+  bool get isOnActiveTrial {
+    if (trialEndsAt == null) return false;
+    return DateTime.now().isBefore(trialEndsAt!);
+  }
+
+  int get trialDaysLeft {
+    if (trialEndsAt == null) return 0;
+    final diff = trialEndsAt!.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
+  // ── Serialisation ────────────────────────────────────────────────────────────
 
   factory Business.fromMap(Map<String, dynamic> map) => Business(
         id: map['id'] as String,
@@ -94,31 +110,39 @@ class Business {
             BusinessType.fromString(map['business_type'] as String),
         subscriptionPlan: SubscriptionPlan.fromString(
             map['subscription_plan'] as String? ?? 'free'),
-        logoUrl: map['logo_url'] as String?,
-        address: map['address'] as String?,
-        phone: map['phone'] as String?,
-        email: map['email'] as String?,
-        currency: map['currency'] as String? ?? 'PHP',
-        timezone: map['timezone'] as String? ?? 'Asia/Manila',
-        isActive: map['is_active'] as bool? ?? true,
+        logoUrl:  map['logo_url']  as String?,
+        address:  map['address']   as String?,
+        phone:    map['phone']     as String?,
+        email:    map['email']     as String?,
+        currency: map['currency']  as String? ?? 'PHP',
+        timezone: map['timezone']  as String? ?? 'Asia/Manila',
+        isActive: map['is_active'] as bool?   ?? true,
         createdAt: DateTime.parse(map['created_at'] as String),
         updatedAt: DateTime.parse(map['updated_at'] as String),
+        trialStartedAt: map['trial_started_at'] != null
+            ? DateTime.parse(map['trial_started_at'] as String)
+            : null,
+        trialEndsAt: map['trial_ends_at'] != null
+            ? DateTime.parse(map['trial_ends_at'] as String)
+            : null,
       );
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'business_type': businessType.value,
+        'id':                id,
+        'name':              name,
+        'business_type':     businessType.value,
         'subscription_plan': subscriptionPlan.value,
-        'logo_url': logoUrl,
-        'address': address,
-        'phone': phone,
-        'email': email,
-        'currency': currency,
-        'timezone': timezone,
-        'is_active': isActive,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
+        'logo_url':          logoUrl,
+        'address':           address,
+        'phone':             phone,
+        'email':             email,
+        'currency':          currency,
+        'timezone':          timezone,
+        'is_active':         isActive,
+        'created_at':        createdAt.toIso8601String(),
+        'updated_at':        updatedAt.toIso8601String(),
+        'trial_started_at':  trialStartedAt?.toIso8601String(),
+        'trial_ends_at':     trialEndsAt?.toIso8601String(),
       };
 
   Business copyWith({
@@ -135,25 +159,29 @@ class Business {
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? trialStartedAt,
+    DateTime? trialEndsAt,
   }) =>
       Business(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        businessType: businessType ?? this.businessType,
+        id:               id               ?? this.id,
+        name:             name             ?? this.name,
+        businessType:     businessType     ?? this.businessType,
         subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
-        logoUrl: logoUrl ?? this.logoUrl,
-        address: address ?? this.address,
-        phone: phone ?? this.phone,
-        email: email ?? this.email,
-        currency: currency ?? this.currency,
-        timezone: timezone ?? this.timezone,
-        isActive: isActive ?? this.isActive,
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
+        logoUrl:          logoUrl          ?? this.logoUrl,
+        address:          address          ?? this.address,
+        phone:            phone            ?? this.phone,
+        email:            email            ?? this.email,
+        currency:         currency         ?? this.currency,
+        timezone:         timezone         ?? this.timezone,
+        isActive:         isActive         ?? this.isActive,
+        createdAt:        createdAt        ?? this.createdAt,
+        updatedAt:        updatedAt        ?? this.updatedAt,
+        trialStartedAt:   trialStartedAt   ?? this.trialStartedAt,
+        trialEndsAt:      trialEndsAt      ?? this.trialEndsAt,
       );
 
   @override
   String toString() =>
       'Business(id: $id, name: $name, type: ${businessType.value}, '
-      'plan: ${subscriptionPlan.value})';
+      'plan: ${subscriptionPlan.value}, trialDaysLeft: $trialDaysLeft)';
 }

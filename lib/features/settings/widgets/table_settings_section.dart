@@ -287,11 +287,7 @@ class _TableChip extends ConsumerWidget {
                   ),
                 );
                 if (confirm == true && table.uuid != null) {
-                  final client = ref.read(supabaseClientProvider);
-                  await client
-                      .from('restaurant_tables')
-                      .update({'is_active': false}).eq('id', table.uuid!);
-                  ref.read(tableProvider.notifier).refresh();
+                  await ref.read(tableProvider.notifier).deleteTable(table.uuid!);
                 }
               },
               child: const Icon(Icons.close,
@@ -301,5 +297,6 @@ class _TableChip extends ConsumerWidget {
         ],
       ),
     );
+    
   }
 }

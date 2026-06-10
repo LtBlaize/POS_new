@@ -94,6 +94,42 @@ class Sidebar extends ConsumerWidget {
     required this.currentRoute,
   });
 
+  void _showUpgradeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_rounded, size: 18, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Pro feature', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'Your free trial has ended. Upgrade to Pro to unlock Reports, '
+          'Kitchen Display, and Table Management.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              // Phase 8: navigate to settings subscription section.
+              Navigator.pushNamed(context, '/settings');
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text('View plans'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -137,18 +173,28 @@ class Sidebar extends ConsumerWidget {
     // permissions in Settings, no restart required.
     final allowedTabs = ref.watch(activeStaffTabsProvider);
 
+    final fm = featureManager;
+
     final visibleItems = _allItems.where((item) {
-      // 1. Business must have the feature enabled (e.g. kitchen toggle in config)
-      if (item.requiredFeature != null &&
-          !featureManager.hasFeature(item.requiredFeature!)) {
-        return false;
-      }
-      // 2. Active staff role must have the tab in their permissions.
-      //    Owner always gets everything (activeStaffTabsProvider returns kAllTabs
-      //    for owner so this check passes automatically).
+      // 1. Role-based tab check — always applies.
       if (item.requiredTab != null &&
           !allowedTabs.contains(item.requiredTab)) {
         return false;
+      }
+      // 2. Feature check.
+      // Plan-gated features (reports, kitchen, tables, export) stay visible
+      // but show a lock badge when the current plan doesn't include them —
+      // both during trial AND after expiry. This lets users see what they're
+      // missing at all times, not just after trial ends.
+      // Config-gated features (anything else) are hard-hidden when disabled.
+      if (item.requiredFeature != null &&
+          !fm.hasFeature(item.requiredFeature!)) {
+        final isPlanGated = item.requiredFeature == AppFeature.reports ||
+            item.requiredFeature == AppFeature.kitchen ||
+            item.requiredFeature == AppFeature.tables ||
+            item.requiredFeature == AppFeature.export;
+        if (!isPlanGated) return false;
+        // Plan-gated: stay visible so lock badge shows.
       }
       return true;
     }).toList();
@@ -184,8 +230,14 @@ class Sidebar extends ConsumerWidget {
                   : item.label,
               preferBelow: false,
               child: GestureDetector(
-                onTap: () =>
-                    Navigator.pushReplacementNamed(context, item.route),
+                onTap: () {
+                  if (item.requiredFeature != null &&
+                      !fm.hasFeature(item.requiredFeature!)) {
+                    _showUpgradeDialog(context);
+                    return;
+                  }
+                  Navigator.pushReplacementNamed(context, item.route);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.symmetric(
@@ -224,6 +276,25 @@ class Sidebar extends ConsumerWidget {
                                 decoration: const BoxDecoration(
                                   color: AppColors.danger,
                                   shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          if (item.requiredFeature != null &&
+                              !fm.hasFeature(item.requiredFeature!))
+                            Positioned(
+                              bottom: -2,
+                              right: -6,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade700,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.lock_rounded,
+                                  size: 7,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),

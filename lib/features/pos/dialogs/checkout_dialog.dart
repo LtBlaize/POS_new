@@ -117,6 +117,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     setState(() => payNow ? _placing = true : _sendingToKitchen = true);
 
     try {
+      final tableState = ref.read(tableProvider);
       final result = await ref.read(checkoutServiceProvider).placeOrder(
             context: context,
             payNow: payNow,
@@ -133,6 +134,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             referenceNumber: _refController.text.trim().isEmpty
                 ? null
                 : _refController.text.trim(),
+            tableNumber: tableState.selectedTableName,
           );
 
       if (!mounted) return;
@@ -408,15 +410,15 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                         items: items,
                         subtotal: widget.subtotal,
                         itemsTotal:
-                            ref.read(cartProvider.notifier).itemsTotal,
+                            ref.watch(cartProvider.notifier).itemsTotal,
                         tipAmount:
-                            ref.read(cartProvider.notifier).tipAmount,
+                            ref.watch(cartProvider.notifier).tipAmount,
                         orderDiscountValue:
-                            ref.read(cartProvider.notifier).orderDiscountValue,
+                            ref.watch(cartProvider.notifier).orderDiscountValue,
                         orderDiscountLabel:
-                            ref.read(cartProvider.notifier).orderDiscountType ==
+                            ref.watch(cartProvider.notifier).orderDiscountType ==
                                     DiscountType.percentage
-                                ? 'Discount (${ref.read(cartProvider.notifier).orderDiscountAmount.toStringAsFixed(0)}%)'
+                                ? 'Discount (${ref.watch(cartProvider.notifier).orderDiscountAmount.toStringAsFixed(0)}%)'
                                 : 'Discount',
                       ),
                       const SizedBox(height: 16),
@@ -724,10 +726,10 @@ class _NoTableBanner extends StatelessWidget {
       child: const Row(
         children: [
           Icon(Icons.table_restaurant_outlined,
-              size: 13, color: Color(0xFFFFB547)),
+              size: 13, color: Colors.white),
           SizedBox(width: 6),
           Text('No table selected — will be recorded as walk-in',
-              style: TextStyle(fontSize: 11, color: Color(0xFFFFB547))),
+              style: TextStyle(fontSize: 11, color: Colors.white)),
         ],
       ),
     );
@@ -1179,7 +1181,7 @@ class _OrderTypeSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(cartProvider);
-    final current = ref.read(cartProvider.notifier).orderType;
+    final current = ref.watch(cartProvider.notifier).orderType;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

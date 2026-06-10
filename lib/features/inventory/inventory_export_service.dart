@@ -1,5 +1,6 @@
 // lib/features/inventory/inventory_export_service.dart
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +41,7 @@ class InventoryExportService {
       ].join(','));
     }
 
-    final bytes = Uint8List.fromList(buffer.toString().codeUnits);
+    final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
     final fileName =
         'inventory_${DateTime.now().toIso8601String().substring(0, 10)}';
 

@@ -238,7 +238,16 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
     final savedTip = ref.read(cartProvider.notifier).tipAmount;
 
     // Override cart with this split's items, then open checkout
-    ref.read(cartProvider.notifier).loadItems(items);
+    final allItems = ref.read(_splitsProvider.notifier)._allItems;
+    final allTotal = allItems.fold<double>(0, (s, i) => s + i.total);
+    final splitTotal = items.fold<double>(0, (s, i) => s + i.total);
+    final ratio = allTotal > 0 ? splitTotal / allTotal : 0.0;
+    ref.read(cartProvider.notifier).loadItems(
+      items,
+      orderDiscountAmount: savedDiscount * ratio,
+      orderDiscountType: savedDiscountType,
+      tipAmount: savedTip * ratio,
+    );
 
     if (!mounted) return;
     setState(() => _paying = false);
@@ -252,7 +261,6 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
     if (!mounted) return;
 
     // Restore full cart with original discount/tip
-    final allItems = ref.read(_splitsProvider.notifier)._allItems;
     ref.read(cartProvider.notifier).loadItems(
       allItems,
       orderDiscountAmount: savedDiscount,

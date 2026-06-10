@@ -15,6 +15,7 @@ import 'widgets/void_item_dialog.dart';
 import '../../core/models/cart_item.dart';
 import '../../core/services/receipt_service.dart';
 import '../../core/services/local_db_service.dart';
+import '../../core/services/thermal_print_service.dart';
 import '../../core/providers/app_context_provider.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
@@ -440,10 +441,14 @@ class _OrderCard extends ConsumerWidget {
                             ],
                           )
                         else if (order.paidAt == null &&
-                            order.status != OrderStatus.cancelled)
+                            order.status != OrderStatus.cancelled) ...[
+                          if (order.tableId != null)
+                            _PrintBillButton(order: order),
+                          const SizedBox(width: 8),
                           _PayNowButton(
                               order: order,
                               featureManager: featureManager),
+                        ],
                         if (_canVoidOrder &&
                             activeStaff != null &&
                             (activeStaff.role == StaffRole.owner ||
@@ -505,10 +510,10 @@ class _OrderCard extends ConsumerWidget {
   }
 
   String _formatTime(DateTime dt) {
-    final h = dt.hour > 12
-        ? dt.hour - 12
-        : dt.hour == 0
-            ? 12
+    final h = dt.hour == 0
+        ? 12
+        : dt.hour > 12
+            ? dt.hour - 12
             : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour >= 12 ? 'PM' : 'AM';
@@ -761,8 +766,13 @@ class _ReprintButtonState extends ConsumerState<_ReprintButton> {
           receipt: receipt,
           order: widget.order,
           onPrint: () async {
-            await receiptService
-                .markReprinted(receipt['id'] as String);
+            await ThermalPrintService.printReceipt(
+              order: widget.order,
+              tendered: widget.order.amountTendered ?? widget.order.totalAmount,
+              change: widget.order.changeAmount ?? 0.0,
+              businessName: receipt['business_name'] as String? ?? '',
+            );
+            await receiptService.markReprinted(receipt['id'] as String);
           },
         ),
       );
@@ -1101,6 +1111,102 @@ class _ReceiptLine extends StatelessWidget {
   }
 }
 
+// ── Print Bill button ─────────────────────────────────────────────────────────
+
+class _PrintBillButton extends ConsumerStatefulWidget {
+  final Order order;
+  const _PrintBillButton({required this.order});
+
+  @override
+  ConsumerState<_PrintBillButton> createState() => _PrintBillButtonState();
+}
+
+class _PrintBillButtonState extends ConsumerState<_PrintBillButton> {
+  bool _loading = false;
+
+  Future<void> _printBill() async {
+    setState(() => _loading = true);
+    try {
+      final profile = ref.read(profileProvider).asData?.value;
+      final businessName = profile?.fullName ?? 'Restaurant';
+
+      await ThermalPrintService.printBill(
+        order: widget.order,
+        businessName: businessName,
+        is58mm: false,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(children: [
+              Icon(Icons.print_outlined, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Text('Bill sent to printer'),
+            ]),
+            backgroundColor: const Color(0xFF1F2937),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Print failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    return Tooltip(
+      message: 'Print bill',
+      child: GestureDetector(
+        onTap: _printBill,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F2937).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: const Color(0xFF1F2937).withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.receipt_long_outlined,
+                  size: 13, color: Color(0xFF1F2937)),
+              SizedBox(width: 5),
+              Text(
+                'Bill',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2937)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Pay Now button (unchanged from original) ──────────────────────────────────
 class _PayNowButton extends ConsumerStatefulWidget {
   final Order order;
@@ -1128,7 +1234,7 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
       cartNotifier.clear();
       for (final item in order.items) {
         for (var i = 0; i < item.quantity; i++) {
-          cartNotifier.addProduct(item.product);
+          cartNotifier.addProduct(item.product, variant: item.selectedVariant);
         }
       }
 

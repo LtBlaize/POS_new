@@ -88,7 +88,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           .from('orders')
           .update({
             'status': next.value,
-           
+            'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', orderId);
     } catch (e) {
@@ -112,6 +112,8 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
         ),
         quantity: map['quantity'] as int? ?? 1,
+        costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
+        notes: map['notes'] as String?,
       );
     }).toList();
     final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
@@ -201,7 +203,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     final isOffline = kitchenState.connection == LanConnectionState.disconnected;
 
     // If LAN is disconnected, fall back to DB view automatically
-    if (isOffline && kitchenState.orders.isEmpty) {
+    if (isOffline) {
       return _DbKitchenView(showLanBanner: true);
     }
 

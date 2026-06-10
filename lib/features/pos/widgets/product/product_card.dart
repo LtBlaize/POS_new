@@ -35,13 +35,13 @@ class _ProductCardState extends ConsumerState<ProductCard>
   late final Animation<double> _scaleAnim;
   bool _added = false;
 
-  late final _liveProductProvider = Provider<Product>((ref) {
+  Product _liveProduct(WidgetRef ref) {
     final products = ref.watch(productListProvider).asData?.value ?? [];
     return products.firstWhere(
       (p) => p.id == widget.product.id,
       orElse: () => widget.product,
     );
-  });
+  }
 
   @override
   void initState() {
@@ -63,7 +63,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
     await _controller.forward();
     await _controller.reverse();
 
-    final liveProduct = ref.read(_liveProductProvider);
+    final liveProduct = _liveProduct(ref);
 
     if (liveProduct.trackInventory && liveProduct.stockQuantity <= 0) {
       if (mounted) {
@@ -86,7 +86,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
 
   @override
   Widget build(BuildContext context) {
-    final liveProduct = ref.watch(_liveProductProvider);
+    final liveProduct = _liveProduct(ref);
     final cartItems = ref.watch(cartProvider);
     final inCart = cartItems
         .where((i) => i.product.id == widget.product.id)

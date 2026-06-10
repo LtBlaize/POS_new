@@ -1,15 +1,12 @@
 // lib/features/auth/business_type_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'auth_provider.dart';
 import 'register_screen.dart';
+import 'plan_picker_screen.dart';
 import 'widgets/auth_text_field.dart';
 import 'widgets/business_type_card.dart';
 import '../../shared/widgets/app_colors.dart';
-import '../../shared/widgets/app_button.dart';
-import '../../config/app_router.dart';
-import '../../main.dart'; // for DeviceRole + deviceRoleProvider
+import '../../shared/widgets/app_button.dart';// for DeviceRole + deviceRoleProvider
 
 class BusinessTypeScreen extends ConsumerStatefulWidget {
   const BusinessTypeScreen({super.key});
@@ -24,7 +21,6 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
   final _businessNameCtrl = TextEditingController();
 
   String? _selectedType;
-  bool    _isLoading = false;
   String? _error;
 
   static const _options = [
@@ -49,12 +45,6 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
     super.dispose();
   }
 
-  String _friendlyError(String raw) {
-    if (raw.contains('network'))    return 'Network error. Check your connection.';
-    if (raw.contains('permission')) return 'Permission denied. Please try again.';
-    return 'Could not save your business. Please try again.';
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -74,71 +64,17 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
       return;
     }
 
-    final ownerPin = ref.read(pendingOwnerPinProvider) ?? '0000';
+    // Store everything the plan picker will need.
+    ref.read(pendingFullNameProvider.notifier).state     = _fullNameCtrl.text.trim();
+    ref.read(pendingBusinessNameProvider.notifier).state = _businessNameCtrl.text.trim();
+    ref.read(pendingBusinessTypeProvider.notifier).state = _selectedType;
 
-    // Get the navigator now, before any async gaps
-    final nav = ref.read(appRouterProvider).navigatorKey.currentState;
-    if (nav == null) {
-      setState(() => _error = 'Navigation error. Please restart the app.');
-      return;
-    }
+    if (!mounted) return;
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      await ref.read(authServiceProvider).completeRegistration(
-            userId:       userId,
-            fullName:     _fullNameCtrl.text.trim(),
-            businessName: _businessNameCtrl.text.trim(),
-            businessType: _selectedType!,
-            ownerPin:     ownerPin,
-          );
-
-      // Clear pending state — this also unblocks the auth listener in main.dart
-      // (which skipped navigation while pendingUserIdProvider was set).
-      // We clear it BEFORE navigating so the listener doesn't race us.
-      ref.read(pendingUserIdProvider.notifier).state   = null;
-      ref.read(pendingOwnerPinProvider.notifier).state = null;
-
-      // ✅ Navigate manually here — the auth listener in main.dart skipped
-      // navigation because pendingUserIdProvider was set during step 1.
-      // Now that the profile row exists in DB, we load it and navigate.
-      if (!mounted) return;
-
-      // Invalidate profileProvider so it re-fetches the newly created profile
-      ref.invalidate(profileProvider);
-      final profile      = await ref.read(profileProvider.future);
-      final isRestaurant = profile?.businessType?.isRestaurant ?? false;
-      final prefs        = await SharedPreferences.getInstance();
-      final savedRole    = prefs.getString('device_role');
-
-      if (profile?.business?.id != null) {
-        await prefs.setString('business_id', profile!.business!.id);
-      }
-
-      if (!mounted) return;
-
-      if (savedRole == null && isRestaurant) {
-        debugPrint('[Registration] Complete → /role-select');
-        nav.pushNamedAndRemoveUntil('/role-select', (_) => false);
-      } else {
-        if (savedRole == null) {
-          await prefs.setString('device_role', DeviceRole.pos.name);
-          ref.read(deviceRoleProvider.notifier).state = DeviceRole.pos;
-        }
-        debugPrint('[Registration] Complete → /pos');
-        nav.pushNamedAndRemoveUntil('/pos', (_) => false);
-      }
-
-    } catch (e) {
-      debugPrint('[Registration] completeRegistration error: $e');
-      if (mounted) setState(() => _error = _friendlyError(e.toString()));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PlanPickerScreen()),
+    );
   }
 
   @override
@@ -170,6 +106,8 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
                     _StepDot(active: true, done: true),
                     _StepLine(active: true),
                     _StepDot(active: true, done: false),
+                    _StepLine(active: false),
+                    _StepDot(active: false, done: false),
                   ],
                 ),
                 const SizedBox(height: 28),
@@ -184,7 +122,7 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Step 2 of 2 — Business details',
+                  'Step 2 of 3 — Business details',
                   style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 32),
@@ -276,11 +214,10 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
                 ],
 
                 const SizedBox(height: 28),
-
                 AppButton(
-                  label: _isLoading ? 'Creating…' : 'Create Business',
-                  onPressed: _isLoading ? null : _submit,
-                  icon: Icons.check_rounded,
+                  label: 'Continue',
+                  onPressed: _submit,
+                  icon: Icons.arrow_forward_rounded,
                 ),
                 const SizedBox(height: 40),
               ],

@@ -18,7 +18,7 @@ class TableSelector extends ConsumerWidget {
         border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: SizedBox(
-        height: 220,
+        height: 340,
         child: Column(
           children: [
             // Selected badge row

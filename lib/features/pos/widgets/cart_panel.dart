@@ -24,8 +24,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
     final items = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final hasKitchen = widget.featureManager.hasFeature('kitchen');
-    ref.watch(cartProvider); // ensure rebuild on discount change
-    final total = ref.read(cartProvider.notifier).grandTotal;
+    final total = ref.watch(cartProvider.notifier).grandTotal;
 
     return Container(
       width: 340,
@@ -245,7 +244,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                                     : cartNotifier
                                         .decrementProduct(item.product.id),
                                 onIncrement: () =>
-                                    cartNotifier.addProduct(item.product),
+                                    cartNotifier.addProduct(item.product, variant: item.selectedVariant),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -307,7 +306,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                             color: AppColors.textSecondary)),
                     const Spacer(),
                     Text(
-                      '₱${ref.read(cartProvider.notifier).itemsTotal.toStringAsFixed(2)}',
+                      '₱${ref.watch(cartProvider.notifier).itemsTotal.toStringAsFixed(2)}',
                       style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary),

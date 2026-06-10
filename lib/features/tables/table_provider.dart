@@ -100,6 +100,15 @@ class TableNotifier extends StateNotifier<TableState> {
         super(const TableState(tables: [], isLoading: true)) {
     if (businessId != null) _loadTables();
   }
+  Future<void> deleteTable(String uuid) async {
+    try {
+      await _client
+          .from('restaurant_tables')
+          .update({'is_active': false})
+          .eq('id', uuid);
+      await _loadTables();
+    } catch (_) {}
+  }
 
   Future<void> _loadTables() async {
     if (_businessId == null) return;
@@ -107,13 +116,17 @@ class TableNotifier extends StateNotifier<TableState> {
     try {
       final rows = await _client
           .from('restaurant_tables')
-          .select('id, table_number, is_occupied, metadata')
+          .select('id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status)')
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number');
 
       final tables = (rows as List).map((row) {
         final meta = row['metadata'] as Map<String, dynamic>? ?? {};
+        final openOrder = (row['orders'] as List?)
+            ?.cast<Map<String, dynamic>>()
+            .where((o) => o['status'] != 'completed' && o['status'] != 'cancelled')
+            .firstOrNull;
         return TableEntry(
           name: row['table_number'].toString(),
           uuid: row['id'] as String,
@@ -124,6 +137,7 @@ class TableNotifier extends StateNotifier<TableState> {
           y: (meta['y'] as num?)?.toDouble() ?? 0,
           w: (meta['w'] as num?)?.toDouble() ?? 80,
           h: (meta['h'] as num?)?.toDouble() ?? 80,
+          orderId: openOrder?['id'] as String?,
         );
       }).toList();
 
@@ -163,7 +177,10 @@ class TableNotifier extends StateNotifier<TableState> {
       tables: [
         for (final t in state.tables)
           if (t.name == name)
-            TableEntry(name: name, uuid: t.uuid)
+            t.copyWith(
+              status: TableStatus.available,
+              clearOrder: true,
+            )
           else
             t,
       ],

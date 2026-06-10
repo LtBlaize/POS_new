@@ -262,6 +262,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
           .from('restaurant_tables')
           .update({'is_active': false})
           .eq('id', tableUuid);
+      await _load();
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }

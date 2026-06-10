@@ -415,10 +415,9 @@ class _CustomerDetail extends ConsumerWidget {
                       );
                       if (result == true) {
                         // refresh the customers list to get updated balance
+                        ref.invalidate(creditTransactionsProvider(customer.id));
                         ref.invalidate(creditCustomersProvider);
-                        ref.invalidate(
-                            creditTransactionsProvider(customer.id));
-                        // find updated customer
+                        await Future.delayed(Duration.zero);
                         final updated = ref
                             .read(creditCustomersProvider)
                             .value

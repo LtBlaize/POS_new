@@ -3,21 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_provider.dart';
-import 'business_type_screen.dart';
+import 'otp_verification_screen.dart';
 import 'widgets/auth_text_field.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
 
 // Stores the pending user ID between step 1 and step 2
 final pendingUserIdProvider = StateProvider<String?>((ref) => null);
-
+final pendingSelectedPlanProvider = StateProvider<String?>((ref) => null);
 // ── FIX: Store the owner PIN between step 1 and step 2 ───────────────────────
 // Previously there was no PIN field on this screen, so pin_hash was stored
 // as an empty default '0000' in completeRegistration. Now the owner sets
 // their PIN on this screen and it's passed through to business_type_screen
 // which calls completeRegistration with the real hashed value.
 final pendingOwnerPinProvider = StateProvider<String?>((ref) => null);
-
+final pendingFullNameProvider     = StateProvider<String?>((ref) => null);
+final pendingBusinessNameProvider = StateProvider<String?>((ref) => null);
+final pendingBusinessTypeProvider = StateProvider<String?>((ref) => null);
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
@@ -81,7 +83,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const BusinessTypeScreen()),
+        MaterialPageRoute(
+          builder: (_) => OtpVerificationScreen(
+            email: _emailCtrl.text.trim(),
+          ),
+        ),
       );
     }
   } catch (e) {
@@ -125,6 +131,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     _StepDot(active: true,  label: '1', done: false),
                     _StepLine(active: false),
                     _StepDot(active: false, label: '2', done: false),
+                    _StepLine(active: false),
+                    _StepDot(active: false, label: '3', done: false),
                   ],
                 ),
                 const SizedBox(height: 28),
@@ -139,7 +147,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Step 1 of 2 — Account credentials',
+                  'Step 1 of 3 — Account credentials',
                   style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 36),

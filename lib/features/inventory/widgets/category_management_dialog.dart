@@ -183,12 +183,12 @@ class _CategoryManagementDialog extends ConsumerWidget {
                           // Swap sort_order values
                           final moved = categories[oldIndex];
                           final target = categories[newIndex];
-                          await notifier.reorder(
-                              moved['id'] as String,
-                              target['sort_order'] as int? ?? newIndex);
-                          await notifier.reorder(
-                              target['id'] as String,
-                              moved['sort_order'] as int? ?? oldIndex);
+                          final movedOrder = moved['sort_order'] as int? ?? oldIndex;
+                          final targetOrder = target['sort_order'] as int? ?? newIndex;
+                          await Future.wait([
+                            notifier.reorder(moved['id'] as String, targetOrder),
+                            notifier.reorder(target['id'] as String, movedOrder),
+                          ]);
                         },
                         itemBuilder: (_, i) => _CategoryTile(
                           key: ValueKey(categories[i]['id']),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/cart_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../../../core/providers/product_provider.dart';
+import '../../../../features/auth/auth_provider.dart';
 
 // Matches pos_screen.dart breakpoint
 const _kBreakpointSm = 900.0;
@@ -249,6 +250,95 @@ class _IconBadge extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ── Trial banner ──────────────────────────────────────────────────────────────
+
+class TrialBanner extends ConsumerWidget {
+  const TrialBanner({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fm = ref.watch(featureManagerProvider);
+
+    final days = fm.trialDaysLeft;
+    final isExpired = !fm.isOnActiveTrial && !fm.currentPlan.isPaid;
+
+    // Hide banner entirely if paid or trial hasn't started yet.
+    if (fm.currentPlan.isPaid || fm.isOnActiveTrial == false && days == 0 && !isExpired) {
+      return const SizedBox.shrink();
+    }
+
+    final Color bg;
+    final Color fg;
+    final String message;
+
+    if (isExpired) {
+      bg      = const Color(0xFFFFEBEB);
+      fg      = const Color(0xFFC0392B);
+      message = 'Your trial has expired — upgrade to keep full access.';
+    } else if (days <= 1) {
+      bg      = const Color(0xFFFFEBEB);
+      fg      = const Color(0xFFC0392B);
+      message = 'Last day of your trial — upgrade now to avoid losing access.';
+    } else if (days <= 2) {
+      bg      = const Color(0xFFFFF3E0);
+      fg      = const Color(0xFFE65100);
+      message = '$days days left in your trial — upgrade to keep full access.';
+    } else {
+      bg      = const Color(0xFFFFF8E1);
+      fg      = const Color(0xFF856404);
+      message = '$days days left in your free trial.';
+    }
+
+    return Container(
+      width: double.infinity,
+      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.access_time_rounded, size: 14, color: fg),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                color: fg,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _openUpgrade(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: fg,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Upgrade',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openUpgrade(BuildContext context) {
+    // Phase 8 will wire this to the settings upgrade screen.
+    // For now show a snackbar as a placeholder.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Upgrade coming soon — check Settings.')),
     );
   }
 }

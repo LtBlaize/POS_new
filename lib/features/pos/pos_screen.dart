@@ -446,6 +446,7 @@ class _POSMainState extends ConsumerState<_POSMain> {
           _PhoneSearchBar(onCameraTap: _openCameraScanner)
         else
           TopBar(onCameraTap: _openCameraScanner),
+        const TrialBanner(),
         if (widget.featureManager.hasFeature('tables')) const TableSelector(),
         const CategoryBar(),
         const Expanded(child: ProductGrid()),

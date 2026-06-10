@@ -12,7 +12,7 @@ class RoleSelectionScreen extends ConsumerWidget {
     await prefs.setString('device_role', role.name);
     ref.read(deviceRoleProvider.notifier).state = role;
     if (context.mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushReplacementNamed(context, '/pos');
     }
   }
 

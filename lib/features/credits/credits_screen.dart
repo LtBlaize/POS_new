@@ -506,8 +506,9 @@ class _CustomerDetail extends ConsumerWidget {
       builder: (_) => PayCreditDialog(customer: customer),
     );
     if (result == true) {
-      ref.invalidate(creditCustomersProvider);
       ref.invalidate(creditTransactionsProvider(customer.id));
+      ref.invalidate(creditCustomersProvider);
+      await Future.delayed(Duration.zero);
       final updated = ref
           .read(creditCustomersProvider)
           .value

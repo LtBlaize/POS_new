@@ -119,16 +119,30 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
 
-    profile.whenData((p) {
-      if (_navigated) return;
-      // Profile resolved — navigate on next frame
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _navigated) return;
+    profile.when(
+      data: (p) {
+        if (_navigated) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _navigated) return;
+          _navigated = true;
+          if (p == null) {
+            debugPrint('[Pending] profile null → /login');
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+          } else {
+            debugPrint('[Pending] profile resolved: ${p.businessId} → /pos');
+            Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
+          }
+        });
+      },
+      error: (e, _) {
+        if (_navigated) return;
         _navigated = true;
-        debugPrint('[Pending] profile resolved: ${p?.businessId} → /pos');
-        Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
-      });
-    });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+        });
+      },
+      loading: () {},
+    );
 
     return const Scaffold(
       backgroundColor: Color(0xFF0F1117),

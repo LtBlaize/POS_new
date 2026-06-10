@@ -5,9 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/business.dart';
-import '../../config/business_config.dart';
 import '../../core/services/feature_manager.dart';
-import '../../features/settings/settings_provider.dart';
 import '../../core/models/staff.dart';
 
 
@@ -97,25 +95,26 @@ final businessProvider = Provider<Business?>((ref) {
   return ref.watch(profileProvider).asData?.value?.business;
 });
 
-final featureManagerProvider = Provider<FeatureManager?>((ref) {
-  final businessType = ref.watch(businessTypeProvider);
-  if (businessType == null) return null;
+final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final business = ref.watch(businessProvider);
+  if (business == null) return null;
+  final client = ref.watch(supabaseClientProvider);
+  return await client
+      .from('business_configs')
+      .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management')
+      .eq('business_id', business.id)
+      .maybeSingle();
+});
 
-  final features = <String>['inventory'];
-
-  if (businessType.isRestaurant) {
-    final config = ref.watch(businessConfigProvider);
-    if (config != null) {
-      if (config.enableKitchenDisplay) features.add('kitchen');
-      if (config.enableTableManagement) features.add('tables');
-    }
-  } else {
-    // Retail features
-    features.add('barcode');
-    features.add('credits'); // retail always has credits — intentional
-  }
-
-  return FeatureManager(features);
+final featureManagerProvider = Provider<FeatureManager>((ref) {
+  final business = ref.watch(businessProvider);
+  final config   = ref.watch(featureConfigProvider).asData?.value;
+  return FeatureManager(
+    business,
+    configBarcodeEnabled: config?['enable_barcode_scanner'] as bool? ?? false,
+    configKitchenEnabled: config?['enable_kitchen_display']  as bool? ?? false,
+    configTablesEnabled:  config?['enable_table_management'] as bool? ?? false,
+  );
 });
 
 final authServiceProvider = Provider<AuthService>((ref) {
@@ -161,7 +160,10 @@ class AuthService {
     //    will fire and handle navigation to /pos or /role-select.
   }
 
-  // ── Registration step 1: create Supabase auth user ─────────────────────────
+  // ── Registration step 1: create Supabase auth user + trigger OTP email ──────
+  // signUp() with email confirmation enabled sends a 6-digit OTP to the user.
+  // We do NOT wait for a session here — the session is established in step 1b
+  // (verifyOtp) after the user enters the code.
   Future<String> startRegistration({
     required String email,
     required String password,
@@ -174,21 +176,45 @@ class AuthService {
     final userId = response.user?.id;
     if (userId == null) throw Exception('Registration failed.');
 
-    // Wait for session to settle — do NOT call signInWithPassword here.
-    // A second sign-in fires a second signedIn event which can race with
-    // completeRegistration and cause duplicate DB inserts.
+    debugPrint('[Auth] signUp complete, OTP sent to $email, userId: $userId');
+    return userId;
+  }
+
+  // ── Registration step 1b: verify OTP from email ──────────────────────────────
+  // Calling verifyOTP with type=signup establishes the session.
+  // After this returns, currentSession is non-null and completeRegistration
+  // can safely insert DB records.
+  Future<void> verifyRegistrationOtp({
+    required String email,
+    required String otp,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email,
+      token: otp,
+      type: OtpType.signup,
+    );
+
+    // Wait for session to settle after OTP verification
     int attempts = 0;
-    while (_client.auth.currentSession == null && attempts < 10) {
+    while (_client.auth.currentSession == null && attempts < 15) {
       await Future.delayed(const Duration(milliseconds: 200));
       attempts++;
     }
 
     if (_client.auth.currentSession == null) {
-      throw Exception('Could not establish session. Please try again.');
+      throw Exception('Session could not be established. Please try again.');
     }
 
-    debugPrint('[Auth] Session confirmed: ${_client.auth.currentSession!.user.id}');
-    return userId;
+    debugPrint('[Auth] OTP verified, session: ${_client.auth.currentSession!.user.id}');
+  }
+
+  // ── Resend OTP ────────────────────────────────────────────────────────────────
+  Future<void> resendOtp({required String email}) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email,
+    );
+    debugPrint('[Auth] OTP resent to $email');
   }
 
   // ── Registration step 2: insert DB records ──────────────────────────────────
@@ -201,6 +227,7 @@ class AuthService {
     required String businessName,
     required String businessType,
     String ownerPin = '0000',
+    String selectedPlan = 'basic',
   }) async {
     try {
       debugPrint('=== completeRegistration START ===');
@@ -219,11 +246,18 @@ class AuthService {
 
       // 1. Business
       debugPrint('[Auth] Inserting business...');
+      final now = DateTime.now().toUtc();
+      // Only insert trial dates when user picked a paid plan.
+      // Enterprise is handled manually so treat it like premium for now.
+      final bool startTrial = selectedPlan != 'free' && selectedPlan != 'enterprise';
       final business = await _client
           .from('businesses')
           .insert({
-            'name': businessName,
-            'business_type': businessType,
+            'name':             businessName,
+            'business_type':    businessType,
+            'subscription_plan': selectedPlan == 'enterprise' ? 'premium' : selectedPlan,
+            if (startTrial) 'trial_started_at': now.toIso8601String(),
+            if (startTrial) 'trial_ends_at':    now.add(const Duration(days: 7)).toIso8601String(),
           })
           .select()
           .single();

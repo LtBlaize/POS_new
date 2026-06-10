@@ -263,15 +263,15 @@ class _TableWidgetState extends State<_TableWidget> {
         ),
         childWhenDragging: Opacity(opacity: 0.2, child: tableBox),
         onDragEnd: (details) {
-          final box = context.findRenderObject() as RenderBox?;
-          if (box == null) return;
-          final localPos = box.globalToLocal(details.offset);
-          setState(() {
-            _x = (_x + localPos.dx).clamp(0, 920);
-            _y = (_y + localPos.dy).clamp(0, 720);
-          });
-          widget.onDragEnd(_x, _y);
-        },
+              final canvas = context.findAncestorRenderObjectOfType<RenderBox>();
+              if (canvas == null) return;
+              final localPos = canvas.globalToLocal(details.offset);
+              setState(() {
+                _x = localPos.dx.clamp(0, 920);
+                _y = localPos.dy.clamp(0, 720);
+              });
+              widget.onDragEnd(_x, _y);
+            },
         child: tableBox,
       );
     }
