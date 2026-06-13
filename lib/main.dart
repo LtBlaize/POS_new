@@ -214,6 +214,7 @@ class _MyAppState extends ConsumerState<MyApp> {
             debugPrint('[Auth] Signed in: ${currentUser.id} → loading profile');
 
             try {
+              ref.invalidate(profileProvider);
               final profile = await ref.read(profileProvider.future);
 
               if (profile?.business?.id != null) {

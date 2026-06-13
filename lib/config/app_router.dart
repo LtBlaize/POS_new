@@ -16,6 +16,7 @@ import '../features/orders/orders_screen.dart';
 import '../features/credits/credits_screen.dart';
 import '../features/auth/role_selection_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 
 final appRouterProvider = Provider<AppRouter>((ref) {
   final featureManager = ref.watch(featureManagerProvider);
@@ -58,7 +59,8 @@ class AppRouter {
     if (name == '/login')         return _route(const LoginScreen());
     if (name == '/register')      return _route(const RegisterScreen());
     if (name == '/business-type') return _route(const BusinessTypeScreen());
-    if (name == '/role-select')   return _route(const RoleSelectionScreen());
+    if (name == '/role-select')        return _route(const RoleSelectionScreen());
+    if (name == '/forgot-password')    return _route(const ForgotPasswordScreen());
 
     // /pending is the dedicated boot-wait route. Always serves _PendingPosScreen
     // regardless of featureManager state — it will self-navigate to /pos once
@@ -114,6 +116,7 @@ class _PendingPosScreen extends ConsumerStatefulWidget {
 
 class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
   bool _navigated = false;
+  int _nullCount = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +127,20 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
         if (_navigated) return;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _navigated) return;
-          _navigated = true;
+
           if (p == null) {
-            debugPrint('[Pending] profile null → /login');
+            _nullCount++;
+            if (_nullCount < 5) {
+              debugPrint('[Pending] profile null, retry $_nullCount/5');
+              ref.invalidate(profileProvider);
+              return;
+            }
+            debugPrint('[Pending] profile null after retries → /login');
+            _navigated = true;
             Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
           } else {
             debugPrint('[Pending] profile resolved: ${p.businessId} → /pos');
+            _navigated = true;
             Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
           }
         });

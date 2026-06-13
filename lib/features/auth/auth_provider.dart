@@ -332,5 +332,17 @@ class AuthService {
     // ✅ MyApp's ref.listen fires with user=null and navigates to /login.
   }
 
+  // ── Forgot Password ─────────────────────────────────────────────────────────
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    await _client.auth.resetPasswordForEmail(email);
+    debugPrint('[Auth] Password reset email sent to $email');
+  }
+
+  // ── Update Password (called after reset link is clicked) ───────────────────
+  Future<void> updatePassword({required String newPassword}) async {
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+    debugPrint('[Auth] Password updated successfully');
+  }
+
   User? get currentUser => _client.auth.currentUser;
 }
