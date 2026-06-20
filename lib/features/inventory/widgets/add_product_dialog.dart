@@ -1,13 +1,20 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../inventory_service.dart';
 import '../../../core/providers/product_provider.dart';
+import '../../../core/providers/app_context_provider.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/product_variant.dart';
 import '../../../core/providers/staff_provider.dart';
 import '../../../core/models/staff.dart';
+import '../../../core/services/image_storage_service.dart';
+import '../../../core/services/local_db_service.dart';
+import '../../../core/services/sync_queue_service.dart';
 
 class AddProductDialog extends ConsumerStatefulWidget {
 final Product? product;
@@ -28,7 +35,6 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   final _barcodeController     = TextEditingController();
   final _skuController         = TextEditingController();
   final _stockController       = TextEditingController(text: '0');
-  final _imageUrlController    = TextEditingController();
   final _newCategoryController = TextEditingController();
 
   // State
@@ -38,6 +44,11 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   bool _saving = false;
   bool _addingNewCategory = false;
   int _originalStock = 0; // ← added: used to block non-owners from reducing stock on edit
+
+  // Product photo — newly picked file, or existing local/cloud path when editing
+  XFile? _pickedImage;
+  String? _existingLocalImagePath;
+  String? _existingImageUrl;
 
   // Categories loaded from DB
   List<Map<String, dynamic>> _categories = [];
@@ -71,7 +82,8 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
       _costController.text     = p.costPrice > 0 ? p.costPrice.toStringAsFixed(2) : '';
       _stockController.text    = '${p.stockQuantity}';
       _sendToKitchen           = p.sendToKitchen;
-      _imageUrlController.text = p.imageUrl ?? '';
+      _existingImageUrl        = p.imageUrl;
+      _existingLocalImagePath  = p.localImagePath;
       _trackInventory          = p.trackInventory;
       _selectedCategoryId      = p.categoryId;
       _originalStock           = p.stockQuantity;
@@ -159,6 +171,58 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     });
   }
 
+  // ── Photo capture ────────────────────────────────────────────────────────
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        maxWidth: 2000,
+        imageQuality: 90,
+      );
+      if (file != null && mounted) {
+        setState(() => _pickedImage = file);
+      }
+    } catch (e) {
+      _showError('Could not access ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e');
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _pickedImage = null;
+      _existingImageUrl = null;
+      _existingLocalImagePath = null;
+    });
+  }
+
+  Future<void> _processPickedImage(String productId) async {
+    if (_pickedImage == null) return;
+
+    final localPath = await ProductImagePipeline.compressAndSaveLocal(
+      sourcePath: _pickedImage!.path,
+      productId: productId,
+    );
+
+    final local = ref.read(localDbServiceProvider);
+    await local.updateProductLocalImage(productId, localPath);
+
+    final profile = ref.read(profileProvider).asData?.value;
+    final businessId = profile?.businessId ?? ref.read(activeBusinessIdProvider) ?? '';
+
+    final syncQueue = ref.read(syncQueueServiceProvider);
+    await syncQueue.enqueue(
+      operation: 'upload_product_image',
+      tableName: 'products',
+      recordId: productId,
+      payload: {
+        'local_path': localPath,
+        'business_id': businessId,
+      },
+    );
+  }
+
   // ── Save product ───────────────────────────────────────────────────────────
 
   Future<void> _save() async {
@@ -197,7 +261,6 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'name':            _nameController.text.trim(),
         'description':     _descController.text.trim().isEmpty ? null : _descController.text.trim(),
         'price':           double.parse(_priceController.text),
-        'image_url':       _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
         'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
         'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
         'cost_price':      double.tryParse(_costController.text) ?? 0,
@@ -228,6 +291,21 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
             .update(data)
             .eq('id', widget.product!.id);
         productId = widget.product!.id;
+      }
+
+      final hadOriginalImage = widget.product != null &&
+          ((widget.product!.imageUrl?.isNotEmpty ?? false) ||
+              (widget.product!.localImagePath?.isNotEmpty ?? false));
+      final imageWasRemoved = hadOriginalImage &&
+          _pickedImage == null &&
+          (_existingImageUrl == null || _existingImageUrl!.isEmpty) &&
+          (_existingLocalImagePath == null || _existingLocalImagePath!.isEmpty);
+
+      if (_pickedImage != null) {
+        await _processPickedImage(productId);
+      } else if (imageWasRemoved) {
+        final local = ref.read(localDbServiceProvider);
+        await local.updateProductLocalImage(productId, null);
       }
 
       await _saveVariants(client, productId);
@@ -433,11 +511,15 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Image URL
-                      _label('Image URL'),
-                      _field(
-                        controller: _imageUrlController,
-                        hint: 'https://…',
+                      // Product photo
+                      _label('Product Photo'),
+                      _PhotoPicker(
+                        pickedImage: _pickedImage,
+                        existingLocalPath: _existingLocalImagePath,
+                        existingImageUrl: _existingImageUrl,
+                        onTakePhoto: () => _pickImage(ImageSource.camera),
+                        onPickGallery: () => _pickImage(ImageSource.gallery),
+                        onRemove: _removeImage,
                       ),
 
                       const SizedBox(height: 10),
@@ -732,6 +814,113 @@ class _NewCategoryField extends StatelessWidget {
     );
   }
 }
+// ── Product photo picker ──────────────────────────────────────────────────────
+
+class _PhotoPicker extends StatelessWidget {
+  final XFile? pickedImage;
+  final String? existingLocalPath;
+  final String? existingImageUrl;
+  final VoidCallback onTakePhoto;
+  final VoidCallback onPickGallery;
+  final VoidCallback onRemove;
+
+  const _PhotoPicker({
+    required this.pickedImage,
+    required this.existingLocalPath,
+    required this.existingImageUrl,
+    required this.onTakePhoto,
+    required this.onPickGallery,
+    required this.onRemove,
+  });
+
+  bool get _hasImage =>
+      pickedImage != null ||
+      (existingLocalPath != null && existingLocalPath!.isNotEmpty) ||
+      (existingImageUrl != null && existingImageUrl!.isNotEmpty);
+
+  Widget _buildPreview() {
+    if (pickedImage != null) {
+      return Image.file(File(pickedImage!.path), fit: BoxFit.cover);
+    }
+    if (existingLocalPath != null && existingLocalPath!.isNotEmpty) {
+      return Image.file(File(existingLocalPath!), fit: BoxFit.cover);
+    }
+    if (existingImageUrl != null && existingImageUrl!.isNotEmpty) {
+      return Image.network(existingImageUrl!, fit: BoxFit.cover);
+    }
+    return const SizedBox.shrink();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.divider),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _hasImage
+              ? _buildPreview()
+              : const Icon(Icons.image_outlined,
+                  color: AppColors.textSecondary, size: 28),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onTakePhoto,
+                icon: const Icon(Icons.camera_alt_outlined, size: 14),
+                label: const Text('Take Photo',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onPickGallery,
+                icon: const Icon(Icons.photo_library_outlined, size: 14),
+                label: const Text('Gallery',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  side: const BorderSide(color: AppColors.divider),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              if (_hasImage)
+                OutlinedButton.icon(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text('Remove',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: const BorderSide(color: AppColors.danger),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SendToKitchenToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;

@@ -14,6 +14,11 @@
 // v10 — product_variants table
 // v11 — low_stock_alerts table
 // v12 — cost_at_sale column on order_items
+// v13 — notes column on order_items; cost_price on product_variants
+// v14 — pin_salt column on staff_members
+// v15 — variant_id column on order_items
+// v16 — tip_amount column on orders
+// v17 — local_image_path column on products (local-first product photos)
 
 import 'dart:async';
 import 'dart:convert';
@@ -36,7 +41,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 16;
+const _kDbVersion = 17;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -108,6 +113,7 @@ class LocalDbService {
         description TEXT,
         price REAL NOT NULL,
         image_url TEXT,
+        local_image_path TEXT,
         barcode TEXT,
         sku TEXT,
         track_inventory INTEGER NOT NULL DEFAULT 1,
@@ -550,6 +556,17 @@ class LocalDbService {
         debugPrint('[LocalDb] v16: tip_amount already exists ($e)');
       }
     }
+
+    if (oldVersion < 17) {
+      try {
+        await db.execute(
+          'ALTER TABLE products ADD COLUMN local_image_path TEXT',
+        );
+        debugPrint('[LocalDb] v17: local_image_path added to products');
+      } catch (e) {
+        debugPrint('[LocalDb] v17: local_image_path already exists ($e)');
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -560,27 +577,37 @@ class LocalDbService {
         final batch = d.batch();
         final now = DateTime.now().toIso8601String();
         for (final p in products) {
-          batch.insert(
-            'products',
-            {
-              'id': p.id,
-              'business_id': p.businessId,
-              'category_id': p.categoryId,
-              'name': p.name,
-              'description': p.description,
-              'price': p.price,
-              'image_url': p.imageUrl,
-              'barcode': p.barcode,
-              'sku': p.sku,
-              'track_inventory': p.trackInventory ? 1 : 0,
-              'stock_quantity': p.stockQuantity,
-              'is_available': p.isAvailable ? 1 : 0,
-              'is_active': p.isActive ? 1 : 0,
-              'category_name': p.category,
-              'synced_at': now,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          // Raw upsert (not a plain replace) so local_image_path survives a
+          // cloud sync — Product.fromMap from Supabase never carries it, and
+          // a blind replace would wipe the cached photo on every refresh.
+          batch.rawInsert('''
+            INSERT INTO products (
+              id, business_id, category_id, name, description, price,
+              image_url, local_image_path, barcode, sku, track_inventory,
+              stock_quantity, is_available, is_active, category_name, synced_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              business_id = excluded.business_id,
+              category_id = excluded.category_id,
+              name = excluded.name,
+              description = excluded.description,
+              price = excluded.price,
+              image_url = excluded.image_url,
+              local_image_path = COALESCE(excluded.local_image_path, products.local_image_path),
+              barcode = excluded.barcode,
+              sku = excluded.sku,
+              track_inventory = excluded.track_inventory,
+              stock_quantity = excluded.stock_quantity,
+              is_available = excluded.is_available,
+              is_active = excluded.is_active,
+              category_name = excluded.category_name,
+              synced_at = excluded.synced_at
+          ''', [
+            p.id, p.businessId, p.categoryId, p.name, p.description, p.price,
+            p.imageUrl, p.localImagePath, p.barcode, p.sku,
+            p.trackInventory ? 1 : 0, p.stockQuantity, p.isAvailable ? 1 : 0,
+            p.isActive ? 1 : 0, p.category, now,
+          ]);
         }
         await batch.commit(noResult: true);
       });
@@ -653,6 +680,31 @@ class LocalDbService {
     );
   }
 
+  /// Sets the local cached file path right after a capture is compressed
+  /// and saved to disk. Pass null to clear it (photo removed).
+  Future<void> updateProductLocalImage(
+      String productId, String? localImagePath) async {
+    final d = await db;
+    await d.update(
+      'products',
+      {'local_image_path': localImagePath},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  }
+
+  /// Sets the cloud image_url once a queued upload completes.
+  Future<void> updateProductImageUrl(
+      String productId, String imageUrl) async {
+    final d = await db;
+    await d.update(
+      'products',
+      {'image_url': imageUrl},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  }
+
   Product _productFromRow(Map<String, dynamic> row) => Product(
         id: row['id'] as String,
         businessId: row['business_id'] as String,
@@ -661,6 +713,7 @@ class LocalDbService {
         description: row['description'] as String?,
         price: (row['price'] as num).toDouble(),
         imageUrl: row['image_url'] as String?,
+        localImagePath: row['local_image_path'] as String?,
         barcode: row['barcode'] as String?,
         sku: row['sku'] as String?,
         trackInventory: (row['track_inventory'] as int) == 1,

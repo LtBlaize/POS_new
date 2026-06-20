@@ -191,7 +191,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
       await _local.upsertProducts(products);
 
-      final entries = products
+      // Re-read from local cache so local_image_path (preserved through the
+      // upsert) shows up immediately, not just the bare Supabase row.
+      final mergedProducts = await _local.getProducts(_businessId);
+      final entries = mergedProducts
           .map((p) => InventoryEntry(product: p, lowStockThreshold: threshold))
           .toList();
 

@@ -1,6 +1,7 @@
 // lib/features/auth/auth_provider.dart
 
 import 'package:flutter/foundation.dart';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile.dart';
@@ -145,6 +146,16 @@ class AuthService {
     return (hash: hash, salt: salt);
   }
 
+  // ── UUID v4 generator (avoids needing the `uuid` package) ───────────────────
+  String _generateUuidV4() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
   // ── Login ───────────────────────────────────────────────────────────────────
   //
   // FIX: login() now ONLY authenticates. Navigation is handled entirely
@@ -250,19 +261,15 @@ class AuthService {
       // Only insert trial dates when user picked a paid plan.
       // Enterprise is handled manually so treat it like premium for now.
       final bool startTrial = selectedPlan != 'free' && selectedPlan != 'enterprise';
-      final business = await _client
-          .from('businesses')
-          .insert({
-            'name':             businessName,
-            'business_type':    businessType,
-            'subscription_plan': selectedPlan == 'enterprise' ? 'premium' : selectedPlan,
-            if (startTrial) 'trial_started_at': now.toIso8601String(),
-            if (startTrial) 'trial_ends_at':    now.add(const Duration(days: 7)).toIso8601String(),
-          })
-          .select()
-          .single();
-
-      final businessId = business['id'] as String;
+      final businessId = _generateUuidV4();
+      await _client.from('businesses').insert({
+        'id':                businessId,
+        'name':              businessName,
+        'business_type':     businessType,
+        'subscription_plan': selectedPlan == 'enterprise' ? 'premium' : selectedPlan,
+        if (startTrial) 'trial_started_at': now.toIso8601String(),
+        if (startTrial) 'trial_ends_at':    now.add(const Duration(days: 7)).toIso8601String(),
+      });
       debugPrint('[Auth] Business inserted: $businessId');
 
       // 2. Profile

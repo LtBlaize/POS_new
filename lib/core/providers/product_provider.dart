@@ -78,17 +78,11 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
       await local.upsertAllVariants(allVariants);
     }
 
-    // 3. Group variants by product_id and attach
-    final variantMap = <String, List<ProductVariant>>{};
-    for (final v in allVariants) {
-      variantMap.putIfAbsent(v.productId, () => []);
-      variantMap[v.productId]!.add(v);
-    }
-
-    return products.map((p) {
-      final variants = variantMap[p.id] ?? [];
-      return p.copyWith(variants: variants);
-    }).toList();
+    // 3. Cache variants locally, then re-read everything from local —
+    // this is what attaches local_image_path (Supabase rows never carry
+    // it) so the POS grid shows the cached photo immediately instead of
+    // falling back to a network image or blank state.
+    return local.getProducts(businessId);
   }
 
   void reload() async {

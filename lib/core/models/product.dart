@@ -10,6 +10,7 @@ class Product {
   final String? description;
   final double price;
   final String? imageUrl;
+  final String? localImagePath;
   final String? barcode;
   final String? sku;
   final double costPrice;
@@ -31,6 +32,7 @@ class Product {
     this.description,
     required this.price,
     this.imageUrl,
+    this.localImagePath,
     this.barcode,
     this.sku,
     this.costPrice = 0,
@@ -69,6 +71,7 @@ class Product {
       price: (map['price'] as num).toDouble(),
       costPrice: (map['cost_price'] as num?)?.toDouble() ?? 0,
       imageUrl: map['image_url'] as String?,
+      localImagePath: map['local_image_path'] as String?,
       barcode: map['barcode'] as String?,
       sku: map['sku'] as String?,
       trackInventory: map['track_inventory'] as bool? ?? true,
@@ -108,6 +111,8 @@ class Product {
     bool? isAvailable,
     int? stockQuantity,
     bool? sendToKitchen,
+    String? imageUrl,
+    String? localImagePath,
     List<ProductVariant>? variants,
   }) =>
       Product(
@@ -118,7 +123,8 @@ class Product {
         description: description,
         price: price ?? this.price,
         costPrice: costPrice ?? this.costPrice,
-        imageUrl: imageUrl,
+        imageUrl: imageUrl ?? this.imageUrl,
+        localImagePath: localImagePath ?? this.localImagePath,
         barcode: barcode,
         sku: sku,
         trackInventory: trackInventory,

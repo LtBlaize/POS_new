@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
+import 'image_storage_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../models/order.dart';
 
@@ -229,6 +230,19 @@ class SyncQueueService {
           'notes': payload['notes'],
           'performed_at': payload['performed_at'],
         });
+
+      case 'upload_product_image':
+        final productId = recordId;
+        final localPath = payload['local_path'] as String;
+        final bytes = await ProductImagePipeline.readLocalBytes(localPath);
+        final remotePath = '${payload['business_id']}/$productId.jpg';
+        final storage = _ref.read(imageStorageServiceProvider);
+        final url = await storage.upload(bytes, remotePath);
+
+        await _client
+            .from('products')
+            .update({'image_url': url}).eq('id', productId);
+        await _local.updateProductImageUrl(productId, url);
 
       case 'insert_kitchen_ticket':
         // Idempotency: skip if ticket already exists for this order

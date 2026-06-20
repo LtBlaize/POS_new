@@ -14,7 +14,7 @@ class PlanPickerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
-  String _selectedPlan = 'pro';
+  String _selectedPlan = 'premium';
   bool   _isLoading    = false;
   String? _error;
 
@@ -52,10 +52,19 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
       ref.read(pendingFullNameProvider.notifier).state     = null;
       ref.read(pendingBusinessNameProvider.notifier).state = null;
       ref.read(pendingBusinessTypeProvider.notifier).state = null;
-      ref.read(pendingSelectedPlanProvider.notifier).state = 'pro';
-      // ✅ Do not navigate here — MyApp's authStateProvider listener
-      //    handles navigation after completeRegistration() establishes
-      //    the session. Navigating here races with that listener.
+      ref.read(pendingSelectedPlanProvider.notifier).state = 'premium';
+
+      // FIX: MyApp's authStateProvider listener already fired once during
+      // OTP verification and bailed out via the "Mid-registration" guard.
+      // No new auth event happens when completeRegistration() finishes, so
+      // nothing re-triggers navigation. We must push it ourselves here.
+      // /pending re-resolves profileProvider and routes to /pos once the
+      // freshly-inserted profile/business rows are visible.
+      ref.invalidate(profileProvider);
+      if (mounted) {
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/pending', (route) => false);
+      }
     } catch (e) {
       debugPrint('[PlanPicker] completeRegistration error: $e');
       if (mounted) {
@@ -137,7 +146,7 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
               const SizedBox(height: 12),
 
               _PlanCard(
-                plan:        'pro',
+                plan:        'premium',
                 title:       'Pro',
                 price:       '₱X / month',
                 description: 'Full access free for 7 days, then ₱X/mo.',
@@ -150,9 +159,9 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
                   _Feature('Kitchen display',    true),
                   _Feature('Table management',   true),
                 ],
-                isSelected:  _selectedPlan == 'pro',
+                isSelected:  _selectedPlan == 'premium',
                 isBestValue: true,
-                onTap: () => setState(() => _selectedPlan = 'pro'),
+                onTap: () => setState(() => _selectedPlan = 'premium'),
               ),
               const SizedBox(height: 12),
 
@@ -199,7 +208,7 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
               const SizedBox(height: 12),
               Text(
-                _selectedPlan == 'pro'
+                _selectedPlan == 'premium'
                     ? 'No credit card required. Trial ends in 7 days.'
                     : ' ',
                 style: const TextStyle(
@@ -236,7 +245,7 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
   String get _ctaLabel => switch (_selectedPlan) {
         'free'       => 'Start with Free',
-        'pro'        => 'Start 7-day trial',
+        'premium'    => 'Start 7-day trial',
         'enterprise' => 'Contact sales',
         _            => 'Continue',
       };

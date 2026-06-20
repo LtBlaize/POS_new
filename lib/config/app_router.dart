@@ -18,6 +18,16 @@ import '../features/auth/role_selection_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 
+// FIX: must be a stable top-level singleton. AppRouter is rebuilt by Riverpod
+// every time featureManagerProvider changes (which happens constantly during
+// registration as profileProvider/businessProvider refetch). If the
+// GlobalKey lived on the AppRouter instance, every rebuild created a NEW key,
+// which made MaterialApp treat its Navigator as a brand new widget — tearing
+// down the entire navigation stack and resetting to initialRoute ('/pending').
+// That's why OTP verification → BusinessTypeScreen would silently bounce
+// back to /pending → /login mid-registration.
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouterProvider = Provider<AppRouter>((ref) {
   final featureManager = ref.watch(featureManagerProvider);
   return AppRouter(featureManager, ref);   // pass ref
@@ -26,7 +36,7 @@ final appRouterProvider = Provider<AppRouter>((ref) {
 class AppRouter {
   final FeatureManager? featureManager;
   final Ref _ref;                          // ADD
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  GlobalKey<NavigatorState> get navigatorKey => _appNavigatorKey;
 
   AppRouter(this.featureManager, this._ref);   // ADD _ref
 

@@ -38,8 +38,12 @@ class _OtpVerificationScreenState
 
   @override
   void dispose() {
-    for (final c in _ctrlList) c.dispose();
-    for (final f in _focusList) f.dispose();
+    for (final c in _ctrlList) {
+      c.dispose();
+    }
+    for (final f in _focusList) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -87,7 +91,9 @@ class _OtpVerificationScreenState
           _isLoading = false;
         });
         // Clear boxes on wrong code
-        for (final c in _ctrlList) c.clear();
+        for (final c in _ctrlList) {
+          c.clear();
+        }
         _focusList.first.requestFocus();
       }
     }
