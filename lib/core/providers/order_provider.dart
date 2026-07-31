@@ -15,6 +15,7 @@ import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../providers/app_context_provider.dart';
+import '../services/event_bus.dart';
 import 'product_provider.dart';
 
 
@@ -278,6 +279,11 @@ class OrderService {
 
     _ref.invalidate(productListProvider);
 
+    EventBus.instance.emit(AppEvents.orderPlaced, {
+      'order_id': order.id,
+      'business_id': businessId,
+    });
+
     return order;
   }
 
@@ -357,6 +363,11 @@ class OrderService {
 
     await _deductInventory(businessId, items);
 
+    EventBus.instance.emit(AppEvents.orderPlaced, {
+      'order_id': order.id,
+      'business_id': businessId,
+    });
+
     return order;
   }
 
@@ -369,6 +380,10 @@ class OrderService {
           'status': status.value,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', orderId);
+        EventBus.instance.emit(AppEvents.orderStatusChanged, {
+          'order_id': orderId,
+          'status': status.value,
+        });
         return;
       } catch (e) {
         debugPrint(
@@ -381,6 +396,10 @@ class OrderService {
       recordId: orderId,
       payload: {'status': status.value},
     );
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {
+      'order_id': orderId,
+      'status': status.value,
+    });
   }
 
   // ── Process payment ─────────────────────────────────────────────────────────
@@ -593,6 +612,10 @@ class OrderService {
         // Mark local void record as synced
         await _local.markVoidSynced(voidId);
 
+        EventBus.instance.emit(AppEvents.orderStatusChanged, {
+          'order_id': orderId,
+        });
+
         debugPrint(
             '[OrderService] voidOrderItem synced to Supabase: $voidId');
         return voidRecord;
@@ -616,6 +639,10 @@ class OrderService {
       },
     );
 
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {
+      'order_id': orderId,
+    });
+
     debugPrint(
         '[OrderService] voidOrderItem queued for sync: $voidId');
     return voidRecord;
@@ -638,6 +665,11 @@ class OrderService {
 
     // 1b. Invalidate item cache for this order.
     invalidateOrderCache(_ref, orderId);
+
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {
+      'order_id': orderId,
+      'status': 'cancelled',
+    });
 
     // 2. Reverse inventory for all items
     try {

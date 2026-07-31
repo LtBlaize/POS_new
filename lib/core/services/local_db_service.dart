@@ -41,7 +41,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 17;
+const _kDbVersion = 18;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -192,7 +192,8 @@ class LocalDbService {
         payload TEXT NOT NULL,
         created_at TEXT NOT NULL,
         retries INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT
+        last_error TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
       )
     ''');
 
@@ -567,6 +568,17 @@ class LocalDbService {
         debugPrint('[LocalDb] v17: local_image_path already exists ($e)');
       }
     }
+
+    if (oldVersion < 18) {
+      try {
+        await db.execute(
+          "ALTER TABLE sync_queue ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
+        );
+        debugPrint('[LocalDb] v18: status added to sync_queue');
+      } catch (e) {
+        debugPrint('[LocalDb] v18: status already exists ($e)');
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -877,14 +889,8 @@ class LocalDbService {
     });
   }
 
-  Future<void> purgeDeadQueueEntries(int maxRetries) async {
-    final d = await db;
-    await d.delete(
-      'sync_queue',
-      where: 'retries >= ?',
-      whereArgs: [maxRetries],
-    );
-  }
+  // (removed — replaced by markQueueDead below; dead entries are now kept
+  // and surfaced instead of silently deleted)
 
   Future<void> upsertOrders(List<Order> orders) => _write((d) async {
         final now = DateTime.now().toIso8601String();
@@ -965,6 +971,35 @@ class LocalDbService {
           },
           where: 'id = ?',
           whereArgs: [orderId],
+        );
+      });
+
+  /// Deletes locally cached orders for [businessId] that are no longer in
+  /// [keepIds] — used by the kitchen device to mirror the server's active-
+  /// order snapshot so stale (completed/cancelled) orders don't resurface
+  /// after a reboot.
+  Future<void> pruneKitchenOrders(
+      String businessId, List<String> keepIds) => _write((d) async {
+        if (keepIds.isEmpty) {
+          await d.delete(
+            'order_items',
+            where: 'order_id IN (SELECT id FROM orders WHERE business_id = ?)',
+            whereArgs: [businessId],
+          );
+          await d.delete('orders', where: 'business_id = ?', whereArgs: [businessId]);
+          return;
+        }
+        final placeholders = List.filled(keepIds.length, '?').join(',');
+        await d.delete(
+          'order_items',
+          where:
+              'order_id IN (SELECT id FROM orders WHERE business_id = ? AND id NOT IN ($placeholders))',
+          whereArgs: [businessId, ...keepIds],
+        );
+        await d.delete(
+          'orders',
+          where: 'business_id = ? AND id NOT IN ($placeholders)',
+          whereArgs: [businessId, ...keepIds],
         );
       });
 
@@ -1304,12 +1339,16 @@ class LocalDbService {
       'payload': jsonEncode(payload),
       'created_at': DateTime.now().toIso8601String(),
       'retries': 0,
+      'status': 'pending',
     });
   }
 
+  /// Only entries still being actively retried. Dead-lettered entries
+  /// (status = 'failed') are excluded so they stop being replayed forever.
   Future<List<Map<String, dynamic>>> getPendingQueue() async {
     final d = await db;
-    return d.query('sync_queue', orderBy: 'id ASC');
+    return d.query('sync_queue',
+        where: "status = 'pending'", orderBy: 'id ASC');
   }
 
   Future<void> dequeue(int queueId) async {
@@ -1323,6 +1362,45 @@ class LocalDbService {
       'UPDATE sync_queue SET retries = retries + 1, last_error = ? WHERE id = ?',
       [error, queueId],
     );
+  }
+
+  /// Moves an entry from 'pending' to 'failed' instead of deleting it —
+  /// keeps the row (and its payload/error) visible in Settings.
+  Future<void> markQueueDead(int queueId) async {
+    final d = await db;
+    await d.update(
+      'sync_queue',
+      {'status': 'failed'},
+      where: 'id = ?',
+      whereArgs: [queueId],
+    );
+  }
+
+  /// Dead-lettered entries — surfaced in Settings so a failed payment/order
+  /// sync doesn't vanish silently.
+  Future<List<Map<String, dynamic>>> getFailedQueue() async {
+    final d = await db;
+    return d.query('sync_queue',
+        where: "status = 'failed'", orderBy: 'id DESC');
+  }
+
+  /// Re-queues a dead-lettered entry for another attempt (e.g. user tapped
+  /// "Retry" in Settings after fixing whatever caused it to fail).
+  Future<void> retryQueueEntry(int queueId) async {
+    final d = await db;
+    await d.update(
+      'sync_queue',
+      {'status': 'pending', 'retries': 0},
+      where: 'id = ?',
+      whereArgs: [queueId],
+    );
+  }
+
+  Future<int> failedQueueCount() async {
+    final d = await db;
+    final result = await d.rawQuery(
+        "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'failed'");
+    return (result.first['c'] as int?) ?? 0;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1389,8 +1467,8 @@ class LocalDbService {
 
   Future<int> pendingQueueCount() async {
     final d = await db;
-    final result =
-        await d.rawQuery('SELECT COUNT(*) as c FROM sync_queue');
+    final result = await d.rawQuery(
+        "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'pending'");
     return (result.first['c'] as int?) ?? 0;
   }
 

@@ -1,5 +1,11 @@
 // lib/core/providers/cart_provider.dart
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -8,21 +14,96 @@ import '../models/product_variant.dart';
 
 // REPLACE
 class CartNotifier extends StateNotifier<List<CartItem>> {
-  CartNotifier() : super([]);
+  CartNotifier() : super([]) {
+    _restoreDraft();
+  }
+
+  static const _draftKey = 'draft_cart_v1';
+  Timer? _persistDebounce;
+  bool _restoringDraft = true;
 
   double orderDiscountAmount = 0;
   DiscountType orderDiscountType = DiscountType.fixed;
   OrderType orderType = OrderType.walkIn;
 
+  /// Silently reloads whatever cart was in progress when the app last
+  /// closed/crashed, so a restart drops the user back where they were.
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null) return;
+
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final items = (map['items'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(CartItem.fromParkedMap)
+          .toList();
+      if (items.isEmpty) return;
+
+      orderDiscountAmount =
+          (map['order_discount_amount'] as num?)?.toDouble() ?? 0;
+      orderDiscountType = DiscountType.values.firstWhere(
+        (e) => e.name == map['order_discount_type'],
+        orElse: () => DiscountType.fixed,
+      );
+      orderType = OrderType.values.firstWhere(
+        (e) => e.name == map['order_type'],
+        orElse: () => OrderType.walkIn,
+      );
+      _tipAmount = (map['tip_amount'] as num?)?.toDouble() ?? 0;
+      state = items;
+      debugPrint('[Cart] Restored draft cart (${items.length} item(s))');
+    } catch (e) {
+      debugPrint('[Cart] Draft restore failed: $e');
+    } finally {
+      _restoringDraft = false;
+    }
+  }
+
+  /// Debounced write-through so a burst of taps (e.g. tapping +3 quickly)
+  /// doesn't hit disk on every single tap.
+  void _persist() {
+    if (_restoringDraft) return; // don't immediately re-save what we just loaded
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(const Duration(milliseconds: 400), () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (state.isEmpty) {
+          await prefs.remove(_draftKey);
+          return;
+        }
+        final map = {
+          'items': state.map((i) => i.toParkedMap()).toList(),
+          'order_discount_amount': orderDiscountAmount,
+          'order_discount_type': orderDiscountType.name,
+          'order_type': orderType.name,
+          'tip_amount': _tipAmount,
+        };
+        await prefs.setString(_draftKey, jsonEncode(map));
+      } catch (e) {
+        debugPrint('[Cart] Draft persist failed: $e');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _persistDebounce?.cancel();
+    super.dispose();
+  }
+
   void setOrderType(OrderType type) {
     orderType = type;
     state = [...state];
+    _persist();
   }
 
   void applyOrderDiscount(double amount, DiscountType type) {
     orderDiscountAmount = amount;
     orderDiscountType = type;
     state = [...state]; // trigger rebuild
+    _persist();
   }
 
   void applyItemDiscount(String productId, double amount, DiscountType type) {
@@ -40,6 +121,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       notes: item.notes,
     );
     state = updated;
+    _persist();
   }
 
   void setItemNotes(String productId, String? notes) {
@@ -57,6 +139,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
     );
     state = updated;
+    _persist();
   }
 
   double get itemsTotal => state.fold(0, (sum, item) => sum + item.total);
@@ -74,6 +157,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   void setTip(double amount) {
     _tipAmount = amount.clamp(0, double.infinity);
     state = [...state]; // trigger rebuild
+    _persist();
   }
 
   double get grandTotal => (itemsTotal - orderDiscountValue + _tipAmount).clamp(0, double.infinity);
@@ -105,6 +189,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     } else {
       state = [...state, CartItem(product: product, selectedVariant: variant)];
     }
+    _persist();
   }
 
   void decrementProduct(String productId) {
@@ -126,10 +211,12 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       );
       state = updated;
     }
+    _persist();
   }
 
   void removeProduct(String productId) {
     state = state.where((item) => item.product.id != productId).toList();
+    _persist();
   }
 
   void clear() {
@@ -138,6 +225,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     _tipAmount = 0;
     orderType = OrderType.walkIn;
     state = [];
+    _persistDebounce?.cancel();
+    SharedPreferences.getInstance().then((p) => p.remove(_draftKey));
   }
 
   void loadItems(
@@ -150,6 +239,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     this.orderDiscountType = orderDiscountType;
     _tipAmount = tipAmount;
     state = List.from(items);
+    _persist();
   }
 
   double get total => grandTotal;

@@ -24,6 +24,45 @@ final deviceRoleProvider = StateProvider<DeviceRole>((ref) => DeviceRole.pos);
 
 enum DeviceRole { pos, kitchen }
 
+enum RepairPromptReason { unreachable, authFailed }
+
+/// Single gate for the re-pair dialog. Every condition here is deliberately
+/// conservative — any one being false suppresses the prompt entirely:
+///   - kitchen device only (POS never has cashierIpProvider set, so this
+///     would naturally be null there anyway, but the role check makes the
+///     intent explicit rather than relying on that as a side effect)
+///   - pairing info must actually exist (no IP/key = nothing to re-pair)
+///   - must have paired successfully before (never prompt during first-time
+///     setup, when "can't reach POS yet" is the expected starting state)
+///   - "no network at all" is not a pairing problem — the banner already
+///     covers it, and a dialog on top of a plain WiFi drop is just noise
+final repairPromptReasonProvider = Provider<RepairPromptReason?>((ref) {
+  if (ref.watch(deviceRoleProvider) != DeviceRole.kitchen) return null;
+
+  final hasIp = ref.watch(cashierIpProvider) != null;
+  if (!hasIp || !LanClientService.hasPosKey) return null;
+
+  if (!ref.watch(hasEverPairedProvider)) return null;
+
+  if (ref.watch(connectivityStatusProvider) == ConnectivityStatus.none) {
+    return null;
+  }
+
+  // Auth failure is checked first and reported immediately — no threshold,
+  // since a wrong key doesn't get better with more retries.
+  if (ref.watch(pairingIssueProvider) == PairingIssue.authFailed) {
+    return RepairPromptReason.authFailed;
+  }
+
+  // needsRepairProvider is connectivity_service's sustained-failure signal —
+  // ~30s / 6 consecutive TCP probe failures against the paired IP.
+  if (ref.watch(needsRepairProvider)) {
+    return RepairPromptReason.unreachable;
+  }
+
+  return null;
+});
+
 // ── Entry point ────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
@@ -106,6 +145,12 @@ if (existingSession != null) {
   }
 
   if (isKitchen) {
+    final savedKey = prefs.getString('pos_lan_key');
+    if (savedKey != null && savedKey.isNotEmpty) {
+      LanClientService.setPosKey(savedKey);
+    }
+    container.read(hasEverPairedProvider.notifier).state =
+        prefs.getBool('has_paired_pos') ?? false;
     final cachedIp = prefs.getString('cashier_ip');
     if (cachedIp != null && cachedIp.isNotEmpty) {
       container.read(cashierIpProvider.notifier).state = cachedIp;
@@ -149,6 +194,7 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   bool _initialEventSkipped = false;
   bool _isNavigating = false;
+  bool _repairDialogShowing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -248,6 +294,26 @@ class _MyAppState extends ConsumerState<MyApp> {
       },
     );
 
+    // ── Persist "has this device ever paired successfully" ─────────────────
+    ref.listen<bool>(hasEverPairedProvider, (prev, next) async {
+      if (next && prev != true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_paired_pos', true);
+      }
+    });
+
+    // ── Re-pair prompt ───────────────────────────────────────────────────────
+    // Edge-triggered: only fires on an actual change in reason, so it won't
+    // re-show every rebuild while an outage is ongoing, and won't spam the
+    // user after they dismiss it with "Keep Trying" unless the underlying
+    // issue changes (e.g. unreachable → authFailed) or clears and recurs.
+    ref.listen<RepairPromptReason?>(repairPromptReasonProvider, (previous, next) {
+      if (next == null || previous == next || _repairDialogShowing) return;
+      final ctx = router.navigatorKey.currentContext;
+      if (ctx == null) return;
+      _showRepairPrompt(ctx, next);
+    });
+
     // ── Sync toast ─────────────────────────────────────────────────────────
     ref.listen<DateTime?>(syncCompleteProvider, (prev, next) {
       if (next == null) return;
@@ -284,6 +350,45 @@ class _MyAppState extends ConsumerState<MyApp> {
       initialRoute: widget.initialRoute, // FIX: was 'initialRoute', must be 'widget.initialRoute'
       onGenerateRoute: router.onGenerateRoute,
     );
+  }
+
+  void _showRepairPrompt(BuildContext context, RepairPromptReason reason) {
+    final (title, message) = switch (reason) {
+      RepairPromptReason.authFailed => (
+          'Pairing key rejected',
+          "This device reached the POS, but the saved pairing key doesn't "
+              "match. Orders can't be sent or received until this is fixed.",
+        ),
+      RepairPromptReason.unreachable => (
+          "Can't reach POS",
+          "This device hasn't been able to reach the POS for a while. "
+              "It'll keep retrying in the background — but if the POS's "
+              "network address changed, re-pairing will fix it faster.",
+        ),
+    };
+
+    _repairDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: true, // tapping outside = same as Keep Trying
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Keep Trying'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogCtx).pop();
+              Navigator.of(context).pushNamed('/ip-setup');
+            },
+            child: const Text('Re-pair POS'),
+          ),
+        ],
+      ),
+    ).then((_) => _repairDialogShowing = false);
   }
 }
 

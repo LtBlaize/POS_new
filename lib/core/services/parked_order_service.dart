@@ -9,6 +9,9 @@ import '../models/parked_order.dart';
 import '../providers/cart_provider.dart';
 import 'local_db_service.dart';
 import 'lan_server_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'dart:async';
 
 final parkedOrderServiceProvider =
     Provider<ParkedOrderService>((ref) => ParkedOrderService(ref));
@@ -85,6 +88,13 @@ class ParkedOrderNotifier extends StateNotifier<ParkedOrderState> {
 
     // Broadcast to LAN clients so other POS devices see the parked order
     _broadcastEvent('parked_order_added', parked.toMap());
+
+    // Belt-and-suspenders: park() is the point where these items become
+    // durable elsewhere (parked_orders table), so the crash-recovery draft
+    // for the live cart is redundant past this point. Clear it directly
+    // rather than assuming the caller does — prevents a restart from
+    // silently restoring items that are already sitting in the parked list.
+    unawaited(SharedPreferences.getInstance().then((p) => p.remove('draft_cart_v1')));
 
     debugPrint('[ParkedOrders] Parked: ${parked.label}');
   }

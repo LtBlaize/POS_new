@@ -28,6 +28,11 @@ final isOnlineProvider = StateProvider<bool>((ref) => true);
 /// Only meaningful on the kitchen device.
 final isLanConnectedProvider = StateProvider<bool>((ref) => false);
 
+/// True once LAN has failed enough consecutive probes in a row that the
+/// paired IP is probably stale (DHCP change, POS device swapped, etc.).
+/// Only meaningful on the kitchen device — stays false if no IP is paired.
+final needsRepairProvider = StateProvider<bool>((ref) => false);
+
 /// Combined connectivity state — used by the offline banner.
 final connectivityStatusProvider = Provider<ConnectivityStatus>((ref) {
   final internet = ref.watch(isOnlineProvider);
@@ -84,6 +89,12 @@ class ConnectivityService {
   static const _lanPort = 8080;
   static const _lanTimeout = Duration(seconds: 2);
   static const _lanPollInterval = Duration(seconds: 5);
+
+  // After this many consecutive failed probes against a *configured* IP
+  // (5s interval → ~30s), prompt the user to re-pair rather than retrying
+  // silently forever.
+  static const _lanFailureThreshold = 6;
+  int _consecutiveLanFailures = 0;
 
   ConnectivityService(this._ref);
 
@@ -170,6 +181,21 @@ class ConnectivityService {
     }
 
     _setLan(reachable);
+
+    if (reachable) {
+      _consecutiveLanFailures = 0;
+      if (_ref.read(needsRepairProvider)) {
+        _ref.read(needsRepairProvider.notifier).state = false;
+      }
+    } else {
+      _consecutiveLanFailures++;
+      if (_consecutiveLanFailures >= _lanFailureThreshold &&
+          !_ref.read(needsRepairProvider)) {
+        _ref.read(needsRepairProvider.notifier).state = true;
+        debugPrint('[Connectivity] LAN unreachable $_consecutiveLanFailures× — flagging for re-pair');
+      }
+    }
+
     return reachable;
   }
 

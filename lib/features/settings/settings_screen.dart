@@ -16,6 +16,7 @@ import 'widgets/general_settings_section.dart';
 import 'widgets/lan_settings_section.dart';
 import 'widgets/printer_settings_section.dart';
 import 'widgets/staff_settings_section.dart' show StaffSettingsSection, OwnerPinSection;
+import 'widgets/sync_issues_section.dart';
 import 'widgets/table_settings_section.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -102,6 +103,12 @@ class SettingsScreen extends ConsumerWidget {
               if (isOwner) ...[
                 const SizedBox(height: 16),
                 _SectionCard(child: const StaffSettingsSection()),
+              ],
+
+              // ── Sync issues — managers+ only, POS device only ─────────
+              if (isManager) ...[
+                const SizedBox(height: 16),
+                _SectionCard(child: const SyncIssuesSection()),
               ],
 
               // ── Subscription — owners only ────────────────────────────

@@ -29,8 +29,8 @@ final syncQueueServiceProvider = Provider<SyncQueueService>((ref) {
 });
 
 final pendingQueueCountProvider = StateProvider<int>((ref) => 0);
+final failedQueueCountProvider = StateProvider<int>((ref) => 0);
 final isSyncingProvider = StateProvider<bool>((ref) => false);
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const int kMaxRetries = 5;
@@ -52,6 +52,7 @@ class SyncQueueService {
       }
     });
     _refreshCount();
+    _refreshFailedCount();
     // Flush any queued entries that survived the last session
     Future.microtask(() async {
       final isOnline = _ref.read(isOnlineProvider);
@@ -96,28 +97,25 @@ class SyncQueueService {
       final pending = await _local.getPendingQueue();
       debugPrint('[SyncQueue] Flushing ${pending.length} item(s)');
 
-      int synced = 0;
+      // Group entries that must not run concurrently with each other under
+      // one conflict key (same order, same product/variant stock, same
+      // credit customer). Groups run in parallel; entries *within* a group
+      // stay sequential in original queue order, so e.g. insert_order always
+      // lands before that order's update_order_status/process_payment, and
+      // two stock adjustments on the same product never interleave.
+      final groups = <String, List<Map<String, dynamic>>>{};
       for (final entry in pending) {
-        final id = entry['id'] as int;
-        final retries = entry['retries'] as int;
-        if (retries >= kMaxRetries) continue;
-
-        try {
-          if (retries > 0) {
-            final backoffSeconds = 1 << retries; // 2, 4, 8, 16 seconds
-            await Future.delayed(Duration(seconds: backoffSeconds));
-          }
-          await _replay(entry);
-          await _local.dequeue(id);
-          synced++;
-        } catch (e) {
-          debugPrint('[SyncQueue] Entry $id failed: $e');
-          await _local.incrementRetry(id, e.toString());
-        }
+        if ((entry['retries'] as int) >= kMaxRetries) continue;
+        groups.putIfAbsent(_conflictKey(entry), () => []).add(entry);
       }
 
-      // Purge entries that have exhausted all retries
-      await _purgeDeadEntries();
+      final results = await Future.wait(groups.values.map(_flushGroup));
+      final synced = results.fold<int>(0, (a, b) => a + b);
+
+      // Dead-letter entries that have exhausted all retries — kept, not
+      // deleted, so they can be inspected/retried from Settings.
+      await _markDeadEntries();
+      await _refreshFailedCount();
 
       if (synced > 0) {
         _ref.read(syncCompleteProvider.notifier).state = DateTime.now();
@@ -130,16 +128,101 @@ class SyncQueueService {
     }
   }
 
-  Future<void> _purgeDeadEntries() async {
-    final d = await _local.db;
-    final deleted = await d.delete(
-      'sync_queue',
-      where: 'retries >= ?',
-      whereArgs: [kMaxRetries],
-    );
-    if (deleted > 0) {
-      debugPrint('[SyncQueue] Purged $deleted dead entries');
+  /// Key used to decide which entries must stay sequential. Entries sharing
+  /// a key preserve original queue order; entries with different keys may
+  /// run concurrently.
+  String _conflictKey(Map<String, dynamic> entry) {
+    final op = entry['operation'] as String;
+    final recordId = entry['record_id'] as String;
+    switch (op) {
+      case 'insert_order':
+      case 'insert_order_items':
+      case 'update_order_status':
+      case 'process_payment':
+        // recordId is the order id for all four of these.
+        return 'order:$recordId';
+      case 'insert_receipt':
+      case 'void_order_item':
+      case 'void_order':
+      case 'insert_kitchen_ticket':
+        final payload =
+            jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
+        final orderId = payload['order_id'] as String?;
+        return orderId != null ? 'order:$orderId' : 'misc:$recordId';
+      case 'adjust_stock':
+        return 'product:$recordId';
+      case 'adjust_variant_stock':
+        return 'variant:$recordId';
+      case 'record_credit_payment':
+        final payload =
+            jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
+        return 'credit:${payload['customer_id']}';
+      case 'add_staff':
+      case 'update_staff':
+      case 'delete_staff':
+        return 'staff:$recordId';
+      default:
+        return 'misc:$recordId';
     }
+  }
+
+  /// Runs one conflict group's entries sequentially, in queue order.
+  /// Backoff delay applies only within this group — it no longer blocks
+  /// unrelated entries elsewhere in the queue. Returns count synced.
+  Future<int> _flushGroup(List<Map<String, dynamic>> entries) async {
+    int synced = 0;
+    for (final entry in entries) {
+      final id = entry['id'] as int;
+      final retries = entry['retries'] as int;
+      try {
+        if (retries > 0) {
+          final backoffSeconds = 1 << retries; // 2, 4, 8, 16 seconds
+          await Future.delayed(Duration(seconds: backoffSeconds));
+        }
+        await _replay(entry);
+        await _local.dequeue(id);
+        synced++;
+      } catch (e) {
+        debugPrint('[SyncQueue] Entry $id failed: $e');
+        await _local.incrementRetry(id, e.toString());
+        // Stop this group here: later entries for the same order/product
+        // (e.g. a status update after its insert_order just failed) would
+        // almost certainly fail for the same reason — no point burning a
+        // retry attempt on each of them this cycle.
+        break;
+      }
+    }
+    return synced;
+  }
+
+  Future<void> _markDeadEntries() async {
+    final pending = await _local.getPendingQueue();
+    final dead = pending.where((e) => (e['retries'] as int) >= kMaxRetries);
+    for (final entry in dead) {
+      await _local.markQueueDead(entry['id'] as int);
+    }
+    if (dead.isNotEmpty) {
+      debugPrint('[SyncQueue] Dead-lettered ${dead.length} entr${dead.length == 1 ? 'y' : 'ies'}');
+    }
+  }
+
+  /// Re-queues a dead-lettered entry and immediately attempts a flush.
+  /// Call from a Settings "Retry" button.
+  Future<void> retryFailedEntry(int queueId) async {
+    await _local.retryQueueEntry(queueId);
+    await _refreshFailedCount();
+    await _refreshCount();
+    await flushQueue();
+  }
+
+  Future<List<Map<String, dynamic>>> getFailedEntries() =>
+      _local.getFailedQueue();
+
+  /// Permanently removes a dead-lettered entry — for genuinely bad data
+  /// (not just a network blip) that shouldn't keep occupying the list.
+  Future<void> discardFailedEntry(int queueId) async {
+    await _local.dequeue(queueId);
+    await _refreshFailedCount();
   }
 
   // ── Replay dispatcher ───────────────────────────────────────────────────────
@@ -489,5 +572,10 @@ class SyncQueueService {
   Future<void> _refreshCount() async {
     final count = await _local.pendingQueueCount();
     _ref.read(pendingQueueCountProvider.notifier).state = count;
+  }
+
+  Future<void> _refreshFailedCount() async {
+    final count = await _local.failedQueueCount();
+    _ref.read(failedQueueCountProvider.notifier).state = count;
   }
 }

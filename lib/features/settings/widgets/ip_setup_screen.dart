@@ -27,6 +27,7 @@ import '../../../features/auth/auth_provider.dart';
 import '../../../core/providers/lan_orders_notifier.dart';
 import '../../../core/services/lan_server_service.dart';
 import '../../../core/services/lan_client_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class IpSetupScreen extends ConsumerStatefulWidget {
   const IpSetupScreen({super.key});
@@ -41,21 +42,29 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
   bool _probeSuccess = false;
   String? _resolvedIp;
   final _manualController = TextEditingController();
+  final _manualKeyController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  @override
+ @override
   void dispose() {
     _manualController.dispose();
+    _manualKeyController.dispose();
     super.dispose();
   }
 
-  Future<void> _connectToIp(String ip) async {
+  Future<void> _connectToIp(String ip, {String? key}) async {
     setState(() {
       _probing = true;
       _probeSuccess = false;
       _resolvedIp = ip;
       _scanning = false;
     });
+
+    if (key != null && key.isNotEmpty) {
+      LanClientService.setPosKey(key);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pos_lan_key', key);
+    }
 
     final reachable =
         await ref.read(connectivityServiceProvider).probeLan(ip);
@@ -93,7 +102,7 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
     }
   }
 
-  void _onQrScanned(BarcodeCapture capture) {
+  Future<void> _onQrScanned(BarcodeCapture capture) async {
     if (_probing || _probeSuccess) return;
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
@@ -103,16 +112,15 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
         ? '${uri.host}${uri.port != 0 ? ':${uri.port}' : ''}'
         : raw.replaceFirst('pos://', '').split('?').first.trim();
     final key = uri?.queryParameters['key'];
-    if (key != null && key.isNotEmpty) {
-      LanServerService.setPosKey(key);
-      LanClientService.setPosKey(key);
-    }
-    if (_isValidIp(ip)) _connectToIp(ip);
+    if (_isValidIp(ip)) _connectToIp(ip, key: key);
   }
 
   void _submitManual() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    _connectToIp(_manualController.text.trim());
+    _connectToIp(
+      _manualController.text.trim(),
+      key: _manualKeyController.text.trim(),
+    );
   }
 
   bool _isValidIp(String ip) {
@@ -145,6 +153,7 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
               probeSuccess: _probeSuccess,
               resolvedIp: _resolvedIp,
               manualController: _manualController,
+              manualKeyController: _manualKeyController,
               formKey: _formKey,
               onStartScan: () => setState(() => _scanning = true),
               onStopScan: () => setState(() => _scanning = false),
@@ -283,6 +292,83 @@ class _PosQrDisplay extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 20),
+                const Text(
+                  'Pairing key',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.3),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Required for manual pairing — not needed if scanning the QR code',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () {
+                    final key = LanServerService.getPosKey();
+                    Clipboard.setData(ClipboardData(text: key));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Pairing key copied to clipboard'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.key_outlined,
+                            size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            LanServerService.getPosKey(),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 14,
+                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Copy',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -300,6 +386,7 @@ class _KitchenSetupBody extends StatelessWidget {
   final bool probeSuccess;
   final String? resolvedIp;
   final TextEditingController manualController;
+  final TextEditingController manualKeyController;
   final GlobalKey<FormState> formKey;
   final VoidCallback onStartScan;
   final VoidCallback onStopScan;
@@ -313,6 +400,7 @@ class _KitchenSetupBody extends StatelessWidget {
     required this.probeSuccess,
     required this.resolvedIp,
     required this.manualController,
+    required this.manualKeyController,
     required this.formKey,
     required this.onStartScan,
     required this.onStopScan,
@@ -494,50 +582,73 @@ class _KitchenSetupBody extends StatelessWidget {
           const SizedBox(height: 20),
           Form(
             key: formKey,
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: manualController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'POS IP address',
-                      hintText: '192.168.1.x',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: manualController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'POS IP address',
+                          hintText: '192.168.1.x',
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Enter an IP address';
+                          }
+                          final parts = v.trim().split('.');
+                          if (parts.length != 4) return 'Invalid format';
+                          final valid = parts.every((p) {
+                            final n = int.tryParse(p);
+                            return n != null && n >= 0 && n <= 255;
+                          });
+                          return valid ? null : 'Invalid IP address';
+                        },
+                      ),
                     ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Enter an IP address';
-                      }
-                      final parts = v.trim().split('.');
-                      if (parts.length != 4) return 'Invalid format';
-                      final valid = parts.every((p) {
-                        final n = int.tryParse(p);
-                        return n != null && n >= 0 && n <= 255;
-                      });
-                      return valid ? null : 'Invalid IP address';
-                    },
-                  ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: onManualSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('Connect',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: onManualSubmit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Connect',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: manualKeyController,
+                  decoration: InputDecoration(
+                    labelText: 'Pairing key',
+                    hintText: 'Shown below the QR code on the POS screen',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
                   ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Enter the pairing key from the POS screen';
+                    }
+                    return null;
+                  },
                 ),
               ],
             ),

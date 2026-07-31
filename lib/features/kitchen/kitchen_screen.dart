@@ -17,7 +17,6 @@ import '../../core/providers/lan_orders_notifier.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
-import '../../core/services/lan_config_service.dart';
 import '../../core/services/lan_client_service.dart';
 import '../../core/services/lan_status_queue.dart';
 import '../../../main.dart' show deviceRoleProvider, DeviceRole;
@@ -174,7 +173,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
   }
 
   void _connect() {
-    final ip = ref.read(savedPosIpProvider);
+    final ip = ref.read(cashierIpProvider) ?? '';
     if (ip.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

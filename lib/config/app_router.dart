@@ -16,6 +16,7 @@ import '../features/orders/orders_screen.dart';
 import '../features/credits/credits_screen.dart';
 import '../features/auth/role_selection_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/settings/widgets/ip_setup_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 
 // FIX: must be a stable top-level singleton. AppRouter is rebuilt by Riverpod
@@ -107,6 +108,7 @@ class AppRouter {
       '/inventory' => _route(const InventoryScreen()),
       '/settings'  => _route(SettingsScreen(featureManager: fm)),
       '/credits'   => _route(CreditsScreen(featureManager: fm)),
+      '/ip-setup'  => _route(const IpSetupScreen()),
       _            => _pos(fm),
     };
   }

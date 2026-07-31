@@ -119,9 +119,24 @@ class LanServerService {
 
   // ── REST handlers (unchanged) ──────────────────────────────────────────────
 
-  Response _ping(Request req) =>
-      Response.ok(jsonEncode({'status': 'ok', 'ts': DateTime.now().toIso8601String()}),
-          headers: {'content-type': 'application/json'});
+  Response _ping(Request req) {
+    // Same auth check as /orders/pending and the status PATCH — a caller
+    // that can reach this box but doesn't have the right key should get a
+    // distinct 403, not a 200. Previously /ping had no auth at all, so
+    // "Test Connection" could report success even with a wrong/blank key,
+    // and the real failure only surfaced later as an empty kitchen screen.
+    final key = req.headers['x-pos-key'];
+    if (key == null || key != _posKey) {
+      return Response.forbidden(
+        jsonEncode({'error': 'unauthorized'}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    return Response.ok(
+      jsonEncode({'status': 'ok', 'ts': DateTime.now().toIso8601String()}),
+      headers: {'content-type': 'application/json'},
+    );
+  }
 
   Future<Response> _getPendingOrders(Request req) async {
     final key = req.headers['x-pos-key'];

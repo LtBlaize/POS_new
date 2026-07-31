@@ -23,6 +23,7 @@ class OfflineBanner extends ConsumerWidget {
     final status = ref.watch(connectivityStatusProvider);
     final pendingCount = ref.watch(pendingQueueCountProvider);
     final isSyncing = ref.watch(isSyncingProvider);
+    final needsRepair = ref.watch(needsRepairProvider);
 
     if (status == ConnectivityStatus.full && pendingCount == 0) {
       return const SizedBox.shrink();
@@ -65,6 +66,11 @@ class OfflineBanner extends ConsumerWidget {
       color: color,
       icon: icon,
       message: message,
+      // Only offer re-pair once we've given up on the current IP — avoids
+      // flashing a "re-pair?" prompt during a normal few-second blip.
+      onRepair: needsRepair
+          ? () => Navigator.of(context).pushNamed('/ip-setup')
+          : null,
     );
   }
 }
@@ -74,12 +80,14 @@ class _BannerContainer extends StatelessWidget {
   final IconData icon;
   final String message;
   final bool spin;
+  final VoidCallback? onRepair;
 
   const _BannerContainer({
     required this.color,
     required this.icon,
     required this.message,
     this.spin = false,
+    this.onRepair,
   });
 
   @override
@@ -108,6 +116,21 @@ class _BannerContainer extends StatelessWidget {
                   fontWeight: FontWeight.w600),
             ),
           ),
+          if (onRepair != null)
+            TextButton(
+              onPressed: onRepair,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6)),
+              ),
+              child: const Text('Re-pair',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
         ],
       ),
     );
