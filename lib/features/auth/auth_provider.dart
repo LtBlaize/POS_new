@@ -110,12 +110,18 @@ final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 final featureManagerProvider = Provider<FeatureManager>((ref) {
   final business = ref.watch(businessProvider);
   final config   = ref.watch(featureConfigProvider).asData?.value;
-  return FeatureManager(
+  debugPrint('[FM] business=${business?.id} type=${business?.businessType.value} '
+      'plan=${business?.subscriptionPlan.value} trialEndsAt=${business?.trialEndsAt} '
+      'isOnActiveTrial=${business?.isOnActiveTrial}');
+  debugPrint('[FM] config=$config');
+  final fm = FeatureManager(
     business,
     configBarcodeEnabled: config?['enable_barcode_scanner'] as bool? ?? false,
     configKitchenEnabled: config?['enable_kitchen_display']  as bool? ?? false,
     configTablesEnabled:  config?['enable_table_management'] as bool? ?? false,
   );
+  debugPrint('[FM] hasFullAccess=${fm.hasFullAccess} hasFeature(kitchen)=${fm.hasFeature('kitchen')}');
+  return fm;
 });
 
 final authServiceProvider = Provider<AuthService>((ref) {

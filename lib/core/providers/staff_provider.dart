@@ -7,6 +7,7 @@ import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
+import 'app_context_provider.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -17,7 +18,7 @@ final staffListProvider =
     StateNotifierProvider<StaffListNotifier, AsyncValue<List<StaffMember>>>(
         (ref) {
   final client = ref.watch(supabaseClientProvider);
-  final businessId = ref.watch(profileProvider).asData?.value?.businessId;
+  final businessId = ref.watch(activeBusinessIdProvider);
   final local = ref.read(localDbServiceProvider);
   final syncQueue = ref.read(syncQueueServiceProvider);
 
@@ -49,6 +50,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
         _syncQueue = syncQueue,
         _ref = ref,
         super(const AsyncValue.loading()) {
+    debugPrint('[Staff] StaffListNotifier constructed, businessId=$businessId');
     load();
   }
 
@@ -56,8 +58,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   bool get _isOnline => _ref.read(isOnlineProvider);
 
   Future<void> load({bool retrying = false}) async {
+    debugPrint('[Staff] load() called, businessId=$_businessId, retrying=$retrying');
     if (_businessId == null) {
-      state = const AsyncValue.data([]);
+      state = const AsyncValue.loading();
       return;
     }
 
@@ -71,8 +74,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
     if (!_isOnline) return;
 
-    state = const AsyncValue.loading();
+        state = const AsyncValue.loading();
     try {
+      debugPrint('[Staff] Querying Supabase for business_id=$_businessId, isOnline=$_isOnline');
       final rows = await _client
           .from('staff_members')
           .select()
@@ -80,8 +84,12 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           .eq('is_active', true)
           .order('created_at');
 
+      debugPrint('[Staff] Supabase returned ${(rows as List).length} raw rows');
+
       final members =
-          (rows as List).map((r) => StaffMember.fromJson(r)).toList();
+          (rows).map((r) => StaffMember.fromJson(r)).toList();
+
+      debugPrint('[Staff] Parsed ${members.length} StaffMember objects');
 
       await _local.upsertStaff(members);
 
@@ -126,12 +134,17 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
         }
       }
 
+            debugPrint('[Staff] Setting state to AsyncValue.data with ${members.length} members');
       state = AsyncValue.data(members);
     } catch (e, s) {
+      debugPrint('[Staff] FETCH FAILED: $e');
+      debugPrint('[Staff] Stack: $s');
       try {
         final cached = await _local.getStaff(_businessId);
+        debugPrint('[Staff] Falling back to ${cached.length} cached rows');
         state = AsyncValue.data(cached);
-      } catch (_) {
+      } catch (e2) {
+        debugPrint('[Staff] Cache fallback ALSO failed: $e2');
         state = AsyncValue.error(e, s);
       }
     }

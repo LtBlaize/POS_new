@@ -68,9 +68,14 @@ class POSScreen extends ConsumerWidget {
     final activeIndex = ref.watch(_activeIndexProvider);
     final allowedTabs = ref.watch(activeStaffTabsProvider);
     final activeStaff = ref.watch(activeStaffProvider);
+    // Re-read live from the provider instead of trusting the constructor
+    // value — featureManager passed in at route-push time can be stale
+    // if featureConfigProvider (enable_kitchen_display etc.) hadn't
+    // resolved yet when /pos was first navigated to.
+    final fm = ref.watch(featureManagerProvider);
 
     final screens = _buildScreens(
-      featureManager,
+      fm,
       activeStaff?.role ?? StaffRole.cashier,
       allowedTabs,
       layout,
@@ -83,7 +88,7 @@ class POSScreen extends ConsumerWidget {
       body: PinLockOverlay(
         child: switch (layout) {
           _Layout.phonePortrait || _Layout.tabletPortrait => _PortraitShell(
-              featureManager: featureManager,
+              featureManager: fm,
               screens: screens,
               activeIndex: safeIndex,
               layout: layout,
@@ -93,7 +98,7 @@ class POSScreen extends ConsumerWidget {
               },
             ),
           _Layout.phoneLandscape || _Layout.tabletLandscape => _LandscapeShell(
-              featureManager: featureManager,
+              featureManager: fm,
               screens: screens,
               activeIndex: safeIndex,
               layout: layout,

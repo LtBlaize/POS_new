@@ -1,9 +1,10 @@
 // lib/config/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/providers/role_permissions_provider.dart';   // ADD
-import '../core/providers/staff_provider.dart';              // ADD
-import '../core/models/staff.dart';                          // ADD
+import '../core/providers/role_permissions_provider.dart';
+import '../core/providers/staff_provider.dart';
+import '../core/providers/admin_provider.dart';               // ADD (Phase 3)
+import '../core/models/staff.dart';
 import '../core/services/feature_manager.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/login_screen.dart';
@@ -18,6 +19,16 @@ import '../features/auth/role_selection_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/settings/widgets/ip_setup_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
+import '../features/admin/admin_placeholder_screen.dart';     // ADD (Phase 3)
+import '../features/admin/admin_shell.dart';                  // ADD (Phase 4)
+import '../features/admin/dashboard/admin_dashboard_screen.dart';  // ADD (Phase 4)
+import '../features/admin/businesses/admin_businesses_screen.dart';
+import '../features/admin/businesses/admin_business_detail_screen.dart';
+import '../features/admin/payments/admin_payments_screen.dart';
+import '../features/admin/plans/admin_plans_screen.dart';
+import '../features/admin/activity/admin_activity_screen.dart';
+import '../features/admin/system/admin_system_screen.dart';
+import '../features/admin/settings/admin_settings_screen.dart';
 
 // FIX: must be a stable top-level singleton. AppRouter is rebuilt by Riverpod
 // every time featureManagerProvider changes (which happens constantly during
@@ -34,14 +45,31 @@ final appRouterProvider = Provider<AppRouter>((ref) {
   return AppRouter(featureManager, ref);   // pass ref
 });
 
+// Admin routes recognized by the router. Every one of these currently maps
+// to a placeholder scaffold (Phase 3) — Phase 4-12 replace them one at a
+// time with real screens without touching this list.
+const _adminRouteTitles = <String, String>{
+  '/admin':               'Admin Dashboard',
+  '/admin/dashboard':     'Admin Dashboard',
+  '/admin/businesses':    'Businesses',
+  '/admin/subscriptions': 'Subscriptions',
+  '/admin/payments':      'Payments',
+  '/admin/plans':         'Plans',
+  '/admin/activity':      'Activity Log',
+  '/admin/system':        'System Health',
+  '/admin/settings':      'Admin Settings',
+};
+const _adminBusinessDetailPrefix = '/admin/businesses/';
+
 class AppRouter {
   final FeatureManager? featureManager;
-  final Ref _ref;                          // ADD
+  final Ref _ref;
   GlobalKey<NavigatorState> get navigatorKey => _appNavigatorKey;
 
-  AppRouter(this.featureManager, this._ref);   // ADD _ref
+  AppRouter(this.featureManager, this._ref);
 
-  // Tab → route mapping for permission checks
+  // Tab → route mapping for permission checks (existing POS routes only —
+  // admin routes are gated separately by _isPlatformAdmin, not staff perms).
   static const _tabForRoute = <String, String>{
     '/pos':       'pos',
     '/orders':    'orders',
@@ -63,6 +91,19 @@ class AppRouter {
     return perms[staff.role.value]?.contains(tab) ?? false;
   }
 
+  /// Returns true if the current session belongs to an active platform
+  /// admin. Parallel to _canAccessTab, but reads isPlatformAdminProvider
+  /// (Phase 2's is_platform_admin() RPC) instead of staff role permissions —
+  /// platform admins are not staff members of any business.
+  bool _isPlatformAdmin() {
+    return _ref.read(isPlatformAdminProvider).value ?? false;
+  }
+
+  bool _isAdminRoute(String name) {
+    return _adminRouteTitles.containsKey(name) ||
+        name.startsWith(_adminBusinessDetailPrefix);
+  }
+
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final name = settings.name;
 
@@ -74,9 +115,58 @@ class AppRouter {
     if (name == '/forgot-password')    return _route(const ForgotPasswordScreen());
 
     // /pending is the dedicated boot-wait route. Always serves _PendingPosScreen
-    // regardless of featureManager state — it will self-navigate to /pos once
-    // featureManagerProvider resolves.
+    // regardless of featureManager state — it will self-navigate to /admin
+    // (Phase 3) or /pos once auth/admin-status/featureManager resolve.
     if (name == '/pending') return _route(const _PendingPosScreen());
+
+    // ── Admin routes ──────────────────────────────────────────────────────────
+    // Checked BEFORE the featureManager-null branch below: platform admins
+    // have no business, so featureManager will legitimately be null for them
+    // forever. Gating on admin status has to happen first or every admin
+    // route falls into the "no featureManager yet" POS-pending branch.
+    if (name != null && _isAdminRoute(name)) {
+      if (!_isPlatformAdmin()) {
+        // Not an admin (or admin check hasn't resolved true yet) — never
+        // expose even a blank admin scaffold to a non-admin session.
+        final user = _ref.read(authStateProvider).value;
+        return user != null ? _route(const _PendingPosScreen()) : _route(const LoginScreen());
+      }
+      // Phase 4: every admin route is now wrapped in AdminShell (sidebar +
+      // topbar persist across navigation) instead of a bare placeholder
+      // scaffold. The placeholder content itself is unchanged — only what
+      // wraps it changed.
+      if (name.startsWith(_adminBusinessDetailPrefix)) {
+        final id = name.substring(_adminBusinessDetailPrefix.length);
+        return _route(AdminShell(
+          currentRoute: name,
+          child: AdminPlaceholderScreen(title: 'Business Detail: $id'),
+        ));
+      }
+            final title = _adminRouteTitles[name] ?? _adminRouteTitles['/admin']!;
+      Widget content;
+      if (name == '/admin' || name == '/admin/dashboard') {
+        content = const AdminDashboardScreen();
+      } else if (name == '/admin/businesses') {
+        content = const AdminBusinessesScreen();
+      } else if (name.startsWith(_adminBusinessDetailPrefix)) {
+        final id = name.substring(_adminBusinessDetailPrefix.length);
+        content = AdminBusinessDetailScreen(businessId: id);
+      } else if (name == '/admin/payments') {
+        content = const AdminPaymentsScreen();
+      } else if (name == '/admin/plans') {
+        content = const AdminPlansScreen();
+      } else if (name == '/admin/activity') {
+        content = const AdminActivityScreen();
+      } else if (name == '/admin/system') {
+        content = const AdminSystemScreen();
+      } else if (name == '/admin/settings') {
+        content = const AdminSettingsScreen();
+      } else {
+        content = AdminPlaceholderScreen(title: title);
+      }
+      
+      return _route(AdminShell(currentRoute: name, child: content));
+    }
 
     if (featureManager == null) {
       final user = _ref.read(authStateProvider).value;
@@ -132,6 +222,37 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Admin check, resolved first ──────────────────────────────────────────
+    // Per the Phase 3 spec: an admin lands on /admin by default, with an
+    // explicit "View as business" affordance elsewhere (Phase 4 shell) rather
+    // than silently falling into the normal POS profile flow below. We wait
+    // for this to settle (not just "isn't true yet") before touching the
+    // profile-based flow, so a slow admin-check can't race a fast profile
+    // fetch and flash /pos before correcting to /admin.
+    //
+    // Tradeoff: this adds the admin-check's round trip to every login, admin
+    // or not — see chat note. Acceptable for now; revisit if boot time becomes
+    // an issue.
+    final adminAsync = ref.watch(isPlatformAdminProvider);
+
+    if (adminAsync.isLoading) {
+      return _pendingScaffold;
+    }
+
+    final isAdmin = adminAsync.value ?? false;
+    if (isAdmin) {
+      if (!_navigated) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _navigated) return;
+          debugPrint('[Pending] platform admin detected → /admin');
+          _navigated = true;
+          Navigator.pushNamedAndRemoveUntil(context, '/admin', (_) => false);
+        });
+      }
+      return _pendingScaffold;
+    }
+
+    // ── Existing POS profile flow (unchanged) ────────────────────────────────
     final profile = ref.watch(profileProvider);
 
     profile.when(
@@ -167,12 +288,11 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
       loading: () {},
     );
 
-    return const Scaffold(
-      backgroundColor: Color(0xFF0F1117),
-      body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
-    );
+    return _pendingScaffold;
   }
 }
 
-  
-
+const _pendingScaffold = Scaffold(
+  backgroundColor: Color(0xFF0F1117),
+  body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+);

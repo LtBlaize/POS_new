@@ -282,10 +282,12 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
     final layout = _pinLayoutOf(context);
     final staffAsync = ref.watch(staffListProvider);
     final staffList = staffAsync.asData?.value ?? [];
+    final staffStillLoading = staffAsync.isLoading && staffList.isEmpty;
     final selected = widget.selectedStaff;
 
     final staffPanel = _StaffPanel(
       staffList: staffList,
+      staffStillLoading: staffStillLoading,
       selected: selected,
       layout: layout,
       onStaffSelected: (s) {
@@ -474,12 +476,14 @@ class _SideBySideLayout extends StatelessWidget {
 
 class _StaffPanel extends StatelessWidget {
   final List<StaffMember> staffList;
+  final bool staffStillLoading;
   final StaffMember? selected;
   final _PinLayout layout;
   final ValueChanged<StaffMember> onStaffSelected;
 
   const _StaffPanel({
     required this.staffList,
+    required this.staffStillLoading,
     required this.selected,
     required this.layout,
     required this.onStaffSelected,
@@ -551,13 +555,19 @@ class _StaffPanel extends StatelessWidget {
               color: const Color(0xFF1A1F35),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              'No staff found.\nPlease contact the owner.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha:0.4),
-                fontSize: 13,
-              ),
-            ),
+            child: staffStillLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    'No staff found.\nPlease contact the owner.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha:0.4),
+                      fontSize: 13,
+                    ),
+                  ),
           )
         else
           // Phone landscape: horizontal scroll row to save vertical space

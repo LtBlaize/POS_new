@@ -178,6 +178,7 @@ class LocalDbService {
         name TEXT NOT NULL,
         role TEXT NOT NULL,
         pin_hash TEXT NOT NULL,
+        pin_salt TEXT,
         is_active INTEGER NOT NULL DEFAULT 1,
         synced_at TEXT NOT NULL
       )
