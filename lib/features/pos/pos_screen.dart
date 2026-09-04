@@ -20,6 +20,7 @@ import 'widgets/cart_panel.dart';
 import 'widgets/category_bar.dart';
 import 'widgets/layout/top_bar.dart';
 import 'widgets/product/product_grid.dart';
+import 'widgets/product/promo_grid.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/close_shift_screen.dart';
 import '../../shared/widgets/app_colors.dart';
@@ -454,7 +455,11 @@ class _POSMainState extends ConsumerState<_POSMain> {
         const TrialBanner(),
         if (widget.featureManager.hasFeature('tables')) const TableSelector(),
         const CategoryBar(),
-        const Expanded(child: ProductGrid()),
+        Expanded(
+          child: ref.watch(posViewModeProvider) == PosViewMode.promos
+              ? const PromoGrid()
+              : const ProductGrid(),
+        ),
       ],
     );
 

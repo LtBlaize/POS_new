@@ -10,6 +10,7 @@ import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/product_variant.dart';
+import '../models/promo.dart';
 
 
 // REPLACE
@@ -119,9 +120,10 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       discountType: type,
       costAtSale: item.costAtSale,
       notes: item.notes,
+      promoComponents: item.promoComponents,
+      promoId: item.promoId,
     );
     state = updated;
-    _persist();
   }
 
   void setItemNotes(String productId, String? notes) {
@@ -137,9 +139,10 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       discountType: item.discountType,
       costAtSale: item.costAtSale,
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
+      promoComponents: item.promoComponents,
+      promoId: item.promoId,
     );
     state = updated;
-    _persist();
   }
 
   double get itemsTotal => state.fold(0, (sum, item) => sum + item.total);
@@ -184,6 +187,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         discountType: current.discountType,
         costAtSale: current.costAtSale,
         notes: current.notes,
+        promoComponents: current.promoComponents,
+        promoId: current.promoId,
       );
       state = updated;
     } else {
@@ -208,6 +213,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         discountType: current.discountType,
         costAtSale: current.costAtSale,
         notes: current.notes,
+        promoComponents: current.promoComponents,
+        promoId: current.promoId,
       );
       state = updated;
     }
@@ -216,6 +223,48 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   void removeProduct(String productId) {
     state = state.where((item) => item.product.id != productId).toList();
+    _persist();
+  }
+
+  /// Adds one unit of [promo] to the cart, expanded into [components] for
+  /// inventory/kitchen/receipt purposes. Live stock sufficiency must already
+  /// have been checked by the caller (POS widget) — this method does not
+  /// re-validate stock, matching how addProduct's own stockCap check only
+  /// covers the simple single-product case.
+  void addPromo(Promo promo, List<PromoComponent> components) {
+    final promoProduct = Product.promo(
+      id: 'promo_${promo.id}',
+      name: promo.name,
+      price: promo.effectivePrice,
+      imageUrl: promo.imageUrl,
+    );
+    final index = state.indexWhere((item) => item.product.id == promoProduct.id);
+    if (index >= 0) {
+      final current = state[index];
+      final updated = List<CartItem>.from(state);
+      updated[index] = CartItem(
+        product: current.product,
+        quantity: current.quantity + 1,
+        discountAmount: current.discountAmount,
+        discountType: current.discountType,
+        costAtSale: current.costAtSale,
+        notes: current.notes,
+        promoComponents: current.promoComponents,
+        promoId: current.promoId,
+      );
+      state = updated;
+    } else {
+      state = [
+        ...state,
+        CartItem(
+          product: promoProduct,
+          quantity: 1,
+          costAtSale: 0, // promo COGS not tracked from components yet — see note in final report
+          promoComponents: components,
+          promoId: promo.id,
+        ),
+      ];
+    }
     _persist();
   }
 

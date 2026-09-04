@@ -5,11 +5,8 @@ import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/widgets/app_colors.dart';
-
-// ── Prefs keys ────────────────────────────────────────────────────────────────
-const _kIs58mm        = 'printer_is_58mm';
-const _kPrinterName   = 'printer_selected_name';
-const _kPrinterUrl    = 'printer_selected_url';
+import '../../../core/services/printer_prefs.dart';
+import '../../../core/services/thermal_print_service.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 final printerSettingsProvider =
@@ -58,22 +55,22 @@ class PrinterSettingsNotifier extends StateNotifier<PrinterSettingsState> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     state = state.copyWith(
-      is58mm: prefs.getBool(_kIs58mm) ?? false,
-      selectedPrinterName: prefs.getString(_kPrinterName),
-      selectedPrinterUrl: prefs.getString(_kPrinterUrl),
+      is58mm: prefs.getBool(PrinterPrefsKeys.is58mm) ?? false,
+      selectedPrinterName: prefs.getString(PrinterPrefsKeys.name),
+      selectedPrinterUrl: prefs.getString(PrinterPrefsKeys.url),
     );
   }
 
   Future<void> setIs58mm(bool value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kIs58mm, value);
+    await prefs.setBool(PrinterPrefsKeys.is58mm, value);
     state = state.copyWith(is58mm: value);
   }
 
   Future<void> selectPrinter(Printer printer) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kPrinterName, printer.name);
-    await prefs.setString(_kPrinterUrl, printer.url.toString());
+    await prefs.setString(PrinterPrefsKeys.name, printer.name);
+    await prefs.setString(PrinterPrefsKeys.url, printer.url.toString());
     state = state.copyWith(
       selectedPrinterName: printer.name,
       selectedPrinterUrl: printer.url.toString(),
@@ -82,8 +79,8 @@ class PrinterSettingsNotifier extends StateNotifier<PrinterSettingsState> {
 
   Future<void> clearPrinter() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kPrinterName);
-    await prefs.remove(_kPrinterUrl);
+    await prefs.remove(PrinterPrefsKeys.name);
+    await prefs.remove(PrinterPrefsKeys.url);
     state = PrinterSettingsState(
       is58mm: state.is58mm,
       availablePrinters: state.availablePrinters,
@@ -124,6 +121,26 @@ class _PrinterSettingsSectionState
     });
   }
 
+  Future<void> _handleTestPrint(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Sending test print…'), duration: Duration(seconds: 2)),
+    );
+    try {
+      await ThermalPrintService.testPrint();
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Test print sent successfully.'),
+        backgroundColor: Colors.green,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(printerSettingsProvider);
@@ -151,6 +168,7 @@ class _PrinterSettingsSectionState
               onClear: () =>
                   ref.read(printerSettingsProvider.notifier).clearPrinter(),
             ),
+            _TestPrintRow(onTestPrint: () => _handleTestPrint(context)),
           ],
         ),
 
@@ -257,6 +275,40 @@ class _PrinterRow extends StatelessWidget {
               child: const Icon(Icons.close_rounded,
                   size: 18, color: AppColors.textSecondary),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Test print row ─────────────────────────────────────────────────────────
+class _TestPrintRow extends StatelessWidget {
+  final VoidCallback onTestPrint;
+  const _TestPrintRow({required this.onTestPrint});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.receipt_long_rounded, size: 18, color: AppColors.primary),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text('Test print',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+          ),
+          OutlinedButton(
+            onPressed: onTestPrint,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Print', style: TextStyle(fontSize: 12)),
+          ),
         ],
       ),
     );

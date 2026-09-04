@@ -262,6 +262,8 @@ class ShiftService {
     double creditGiven = 0;
     double creditsPaid = 0;
 
+    final splitOrderIds = <String>[];
+
     void tally(Map<String, dynamic> o) {
       final status = o['status'] as String? ?? '';
       final paidAt = o['paid_at'];
@@ -269,8 +271,17 @@ class ShiftService {
       if (!isPaid) return;
 
       final amount = (o['total_amount'] as num).toDouble();
-      final method = o['payment_method'] as String? ?? '';
+      final isSplit = (o['is_split_payment'] as bool?) ?? false;
 
+      if (isSplit) {
+        // Defer — real per-method breakdown comes from order_payments,
+        // fetched in one batch below to avoid N+1 queries.
+        splitOrderIds.add(o['id'] as String);
+        totalSales += amount;
+        return;
+      }
+
+      final method = o['payment_method'] as String? ?? '';
       totalSales += amount;
 
       switch (method) {
@@ -288,12 +299,58 @@ class ShiftService {
       }
     }
 
+    Future<void> tallySplitOrders() async {
+      if (splitOrderIds.isEmpty) return;
+      try {
+        final legs = await _supabase
+            .from('order_payments')
+            .select('order_id, method, amount')
+            .inFilter('order_id', splitOrderIds);
+        for (final leg in legs as List) {
+          final amount = (leg['amount'] as num).toDouble();
+          switch (leg['method'] as String) {
+            case 'cash':
+              cashSales += amount;
+            case 'gcash':
+            case 'maya':
+              gcashSales += amount;
+            case 'credit':
+              creditGiven += amount; // shouldn't normally occur in a split leg
+            default:
+              otherSales += amount;
+          }
+        }
+      } catch (_) {
+        // Offline fallback — same table exists locally.
+        final d = await _db.db;
+        final placeholders = List.filled(splitOrderIds.length, '?').join(',');
+        final legs = await d.rawQuery(
+          'SELECT method, amount FROM order_payments WHERE order_id IN ($placeholders)',
+          splitOrderIds,
+        );
+        for (final leg in legs) {
+          final amount = (leg['amount'] as num).toDouble();
+          switch (leg['method'] as String) {
+            case 'cash':
+              cashSales += amount;
+            case 'gcash':
+            case 'maya':
+              gcashSales += amount;
+            case 'credit':
+              creditGiven += amount;
+            default:
+              otherSales += amount;
+          }
+        }
+      }
+    }
+
     try {
       // ── Tally paid orders ──────────────────────────────────────────────────
       // Fetch orders assigned to this staff member
       final assignedOrders = await _supabase
           .from('orders')
-          .select('total_amount, payment_method, status, paid_at')
+          .select('id, total_amount, payment_method, status, paid_at, is_split_payment')
           .eq('business_id', businessId)
           .eq('cashier_id', staffId)
           .gte('created_at', from.toUtc().toIso8601String())
@@ -307,7 +364,7 @@ class ShiftService {
       // accounts that were created before the staff row existed)
       final nullCashierOrders = await _supabase
           .from('orders')
-          .select('total_amount, payment_method, status, paid_at')
+          .select('id, total_amount, payment_method, status, paid_at, is_split_payment')
           .eq('business_id', businessId)
           .isFilter('cashier_id', null)
           .gte('created_at', from.toUtc().toIso8601String())
@@ -346,6 +403,8 @@ class ShiftService {
           creditsPaid += (p['amount'] as num).toDouble();
         }
       } catch (_) {}
+
+      await tallySplitOrders();
     } catch (_) {
       // ── Full offline fallback ──────────────────────────────────────────────
       final d = await _db.db;

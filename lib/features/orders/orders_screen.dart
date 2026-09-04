@@ -393,12 +393,29 @@ class _OrderCard extends ConsumerWidget {
                                       color: AppColors.textSecondary),
                                 ),
                                 // ── Void button ───────────────────
-                                if (canVoid) ...[
+                                // Promo lines can't be safely voided item-
+                                // by-item — no clean way to isolate "this
+                                // cart line" in local storage, and voiding
+                                // one component out of a promo is an
+                                // unresolved product question (see
+                                // orders_screen notes). Void the whole
+                                // order instead.
+                                if (canVoid && !item.isPromo) ...[
                                   const SizedBox(width: 6),
                                   _VoidItemButton(
                                     orderId: order.id,
                                     businessId: businessId,
                                     item: item,
+                                  ),
+                                ] else if (canVoid && item.isPromo) ...[
+                                  const SizedBox(width: 6),
+                                  Tooltip(
+                                    message:
+                                        'Promo items can\'t be voided individually — use "Void Order" below.',
+                                    child: Icon(Icons.lock_outline,
+                                        size: 14,
+                                        color: AppColors.textSecondary
+                                            .withValues(alpha: 0.4)),
                                   ),
                                 ],
                               ],

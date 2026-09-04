@@ -217,12 +217,12 @@ final filteredProductsProvider = Provider<List<Product>>((ref) {
 
   bool isVisible(Product p) {
     if (!p.isAvailable) return false;
-    // For products with variants, show if any active variant has stock
-    // (or if inventory tracking is off)
-    if (p.hasVariants) {
-      if (!p.trackInventory) return true;
-      return p.activeVariants.any((v) => v.stockQuantity > 0);
-    }
+    // A product with variants is always shown as long as the product
+    // itself is available. Per-variant stock only disables that specific
+    // variant chip inside the picker (see VariantPickerDialog) — it must
+    // never hide the whole product from the POS grid. Business rule:
+    // adding a variant must never make the parent product disappear.
+    if (p.hasVariants) return true;
     if (p.trackInventory && p.stockQuantity <= 0) return false;
     return true;
   }

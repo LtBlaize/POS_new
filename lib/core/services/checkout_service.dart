@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
+import '../models/order_payment.dart';
 import '../providers/cart_provider.dart';
 import '../models/cart_item.dart';
 import '../providers/order_provider.dart';
@@ -14,7 +15,7 @@ import '../../features/tables/table_provider.dart';
 import '../../features/settings/settings_provider.dart';
 import 'receipt_service.dart';
 import 'thermal_print_service.dart';
-import '../services/sync_queue_service.dart'; 
+import '../services/sync_queue_service.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -54,6 +55,7 @@ class CheckoutService {
     required PaymentMethod paymentMethod,
     required double tendered,
     required double change,
+    List<PaymentSplitInput>? splitPayments,
     required double subtotal,
     required List<CartItem> items,
     required double discountAmount,
@@ -61,15 +63,21 @@ class CheckoutService {
     String? referenceNumber,
     String? tableNumber,
     String? roomName,
+    double splitChangeAmount = 0,
   }) async {
-    final businessId = _ref.read(activeBusinessIdProvider);
+    final effectiveSplitPayments = splitPayments ?? const <PaymentSplitInput>[];
+    final isSplit = effectiveSplitPayments.isNotEmpty;    final businessId = _ref.read(activeBusinessIdProvider);
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
     final profile = _ref.read(profileProvider).asData?.value;
 
-    // Validate reference number for non-cash, non-credit payments
+    // Validate reference number for non-cash, non-credit payments.
+    // Split payments carry their own per-leg reference numbers (validated
+    // by the caller before this is invoked), so this check is skipped
+    // entirely when splitPayments is provided.
     if (payNow &&
+        !isSplit &&
         paymentMethod != PaymentMethod.cash &&
         paymentMethod != PaymentMethod.credit &&
         (referenceNumber == null || referenceNumber.trim().isEmpty)) {
@@ -100,6 +108,11 @@ class CheckoutService {
       if (_isOnline) {
         final client = _ref.read(supabaseClientProvider);
         for (final item in items) {
+          if (item.isPromo) {
+            final err = await _checkPromoStockOnline(client, local, businessId, item);
+            if (err != null) return CheckoutResult.error(err);
+            continue;
+          }
           if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
           try {
@@ -133,6 +146,11 @@ class CheckoutService {
       } else {
         final cached = await local.getProducts(businessId);
         for (final item in items) {
+          if (item.isPromo) {
+            final err = _checkPromoStockLocal(cached, item);
+            if (err != null) return CheckoutResult.error(err);
+            continue;
+          }
           if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
           final p =
@@ -222,22 +240,33 @@ class CheckoutService {
     }
 
     // ── Process payment ─────────────────────────────────────────────────────
-    final actualTendered =
-        paymentMethod == PaymentMethod.cash ? tendered : subtotal;
-    final actualChange =
-        paymentMethod == PaymentMethod.cash ? change : 0.0;
+    final actualTendered = isSplit
+        ? effectiveSplitPayments.fold<double>(0, (s, p) => s + p.amount) + splitChangeAmount
+        : (paymentMethod == PaymentMethod.cash ? tendered : subtotal);
+    final actualChange = isSplit
+        ? splitChangeAmount
+        : (paymentMethod == PaymentMethod.cash ? change : 0.0);
     final cleanRef =
         referenceNumber?.trim().isEmpty == true
             ? null
             : referenceNumber?.trim();
 
-    await service.processPayment(
-      orderId: order.id,
-      method: paymentMethod,
-      amountTendered: actualTendered,
-      changeAmount: actualChange,
-      referenceNumber: cleanRef,
-    );
+    if (isSplit) {
+      await service.processSplitPayment(
+        orderId: order.id,
+        businessId: businessId,
+        payments: effectiveSplitPayments,
+        changeAmount: splitChangeAmount,
+      );
+    } else {
+      await service.processPayment(
+        orderId: order.id,
+        method: paymentMethod,
+        amountTendered: actualTendered,
+        changeAmount: actualChange,
+        referenceNumber: cleanRef,
+      );
+    }
 
     if (!hasKitchen) {
       await service.updateStatus(order.id, OrderStatus.completed);
@@ -257,6 +286,7 @@ class CheckoutService {
       amountTendered: actualTendered,
       changeAmount: actualChange,
       referenceNumber: cleanRef,
+      isSplitPayment: isSplit,
     );
 
     await _ref.read(receiptServiceProvider).createReceipt(
@@ -272,8 +302,12 @@ class CheckoutService {
           : 'Thank you for shopping with us!',
     );
 
-    // ✅ NEW: Auto open cash drawer
-    if (paymentMethod == PaymentMethod.cash) {
+    // ✅ NEW: Auto open cash drawer — also opens when a split payment
+    // includes a cash leg, not just when cash is the sole method.
+    final hasCashLeg = isSplit
+        ? effectiveSplitPayments.any((p) => p.method == PaymentMethod.cash)
+        : paymentMethod == PaymentMethod.cash;
+    if (hasCashLeg) {
       try {
         await ThermalPrintService.openCashDrawer();
       } catch (e) {
@@ -310,6 +344,48 @@ class CheckoutService {
         PaymentMethod.cash => 'cash',
         PaymentMethod.credit => 'credit',
       };
+
+  Future<String?> _checkPromoStockOnline(
+      dynamic client, LocalDbService local, String businessId, CartItem item) async {
+    for (final c in item.promoComponents!) {
+      if (!c.trackInventory) continue;
+      final needed = c.quantity * item.quantity;
+      try {
+        final row = await client
+            .from('products')
+            .select('stock_quantity, name')
+            .eq('id', c.productId)
+            .single();
+        final available = row['stock_quantity'] as int? ?? 0;
+        if (needed > available) {
+          return '${row['name']} only has $available in stock '
+              '(this order needs $needed for "${item.product.name}").';
+        }
+      } catch (e) {
+        debugPrint('[Checkout] Promo stock check failed, using local cache: $e');
+        final cached = await local.getProducts(businessId);
+        final p = cached.where((p) => p.id == c.productId).firstOrNull;
+        if (p != null && needed > p.stockQuantity) {
+          return '${p.name} only has ${p.stockQuantity} in stock '
+              '(this order needs $needed for "${item.product.name}").';
+        }
+      }
+    }
+    return null;
+  }
+
+  String? _checkPromoStockLocal(List cached, CartItem item) {
+    for (final c in item.promoComponents!) {
+      if (!c.trackInventory) continue;
+      final needed = c.quantity * item.quantity;
+      final p = cached.where((p) => p.id == c.productId).firstOrNull;
+      if (p != null && needed > p.stockQuantity) {
+        return '${p.name} only has ${p.stockQuantity} in stock '
+            '(this order needs $needed for "${item.product.name}").';
+      }
+    }
+    return null;
+  }
 }
 
 

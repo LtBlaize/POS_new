@@ -6,6 +6,7 @@ import '../../../../core/models/product.dart';
 import '../../../../core/providers/cart_provider.dart';
 import '../../../../core/providers/product_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
+import '../../dialogs/variant_picker_dialog.dart';
 
 const _categoryGradients = <String, List<Color>>{
   'Food': [Color(0xFFFF9966), Color(0xFFFF5E62)],
@@ -64,6 +65,21 @@ class _ProductCardState extends ConsumerState<ProductCard>
     await _controller.reverse();
 
     final liveProduct = _liveProduct(ref);
+
+    // Products with variants must open the picker instead of adding the
+    // base product directly — stock/price are resolved per-variant there.
+    if (liveProduct.hasVariants) {
+      if (!mounted) return;
+      final variant = await VariantPickerDialog.show(context, liveProduct);
+      if (variant == null || !mounted) return; // cancelled
+
+      ref.read(cartProvider.notifier).addProduct(liveProduct, variant: variant);
+
+      setState(() => _added = true);
+      await Future.delayed(const Duration(milliseconds: 900));
+      if (mounted) setState(() => _added = false);
+      return;
+    }
 
     if (liveProduct.trackInventory && liveProduct.stockQuantity <= 0) {
       if (mounted) {

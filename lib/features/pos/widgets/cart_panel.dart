@@ -251,13 +251,35 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.product.name,
-                                        style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
+                                    Row(
+                                      children: [
+                                        if (item.isPromo) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 1),
+                                            margin: const EdgeInsets.only(right: 5),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text('PROMO',
+                                                style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: AppColors.primary)),
+                                          ),
+                                        ],
+                                        Flexible(
+                                          child: Text(item.product.name,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.textPrimary),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                        ),
+                                      ],
+                                    ),
                                     if (item.notes != null &&
                                         item.notes!.isNotEmpty)
                                       Text(item.notes!,
@@ -265,6 +287,16 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                                               fontSize: 11,
                                               color: AppColors.warning,
                                               fontStyle: FontStyle.italic),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis)
+                                    else if (item.isPromo)
+                                      Text(
+                                          item.promoComponents!
+                                              .map((c) => '${c.quantity}\u00d7 ${c.productName}')
+                                              .join(', '),
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis)
                                     else

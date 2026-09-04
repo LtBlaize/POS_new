@@ -69,6 +69,7 @@ class Order {
   final double? amountTendered;
   final double? changeAmount;
   final String? referenceNumber;
+  final bool isSplitPayment;
   final String? notes;
   final DateTime? paidAt;
   final DateTime createdAt;
@@ -93,6 +94,7 @@ class Order {
     this.amountTendered,
     this.changeAmount,
     this.referenceNumber,
+    this.isSplitPayment = false,
     this.notes,
     this.paidAt,
     required this.createdAt,
@@ -118,6 +120,7 @@ class Order {
     double? amountTendered,
     double? changeAmount,
     String? referenceNumber,
+    bool? isSplitPayment,
     String? notes,
     DateTime? paidAt,
     DateTime? createdAt,
@@ -140,6 +143,7 @@ class Order {
       amountTendered: amountTendered ?? this.amountTendered,
       changeAmount: changeAmount ?? this.changeAmount,
       referenceNumber: referenceNumber ?? this.referenceNumber,
+      isSplitPayment: isSplitPayment ?? this.isSplitPayment,
       notes: notes ?? this.notes,
       paidAt: paidAt ?? this.paidAt,
       createdAt: createdAt ?? this.createdAt,
@@ -170,6 +174,7 @@ class Order {
       amountTendered: (map['amount_tendered'] as num?)?.toDouble(),
       changeAmount: (map['change_amount'] as num?)?.toDouble(),
       referenceNumber: map['reference_number'] as String?,
+      isSplitPayment: map['is_split_payment'] as bool? ?? false,
       notes: map['notes'] as String?,
       paidAt: map['paid_at'] != null
           ? DateTime.parse(map['paid_at'] as String)

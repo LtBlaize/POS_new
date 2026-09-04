@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../models/promo.dart';
 import '../models/void_record.dart';
 import '../services/connectivity_service.dart';
 import '../services/local_db_service.dart';
@@ -17,6 +18,7 @@ import '../../features/auth/auth_provider.dart';
 import '../providers/app_context_provider.dart';
 import '../services/event_bus.dart';
 import 'product_provider.dart';
+import '../models/order_payment.dart';
 
 
 // ── Cache invalidation signal ─────────────────────────────────────────────────
@@ -98,25 +100,61 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
           final allItemRows = await client
               .from('order_items')
               .select(
-                  '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
+                  '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen)')
               .inFilter('order_id', uncachedIds);
 
+          final rowsByOrder = <String, List<Map<String, dynamic>>>{};
           for (final item in allItemRows as List) {
-            final orderId = item['order_id'] as String;
-            final pMap =
-                item['products'] as Map<String, dynamic>? ?? {};
-            final product = Product.fromMap({
-              ...pMap,
-              'category': '',
-              'business_id': pMap['business_id'] ?? '',
-            });
-            itemCache
-                .putIfAbsent(orderId, () => [])
-                .add(CartItem(
-                    product: product,
-                    quantity: item['quantity'] as int,
-                    costAtSale: (item['cost_price'] as num?)?.toDouble() ?? 0,
-                    notes: item['notes'] as String?));
+            final row = item as Map<String, dynamic>;
+            rowsByOrder
+                .putIfAbsent(row['order_id'] as String, () => [])
+                .add(row);
+          }
+
+          for (final entry in rowsByOrder.entries) {
+            itemCache[entry.key] = CartItem.groupOrderItemRows<Map<String, dynamic>>(
+              entry.value,
+              promoGroupId: (row) => row['promo_group_id'] as String?,
+              isHeaderRow: (row) => row['product_id'] == null,
+              buildItem: (row) {
+                if (row['product_id'] == null) {
+                  return CartItem(
+                    product: Product.promo(
+                      id: 'promo_${row['promo_id']}',
+                      name: row['product_name'] as String,
+                      price: (row['unit_price'] as num).toDouble(),
+                    ),
+                    quantity: row['quantity'] as int,
+                    costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+                    notes: row['notes'] as String?,
+                    promoId: row['promo_id'] as String?,
+                  );
+                }
+                final pMap = row['products'] as Map<String, dynamic>? ?? {};
+                final product = Product.fromMap({
+                  ...pMap,
+                  'category': '',
+                  'business_id': pMap['business_id'] ?? '',
+                });
+                return CartItem(
+                  product: product,
+                  quantity: row['quantity'] as int,
+                  costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+                  notes: row['notes'] as String?,
+                );
+              },
+              buildComponent: (row) {
+                final pMap = row['products'] as Map<String, dynamic>? ?? {};
+                return PromoComponent(
+                  promoId: row['promo_id'] as String? ?? '',
+                  productId: row['product_id'] as String,
+                  productName: row['product_name'] as String,
+                  quantity: row['quantity'] as int,
+                  trackInventory: pMap['track_inventory'] as bool? ?? false,
+                  sendToKitchen: pMap['send_to_kitchen'] as bool? ?? true,
+                );
+              },
+            );
           }
         }
 
@@ -257,17 +295,7 @@ class OrderService {
     final orderId = orderRow['id'] as String;
 
     final orderItems = items
-        .map((item) => {
-              'order_id': orderId,
-              'product_id': item.product.id,
-              'product_name': item.product.name,
-              'unit_price': item.product.price,
-              'cost_price': item.costAtSale,
-              'quantity': item.quantity,
-              'subtotal': item.total,
-              'cost_at_sale': _effectiveCost(item),
-              'notes': item.notes,
-            })
+        .expand((item) => _buildOnlineRows(orderId, item))
         .toList();
 
     await _client.from('order_items').insert(orderItems);
@@ -327,16 +355,7 @@ class OrderService {
     await _local.insertOfflineOrder(order);
 
     final itemPayloads = items
-        .map((i) => {
-              'order_id': offlineId,
-              'product_id': i.product.id,
-              'product_name': i.product.name,
-              'unit_price': i.effectivePrice,
-              'quantity': i.quantity,
-              'subtotal': i.total,
-              'cost_at_sale': _effectiveCost(i),
-              'notes': i.notes,
-            })
+        .expand((i) => _buildOfflineRows(i))
         .toList();
 
     await _syncQueue.enqueue(
@@ -454,6 +473,107 @@ class OrderService {
       recordId: orderId,
       payload: payload,
     );
+  }
+
+    // ── Process a SPLIT payment (Task 3) ────────────────────────────────────────
+  //
+  // Records N payment legs against one order. Does not replace
+  // processPayment — a normal single-method checkout still calls that
+  // unchanged. orders.payment_method/amount_tendered/change_amount are kept
+  // populated with the dominant leg for backward compatibility with any
+  // code reading those columns directly; order_payments is the real
+  // breakdown and is_split_payment marks the order as one to look up.
+  Future<List<OrderPayment>> processSplitPayment({
+    required String orderId,
+    required String businessId,
+    required List<PaymentSplitInput> payments,
+    double changeAmount = 0,
+  }) async {
+    assert(payments.isNotEmpty, 'processSplitPayment requires at least one payment leg');
+
+    final now = DateTime.now();
+    final primary = payments.reduce((a, b) => b.amount > a.amount ? b : a);
+    final cashTendered =
+        payments.where((p) => p.method == PaymentMethod.cash).fold(0.0, (s, p) => s + p.amount);
+
+    // Order total isn't passed in here — caller (CheckoutService) already
+    // validated remaining <= 0 before calling this, so any excess is a
+    // genuine cash overpayment/change, not a data error.
+    final orderPayments = payments
+        .map((p) => OrderPayment(
+              id: const Uuid().v4(),
+              orderId: orderId,
+              businessId: businessId,
+              method: p.method,
+              amount: p.amount,
+              referenceNumber: p.referenceNumber,
+              createdAt: now,
+            ))
+        .toList();
+
+    final rows = orderPayments.map((p) => p.toMap()).toList();
+
+    // Local write first — same pattern as processPayment.
+    await _local.insertOrderPayments(
+      rows,
+      orderId: orderId,
+      primaryMethod: primary.method,
+      amountTendered: cashTendered,
+      changeAmount: changeAmount,
+    );
+
+    if (_isOnline) {
+      try {
+        await _client.from('order_payments').insert(rows);
+        await _client.from('orders').update({
+          'payment_method': primary.method.value,
+          'amount_tendered': cashTendered,
+          'change_amount': changeAmount,
+          'is_split_payment': true,
+          'paid_at': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        }).eq('id', orderId);
+        return orderPayments;
+      } catch (e) {
+        debugPrint('[OrderService] processSplitPayment online failed, queuing: $e');
+      }
+    }
+
+    await _syncQueue.enqueue(
+      operation: 'process_split_payment',
+      tableName: 'order_payments',
+      recordId: orderId,
+      payload: {
+        'order_id': orderId,
+        'business_id': businessId,
+        'payments': rows,
+        'primary_method': primary.method.value,
+        'amount_tendered': cashTendered,
+        'change_amount': changeAmount,
+      },
+    );
+
+    return orderPayments;
+  }
+
+  /// Fetches the payment breakdown for an order — empty list for a normal
+  /// single-payment order (nothing was ever written to order_payments).
+  Future<List<OrderPayment>> getOrderPayments(String orderId) async {
+    if (_isOnline) {
+      try {
+        final rows = await _client
+            .from('order_payments')
+            .select()
+            .eq('order_id', orderId)
+            .order('created_at');
+        return (rows as List)
+            .map((r) => OrderPayment.fromMap(r as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        debugPrint('[OrderService] getOrderPayments online failed, using cache: $e');
+      }
+    }
+    return _local.getOrderPayments(orderId);
   }
 
   // ── Void a single item from an existing order ───────────────────────────────
@@ -663,7 +783,29 @@ class OrderService {
     // 1. Cancel locally
     await _local.markOrderStatus(orderId, OrderStatus.cancelled);
 
-    // 1b. Invalidate item cache for this order.
+    // 1b. Record void rows locally — one row per plain item, or a header
+    // + component rows per promo (_buildVoidRows), so getVoidedItemsForOrder
+    // has something to show and this survives offline regardless of when
+    // (or whether) the Supabase sync below succeeds.
+    final localVoidRows = <Map<String, dynamic>>[];
+    for (final item in items) {
+      for (final row in _buildVoidRows(item)) {
+        final id = const Uuid().v4();
+        localVoidRows.add({
+          'id': id,
+          'order_id': orderId,
+          ...row,
+          'reason': reason,
+          'voided_by_staff_id': voidedByStaffId,
+          'voided_by_staff_name': voidedByStaffName,
+          'voided_at': now.toIso8601String(),
+          'synced': 0,
+        });
+      }
+    }
+    await _local.recordVoidedItems(localVoidRows);
+
+    // 1c. Invalidate item cache for this order.
     invalidateOrderCache(_ref, orderId);
 
     EventBus.instance.emit(AppEvents.orderStatusChanged, {
@@ -675,6 +817,10 @@ class OrderService {
     try {
       final inventoryService = _ref.read(inventoryServiceProvider);
       for (final item in items) {
+        if (item.isPromo) {
+          await _reversePromoComponents(businessId, item, inventoryService);
+          continue;
+        }
         if (!item.product.trackInventory) continue;
         if (item.selectedVariant != null) {
           final freshVariants =
@@ -720,22 +866,16 @@ class OrderService {
           'updated_at': now.toIso8601String(),
         }).eq('id', orderId);
 
-        // Void each item row in Supabase
-        for (final item in items) {
-          final voidId = const Uuid().v4();
+        // Void each item row in Supabase — header (promo money) +
+        // component rows for a promo line, same pattern as order_items.
+        // Reuses the ids already written locally so both sides agree,
+        // and marks each row synced once its insert succeeds.
+        for (final localRow in localVoidRows) {
+          final id = localRow['id'] as String;
           await _client.from('void_order_items').insert({
-            'id': voidId,
-            'order_id': orderId,
-            'product_id': item.product.id,
-            'product_name': item.product.name,
-            'unit_price': item.effectivePrice,
-            'quantity': item.quantity,
-            'subtotal': item.total,
-            'reason': reason,
-            'voided_by_staff_id': voidedByStaffId,
-            'voided_by_staff_name': voidedByStaffName,
-            'voided_at': now.toIso8601String(),
+            ...localRow..remove('synced'),
           });
+          await _local.markVoidSynced(id);
         }
 
         // Void the receipt if one exists
@@ -771,15 +911,7 @@ class OrderService {
         'voided_by_staff_id': voidedByStaffId,
         'voided_by_staff_name': voidedByStaffName,
         'voided_at': now.toIso8601String(),
-        'items': items
-            .map((i) => {
-                  'product_id': i.product.id,
-                  'product_name': i.product.name,
-                  'unit_price': i.effectivePrice,
-                  'quantity': i.quantity,
-                  'subtotal': i.total,
-                })
-            .toList(),
+        'items': localVoidRows,
       },
     );
 
@@ -842,6 +974,153 @@ class OrderService {
     return item.product.costPrice;
   }
 
+  // ── Promo → order_items expansion ─────────────────────────────────────────
+  //
+  // A promo cart line becomes N+1 rows sharing one promo_group_id:
+  //   - one header row (product_id = null, carries the actual money —
+  //     unit_price/subtotal/cost) so revenue isn't double-counted
+  //   - one row per underlying product (product_id = real product, quantity
+  //     = component qty × cart qty, unit_price/subtotal = 0) so inventory
+  //     deduction and future kitchen/receipt grouping have something to key
+  //     off. Supabase order_items has no variant_id column, so a component's
+  //     variant is folded into product_name here.
+
+  /// Row shape for a void record. Mirrors order_items' own header+component
+  /// pattern now that void_order_items has promo_id/promo_group_id and a
+  /// nullable product_id: a promo void is one header row (product_id null,
+  /// carries the real refunded amount) plus one row per real component
+  /// (zero money) for the audit trail — so void_order_items' subtotal sum
+  /// matches the order total again, and "what was voided" is still fully
+  /// itemized.
+  List<Map<String, dynamic>> _buildVoidRows(CartItem item) {
+    if (!item.isPromo) {
+      return [
+        {
+          'product_id': item.product.id,
+          'product_name': item.product.name,
+          'unit_price': item.effectivePrice,
+          'quantity': item.quantity,
+          'subtotal': item.total,
+        }
+      ];
+    }
+    final groupId = const Uuid().v4();
+    return [
+      {
+        'product_id': null,
+        'product_name': item.product.name,
+        'unit_price': item.effectivePrice,
+        'quantity': item.quantity,
+        'subtotal': item.total,
+        'promo_id': item.promoId,
+        'promo_group_id': groupId,
+      },
+      for (final c in item.promoComponents!)
+        {
+          'product_id': c.productId,
+          'product_name':
+              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+          'unit_price': 0,
+          'quantity': c.quantity * item.quantity,
+          'subtotal': 0,
+          'promo_id': item.promoId,
+          'promo_group_id': groupId,
+        },
+    ];
+  }
+
+  List<Map<String, dynamic>> _buildOnlineRows(String orderId, CartItem item) {
+    if (!item.isPromo) {
+      return [
+        {
+          'order_id': orderId,
+          'product_id': item.product.id,
+          'product_name': item.product.name,
+          'unit_price': item.effectivePrice,
+          'cost_price': item.costAtSale,
+          'quantity': item.quantity,
+          'subtotal': item.total,
+          'cost_at_sale': _effectiveCost(item),
+          'notes': item.notes,
+        }
+      ];
+    }
+    final groupId = const Uuid().v4();
+    return [
+      {
+        'order_id': orderId,
+        'product_id': null,
+        'product_name': item.product.name,
+        'unit_price': item.effectivePrice,
+        'cost_price': item.costAtSale,
+        'quantity': item.quantity,
+        'subtotal': item.total,
+        'cost_at_sale': _effectiveCost(item),
+        'notes': item.notes,
+        'promo_id': item.promoId,
+        'promo_group_id': groupId,
+      },
+      for (final c in item.promoComponents!)
+        {
+          'order_id': orderId,
+          'product_id': c.productId,
+          'product_name':
+              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+          'unit_price': 0,
+          'cost_price': 0,
+          'quantity': c.quantity * item.quantity,
+          'subtotal': 0,
+          'cost_at_sale': 0,
+          'notes': null,
+          'promo_id': item.promoId,
+          'promo_group_id': groupId,
+        },
+    ];
+  }
+
+  List<Map<String, dynamic>> _buildOfflineRows(CartItem item) {
+    if (!item.isPromo) {
+      return [
+        {
+          'product_id': item.product.id,
+          'product_name': item.product.name,
+          'unit_price': item.effectivePrice,
+          'quantity': item.quantity,
+          'subtotal': item.total,
+          'cost_at_sale': _effectiveCost(item),
+          'notes': item.notes,
+        }
+      ];
+    }
+    final groupId = const Uuid().v4();
+    return [
+      {
+        'product_id': null,
+        'product_name': item.product.name,
+        'unit_price': item.effectivePrice,
+        'quantity': item.quantity,
+        'subtotal': item.total,
+        'cost_at_sale': _effectiveCost(item),
+        'notes': item.notes,
+        'promo_id': item.promoId,
+        'promo_group_id': groupId,
+      },
+      for (final c in item.promoComponents!)
+        {
+          'product_id': c.productId,
+          'product_name':
+              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+          'unit_price': 0,
+          'quantity': c.quantity * item.quantity,
+          'subtotal': 0,
+          'cost_at_sale': 0,
+          'notes': null,
+          'promo_id': item.promoId,
+          'promo_group_id': groupId,
+        },
+    ];
+  }
+
   // ── Inventory deduction ─────────────────────────────────────────────────────
 
   Future<void> _deductInventory(
@@ -849,6 +1128,10 @@ class OrderService {
     try {
       final inventoryService = _ref.read(inventoryServiceProvider);
       for (final item in items) {
+        if (item.isPromo) {
+          await _deductPromoComponents(businessId, item, inventoryService);
+          continue;
+        }
         if (!item.product.trackInventory) continue;
 
         if (item.selectedVariant != null) {
@@ -884,6 +1167,72 @@ class OrderService {
     } catch (e) {
       debugPrint(
           '[OrderService] Inventory deduction error (non-fatal): $e');
+    }
+  }
+
+  Future<void> _reversePromoComponents(
+      String businessId, CartItem promoItem, dynamic inventoryService) async {
+    for (final c in promoItem.promoComponents!) {
+      if (!c.trackInventory) continue;
+      final totalQty = c.quantity * promoItem.quantity;
+
+      if (c.variantId != null) {
+        final freshVariants = await _local.getVariantsForProduct(c.productId);
+        final freshVariant =
+            freshVariants.where((v) => v.id == c.variantId).firstOrNull;
+        await inventoryService.adjustVariantStock(
+          businessId: businessId,
+          productId: c.productId,
+          variantId: c.variantId!,
+          quantityChange: totalQty,
+          quantityBefore: freshVariant?.stockQuantity ?? 0,
+          action: 'void',
+        );
+      } else {
+        final freshProducts = await _local.getProducts(businessId);
+        final freshProduct =
+            freshProducts.where((p) => p.id == c.productId).firstOrNull;
+        await inventoryService.adjustStock(
+          businessId: businessId,
+          productId: c.productId,
+          quantityChange: totalQty,
+          quantityBefore: freshProduct?.stockQuantity ?? 0,
+          action: 'void',
+        );
+      }
+    }
+  }
+
+  Future<void> _deductPromoComponents(
+      String businessId, CartItem promoItem, dynamic inventoryService) async {
+    for (final c in promoItem.promoComponents!) {
+      if (!c.trackInventory) continue;
+      final totalQty = c.quantity * promoItem.quantity;
+
+      if (c.variantId != null) {
+        final freshVariants = await _local.getVariantsForProduct(c.productId);
+        final freshVariant =
+            freshVariants.where((v) => v.id == c.variantId).firstOrNull;
+        await inventoryService.adjustVariantStock(
+          businessId: businessId,
+          productId: c.productId,
+          variantId: c.variantId!,
+          quantityChange: -totalQty,
+          quantityBefore: freshVariant?.stockQuantity ?? 0,
+          action: 'sale',
+        );
+      } else {
+        final freshProducts = await _local.getProducts(businessId);
+        final freshProduct =
+            freshProducts.where((p) => p.id == c.productId).firstOrNull;
+        await inventoryService.adjustStock(
+          businessId: businessId,
+          productId: c.productId,
+          quantityChange: -totalQty,
+          quantityBefore: freshProduct?.stockQuantity ?? 0,
+          action: 'sale',
+        );
+      }
     }
   }
 }

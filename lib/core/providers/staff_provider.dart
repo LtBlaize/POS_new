@@ -295,10 +295,10 @@ class StaffSessionService {
           'device_id': deviceId,
           'created_at': DateTime.now().toUtc().toIso8601String(),
         },
-        onConflict: 'staff_id', // unique index — replaces other device's row
+        onConflict: 'staff_id',
       );
     } catch (e) {
-      debugPrint('[Session] claimSession error (ignored offline): $e');
+      debugPrint('[SESSION] claim FAILED error=$e');
     }
   }
 
@@ -327,8 +327,9 @@ class StaffSessionService {
     try {
       final rows = await _client
           .from('staff_sessions')
-          .select('device_id')
+          .select('device_id, created_at')
           .eq('staff_id', staffId)
+          .order('created_at', ascending: false)
           .limit(1);
       if (rows.isNotEmpty) {
         final activeDevice = rows.first['device_id'] as String?;
@@ -337,7 +338,7 @@ class StaffSessionService {
         }
       }
     } catch (e) {
-      debugPrint('[Session] poll error (ignored): $e');
+      debugPrint('[SESSION] poll FAILED error=$e');
     }
   }
 

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/product_provider.dart';
+import '../../../core/providers/promo_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 
 const _categoryIcons = <String, IconData>{
@@ -16,6 +17,13 @@ const _categoryIcons = <String, IconData>{
 IconData _iconFor(String category) =>
     _categoryIcons[category] ?? Icons.label_outline_rounded;
 
+enum PosViewMode { products, promos }
+
+/// Toggled by the "Promos" chip in CategoryBar; read by _POSMain to decide
+/// whether to render ProductGrid or PromoGrid. Lives here rather than in
+/// pos_screen.dart since CategoryBar is the only thing that writes to it.
+final posViewModeProvider = StateProvider<PosViewMode>((ref) => PosViewMode.products);
+
 class CategoryBar extends ConsumerWidget {
   const CategoryBar({super.key});
 
@@ -23,6 +31,8 @@ class CategoryBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categoriesAsync = ref.watch(categoryListProvider); // FutureProvider now
     final selected = ref.watch(selectedCategoryProvider);
+    final viewMode = ref.watch(posViewModeProvider);
+    final hasPromos = ref.watch(purchasablePromosProvider).isNotEmpty;
 
     // Resolve categories — show empty bar while loading, never block UI
     final categories = categoriesAsync.asData?.value ?? [];
@@ -40,11 +50,12 @@ class CategoryBar extends ConsumerWidget {
           _CategoryChip(
             label: 'All',
             icon: Icons.apps_rounded,
-            isSelected: selected == null,
+            isSelected: viewMode == PosViewMode.products && selected == null,
             onTap: () {
-      ref.read(selectedCategoryProvider.notifier).state = null;
-      ref.read(posSearchQueryProvider.notifier).state = '';
-    },
+              ref.read(posViewModeProvider.notifier).state = PosViewMode.products;
+              ref.read(selectedCategoryProvider.notifier).state = null;
+              ref.read(posSearchQueryProvider.notifier).state = '';
+            },
           ),
           const SizedBox(width: 8),
           ...categories.map((cat) => Padding(
@@ -52,13 +63,24 @@ class CategoryBar extends ConsumerWidget {
                 child: _CategoryChip(
                   label: cat,
                   icon: _iconFor(cat),
-                  isSelected: selected == cat,
+                  isSelected: viewMode == PosViewMode.products && selected == cat,
                   onTap: () {
+                    ref.read(posViewModeProvider.notifier).state = PosViewMode.products;
                     ref.read(selectedCategoryProvider.notifier).state = cat;
                     ref.read(posSearchQueryProvider.notifier).state = '';
                   },
                 ),
               )),
+          if (hasPromos) ...[
+            const SizedBox(width: 8),
+            _CategoryChip(
+              label: 'Promos',
+              icon: Icons.local_offer_rounded,
+              isSelected: viewMode == PosViewMode.promos,
+              onTap: () =>
+                  ref.read(posViewModeProvider.notifier).state = PosViewMode.promos,
+            ),
+          ],
         ],
       ),
     );

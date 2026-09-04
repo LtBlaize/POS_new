@@ -3,7 +3,37 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/order.dart';
+import 'printer_prefs.dart';
+
+/// Thrown when no thermal printer is configured/detected at all.
+class PrinterNotFoundException implements Exception {
+  final String message;
+  PrinterNotFoundException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// Thrown when the printer saved in Settings is no longer detected
+/// (unplugged, powered off, or removed from Windows).
+class PrinterOfflineException implements Exception {
+  final String message;
+  PrinterOfflineException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// Thrown when a print job was sent to the OS but did not succeed.
+class PrintJobFailedException implements Exception {
+  final String message;
+  PrintJobFailedException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// Status of the printer saved in Settings, without sending a print job.
+enum PrinterStatus { notConfigured, offline, available }
 
 /// Handles thermal receipt printing (58mm / 80mm roll) and cash drawer trigger.
 class ThermalPrintService {
@@ -24,6 +54,7 @@ class ThermalPrintService {
     String? businessAddress,
     String? tableNumber,
     String? roomName,
+    Printer? printer,
   }) async {
     final pdf = await _buildBillPdf(
       order: order,
@@ -34,11 +65,23 @@ class ThermalPrintService {
       roomName: roomName,
     );
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf,
-      format: getPaperFormat(is58mm),
-      name: 'Bill-Order#${order.orderNumber}',
-    );
+    final target = await _resolvePrinter(explicit: printer);
+    bool success;
+    try {
+      success = await Printing.directPrintPdf(
+        printer: target,
+        onLayout: (_) async => pdf,
+        format: getPaperFormat(is58mm),
+        name: 'Bill-Order#${order.orderNumber}',
+      );
+    } catch (e) {
+      throw PrintJobFailedException('Failed to print bill to "${target.name}": $e');
+    }
+    if (!success) {
+      throw PrintJobFailedException(
+        'Print job to "${target.name}" did not complete. Check paper, power, and connection.',
+      );
+    }
   }
 
   // ── Print Receipt (after payment — includes tendered/change) ─────────────
@@ -51,6 +94,7 @@ class ThermalPrintService {
     String? businessAddress,
     String? tableNumber,
     String? roomName,
+    Printer? printer,
   }) async {
     final pdf = await _buildReceiptPdf(
       order: order,
@@ -63,37 +107,87 @@ class ThermalPrintService {
       roomName: roomName,
     );
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf,
-      format: getPaperFormat(is58mm),
-      name: 'Receipt-Order#${order.orderNumber}',
-    );
+    final target = await _resolvePrinter(explicit: printer);
+    bool success;
+    try {
+      success = await Printing.directPrintPdf(
+        printer: target,
+        onLayout: (_) async => pdf,
+        format: getPaperFormat(is58mm),
+        name: 'Receipt-Order#${order.orderNumber}',
+      );
+    } catch (e) {
+      throw PrintJobFailedException('Failed to print receipt to "${target.name}": $e');
+    }
+    if (!success) {
+      throw PrintJobFailedException(
+        'Print job to "${target.name}" did not complete. Check paper, power, and connection.',
+      );
+    }
   }
 
   // ── Open Cash Drawer ──────────────────────────────────────────────────────
   /// Sends ESC/POS pulse command through the default printer.
   /// Works on any standard thermal printer with a drawer kick port.
-  static Future<void> openCashDrawer() async {
-    // ESC/POS: ESC p m t1 t2  (pin 2 on, 25×2ms on, 250×2ms off)
+  /// Returns true if the pulse was sent successfully. Doesn't throw — a
+  /// failed drawer kick shouldn't block checkout — but no longer swallows
+  /// the reason silently; callers can check the return value if they want to.
+  static Future<bool> openCashDrawer({Printer? printer}) async {
     final drawerPulse = Uint8List.fromList([
       0x1B, 0x70, 0x00, 0x19, 0xFA, // pin 2
       0x1B, 0x70, 0x01, 0x19, 0xFA, // pin 5 (some printers use this)
     ]);
 
     try {
-      await Printing.directPrintPdf(
-        printer: await _getDefaultPrinter(),
+      final target = await _resolvePrinter(explicit: printer);
+      final success = await Printing.directPrintPdf(
+        printer: target,
         onLayout: (_) async => _wrapRawBytes(drawerPulse),
       );
+      if (!success) {
+        debugPrint('[CashDrawer] Print job to "${target.name}" did not complete.');
+      }
+      return success;
     } catch (e) {
       debugPrint('[CashDrawer] Could not open drawer: $e');
+      return false;
     }
   }
 
-  // ── Get default / first available printer ─────────────────────────────────
-  static Future<Printer> _getDefaultPrinter() async {
+  // ── Resolve which printer to use ────────────────────────────────────────
+  /// Order of preference: explicit arg → saved Settings selection (by URL,
+  /// then name) → best-guess name match → first printer Windows reports.
+  /// This is what the old code was missing: Settings saved a choice that
+  /// nothing here ever read.
+  static Future<Printer> _resolvePrinter({Printer? explicit}) async {
+    if (explicit != null) return explicit;
+
     final printers = await Printing.listPrinters();
-    if (printers.isEmpty) throw Exception('No printers found');
+    if (printers.isEmpty) {
+      throw PrinterNotFoundException(
+        'No printers detected. Make sure the thermal printer is installed '
+        'as a Windows printer (Settings > Printers & scanners) and powered on.',
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(PrinterPrefsKeys.url);
+    final savedName = prefs.getString(PrinterPrefsKeys.name);
+
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      final match = printers.where((p) => p.url.toString() == savedUrl);
+      if (match.isNotEmpty) return match.first;
+    }
+    if (savedName != null && savedName.isNotEmpty) {
+      final match = printers.where((p) => p.name == savedName);
+      if (match.isNotEmpty) return match.first;
+
+      throw PrinterOfflineException(
+        'Selected printer "$savedName" is no longer available. It may be '
+        'disconnected or turned off. Reselect a printer in Settings.',
+      );
+    }
+
     return printers.firstWhere(
       (p) {
         final name = p.name.toLowerCase();
@@ -107,6 +201,23 @@ class ThermalPrintService {
     );
   }
 
+  /// Checks whether the printer saved in Settings is currently detected,
+  /// without sending a print job.
+  static Future<PrinterStatus> checkSelectedPrinterStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(PrinterPrefsKeys.url);
+    final savedName = prefs.getString(PrinterPrefsKeys.name);
+    if ((savedUrl == null || savedUrl.isEmpty) &&
+        (savedName == null || savedName.isEmpty)) {
+      return PrinterStatus.notConfigured;
+    }
+    final printers = await Printing.listPrinters();
+    final stillThere = printers.any(
+      (p) => p.url.toString() == savedUrl || p.name == savedName,
+    );
+    return stillThere ? PrinterStatus.available : PrinterStatus.offline;
+  }
+
   /// Wrap raw ESC/POS bytes in a minimal valid PDF so the printing package
   /// can send it. The bytes are embedded as a raw content stream.
   static Future<Uint8List> _wrapRawBytes(Uint8List bytes) async {
@@ -117,6 +228,59 @@ class ThermalPrintService {
     doc.addPage(pw.Page(
       pageFormat: const PdfPageFormat(1, 1),
       build: (_) => pw.Container(),
+    ));
+    return doc.save();
+  }
+
+  // ── Test Print ────────────────────────────────────────────────────────────
+  static Future<void> testPrint({Printer? printer}) async {
+    final target = await _resolvePrinter(explicit: printer);
+    final pdf = await _buildTestPrintPdf(target);
+    bool success;
+    try {
+      success = await Printing.directPrintPdf(
+        printer: target,
+        onLayout: (_) async => pdf,
+        format: _paperWidth80mm,
+        name: 'POS-Test-Print',
+      );
+    } catch (e) {
+      throw PrintJobFailedException('Test print to "${target.name}" failed: $e');
+    }
+    if (!success) {
+      throw PrintJobFailedException('Test print to "${target.name}" did not complete.');
+    }
+  }
+
+  static Future<Uint8List> _buildTestPrintPdf(Printer printer) async {
+    final doc = pw.Document();
+    final font = await PdfGoogleFonts.sourceCodeProRegular();
+    final fontBold = await PdfGoogleFonts.sourceCodeProBold();
+    final url = printer.url.toString();
+    final connectionType = (url.startsWith('lpd://') ||
+            url.startsWith('ipp://') ||
+            url.startsWith('socket://'))
+        ? 'Network'
+        : 'USB / Local';
+
+    doc.addPage(pw.Page(
+      pageFormat: _paperWidth80mm,
+      build: (ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text('POS TEST PRINT', style: pw.TextStyle(font: fontBold, fontSize: 12)),
+          pw.SizedBox(height: 6),
+          _divider(),
+          pw.SizedBox(height: 6),
+          pw.Text('Printer: ${printer.name}', style: pw.TextStyle(font: font, fontSize: 9)),
+          pw.Text('Connection: $connectionType', style: pw.TextStyle(font: font, fontSize: 9)),
+          pw.Text('Status: OK', style: pw.TextStyle(font: fontBold, fontSize: 9)),
+          pw.SizedBox(height: 6),
+          pw.Text(_formatDateTime(DateTime.now()), style: pw.TextStyle(font: font, fontSize: 8)),
+          pw.SizedBox(height: 6),
+          _divider(),
+        ],
+      ),
     ));
     return doc.save();
   }
@@ -173,21 +337,7 @@ class ThermalPrintService {
           // ── Items ──────────────────────────────────────────────────────
           pw.Text('BILL', style: pw.TextStyle(font: fontBold, fontSize: 10)),
           pw.SizedBox(height: 4),
-          ...order.items.map((item) => pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 2),
-            child: pw.Row(
-              children: [
-                pw.Text('${item.quantity}x ',
-                    style: pw.TextStyle(font: fontBold, fontSize: 9)),
-                pw.Expanded(
-                  child: pw.Text(item.product.name,
-                      style: pw.TextStyle(font: font, fontSize: 9)),
-                ),
-                pw.Text('₱${item.total.toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: fontBold, fontSize: 9)),
-              ],
-            ),
-          )),
+          ...order.items.expand((item) => _itemRows(item, font: font, fontBold: fontBold)),
           pw.SizedBox(height: 4),
           _divider(),
           // ── Totals ────────────────────────────────────────────────────
@@ -266,21 +416,7 @@ class ThermalPrintService {
           _divider(),
           pw.SizedBox(height: 4),
           // ── Items ──────────────────────────────────────────────────────
-          ...order.items.map((item) => pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 2),
-            child: pw.Row(
-              children: [
-                pw.Text('${item.quantity}x ',
-                    style: pw.TextStyle(font: fontBold, fontSize: 9)),
-                pw.Expanded(
-                  child: pw.Text(item.product.name,
-                      style: pw.TextStyle(font: font, fontSize: 9)),
-                ),
-                pw.Text('₱${item.total.toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: fontBold, fontSize: 9)),
-              ],
-            ),
-          )),
+          ...order.items.expand((item) => _itemRows(item, font: font, fontBold: fontBold)),
           pw.SizedBox(height: 4),
           _divider(),
           // ── Totals ────────────────────────────────────────────────────
@@ -326,6 +462,71 @@ class ThermalPrintService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Renders one row for a plain item, or a bold header row + indented
+  /// component rows for a promo — same grouping used on-screen (restaurant/
+  /// retail receipt views) and on the kitchen ticket, so a promo prints
+  /// consistently everywhere order contents are shown.
+  static List<pw.Widget> _itemRows(
+    dynamic item, {
+    required pw.Font font,
+    required pw.Font fontBold,
+  }) {
+    if (!item.isPromo) {
+      return [
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 2),
+          child: pw.Row(
+            children: [
+              pw.Text('${item.quantity}x ',
+                  style: pw.TextStyle(font: fontBold, fontSize: 9)),
+              pw.Expanded(
+                child: pw.Text(item.product.name,
+                    style: pw.TextStyle(font: font, fontSize: 9)),
+              ),
+              pw.Text('₱${item.total.toStringAsFixed(2)}',
+                  style: pw.TextStyle(font: fontBold, fontSize: 9)),
+            ],
+          ),
+        ),
+      ];
+    }
+
+    return [
+      pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 2, bottom: 1),
+        child: pw.Row(
+          children: [
+            pw.Text('${item.quantity}x ',
+                style: pw.TextStyle(font: fontBold, fontSize: 9)),
+            pw.Expanded(
+              child: pw.Text(item.product.name,
+                  style: pw.TextStyle(font: fontBold, fontSize: 9)),
+            ),
+            pw.Text('₱${item.total.toStringAsFixed(2)}',
+                style: pw.TextStyle(font: fontBold, fontSize: 9)),
+          ],
+        ),
+      ),
+      for (final c in item.promoComponents!)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 14, bottom: 1),
+          child: pw.Row(
+            children: [
+              pw.Text('${c.quantity}x ',
+                  style: pw.TextStyle(font: font, fontSize: 8)),
+              pw.Expanded(
+                child: pw.Text(
+                  c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+                  style: pw.TextStyle(font: font, fontSize: 8),
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
+  }
+
   static pw.Widget _divider() => pw.Divider(thickness: 0.5, height: 1);
 
   static pw.Widget _totalRow(

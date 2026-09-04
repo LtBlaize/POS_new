@@ -19,6 +19,11 @@
 // v15 — variant_id column on order_items
 // v16 — tip_amount column on orders
 // v17 — local_image_path column on products (local-first product photos)
+// v18 — status column on sync_queue
+// v19 — promo_id/promo_group_id on order_items; promos + promo_items tables
+// v20 — void_order_items: product_id nullable, promo_id/promo_group_id
+//        added (mirrors order_items so a promo void can carry a header
+//        row + component rows, same as a promo sale)
 
 import 'dart:async';
 import 'dart:convert';
@@ -33,6 +38,8 @@ import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/product_variant.dart';
+import '../models/order_payment.dart';
+import '../models/promo.dart';
 import '../models/staff.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -41,7 +48,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 18;
+const _kDbVersion = 21;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -148,6 +155,7 @@ class LocalDbService {
         reference_number TEXT,
         notes TEXT,
         tip_amount REAL NOT NULL DEFAULT 0,
+        is_split_payment INTEGER NOT NULL DEFAULT 0,
         paid_at TEXT,
         created_at TEXT NOT NULL,
         is_offline INTEGER NOT NULL DEFAULT 0,
@@ -167,6 +175,8 @@ class LocalDbService {
         subtotal REAL NOT NULL,
         notes TEXT,
         variant_id TEXT,
+        promo_id TEXT,
+        promo_group_id TEXT,
         FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     ''');
@@ -269,7 +279,7 @@ class LocalDbService {
       CREATE TABLE void_order_items (
         id TEXT PRIMARY KEY,
         order_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
+        product_id TEXT,
         product_name TEXT NOT NULL,
         unit_price REAL NOT NULL,
         quantity INTEGER NOT NULL,
@@ -279,6 +289,8 @@ class LocalDbService {
         voided_by_staff_name TEXT NOT NULL,
         voided_at TEXT NOT NULL,
         synced INTEGER NOT NULL DEFAULT 0,
+        promo_id TEXT,
+        promo_group_id TEXT,
         FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     ''');
@@ -321,7 +333,66 @@ class LocalDbService {
       'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
     );
 
+    // ── v19 tables ────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE promos (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        promo_type TEXT NOT NULL,
+        bundle_price REAL,
+        buy_quantity INTEGER,
+        get_quantity INTEGER,
+        get_discount_percent REAL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        start_date TEXT,
+        end_date TEXT,
+        synced_at TEXT NOT NULL
+      )
+    ''');
+
+    batch.execute('''
+      CREATE TABLE promo_items (
+        id TEXT PRIMARY KEY,
+        promo_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        variant_id TEXT,
+        quantity INTEGER NOT NULL,
+        role TEXT NOT NULL DEFAULT 'bundle',
+        product_name TEXT,
+        variant_name TEXT,
+        product_price REAL,
+        product_track_inventory INTEGER,
+        product_send_to_kitchen INTEGER,
+        FOREIGN KEY (promo_id) REFERENCES promos(id)
+      )
+    ''');
+
+    batch.execute(
+      'CREATE INDEX IF NOT EXISTS idx_promo_items_promo ON promo_items(promo_id)',
+    );
+
     // ── v11 tables ────────────────────────────────────────────────────────────
+
+    batch.execute('''
+      CREATE TABLE order_payments (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        business_id TEXT NOT NULL,
+        method TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reference_number TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (order_id) REFERENCES orders(id)
+      )
+    ''');
+
+    batch.execute(
+      'CREATE INDEX IF NOT EXISTS idx_order_payments_order ON order_payments(order_id)',
+    );
 
     batch.execute('''
       CREATE TABLE low_stock_alerts (
@@ -580,7 +651,129 @@ class LocalDbService {
         debugPrint('[LocalDb] v18: status already exists ($e)');
       }
     }
+
+    if (oldVersion < 19) {
+      try {
+        await db.execute('ALTER TABLE order_items ADD COLUMN promo_id TEXT');
+        await db.execute('ALTER TABLE order_items ADD COLUMN promo_group_id TEXT');
+        debugPrint('[LocalDb] v19: promo_id/promo_group_id added to order_items');
+      } catch (e) {
+        debugPrint('[LocalDb] v19: promo columns already exist ($e)');
+      }
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS promos (
+          id TEXT PRIMARY KEY,
+          business_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          image_url TEXT,
+          promo_type TEXT NOT NULL,
+          bundle_price REAL,
+          buy_quantity INTEGER,
+          get_quantity INTEGER,
+          get_discount_percent REAL,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          start_date TEXT,
+          end_date TEXT,
+          synced_at TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS promo_items (
+          id TEXT PRIMARY KEY,
+          promo_id TEXT NOT NULL,
+          product_id TEXT NOT NULL,
+          variant_id TEXT,
+          quantity INTEGER NOT NULL,
+          role TEXT NOT NULL DEFAULT 'bundle',
+          product_name TEXT,
+          variant_name TEXT,
+          product_price REAL,
+          product_track_inventory INTEGER,
+          product_send_to_kitchen INTEGER,
+          FOREIGN KEY (promo_id) REFERENCES promos(id)
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_promo_items_promo ON promo_items(promo_id)',
+      );
+      debugPrint('[LocalDb] v19: promos/promo_items tables created');
+    }
+
+    if (oldVersion < 21) {
+      try {
+        await db.execute(
+          'ALTER TABLE orders ADD COLUMN is_split_payment INTEGER NOT NULL DEFAULT 0',
+        );
+        debugPrint('[LocalDb] v21: is_split_payment added to orders');
+      } catch (e) {
+        debugPrint('[LocalDb] v21: is_split_payment already exists ($e)');
+      }
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS order_payments (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          business_id TEXT NOT NULL,
+          method TEXT NOT NULL,
+          amount REAL NOT NULL,
+          reference_number TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (order_id) REFERENCES orders(id)
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_order_payments_order ON order_payments(order_id)',
+      );
+      debugPrint('[LocalDb] v21: order_payments table created');
+    }
+
+    if (oldVersion < 20) {
+      // SQLite has no ALTER COLUMN to drop a NOT NULL constraint, so
+      // product_id's constraint change requires a recreate-copy-swap —
+      // same technique as any other structural SQLite migration.
+      try {
+        await db.execute('DROP TABLE IF EXISTS void_order_items_v20tmp');
+        await db.execute('''
+          CREATE TABLE void_order_items_v20tmp (
+            id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL,
+            product_id TEXT,
+            product_name TEXT NOT NULL,
+            unit_price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            subtotal REAL NOT NULL,
+            reason TEXT NOT NULL,
+            voided_by_staff_id TEXT NOT NULL,
+            voided_by_staff_name TEXT NOT NULL,
+            voided_at TEXT NOT NULL,
+            synced INTEGER NOT NULL DEFAULT 0,
+            promo_id TEXT,
+            promo_group_id TEXT,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+          )
+        ''');
+        await db.execute('''
+          INSERT INTO void_order_items_v20tmp
+            (id, order_id, product_id, product_name, unit_price, quantity,
+             subtotal, reason, voided_by_staff_id, voided_by_staff_name,
+             voided_at, synced)
+          SELECT
+            id, order_id, product_id, product_name, unit_price, quantity,
+            subtotal, reason, voided_by_staff_id, voided_by_staff_name,
+            voided_at, synced
+          FROM void_order_items
+        ''');
+        await db.execute('DROP TABLE void_order_items');
+        await db.execute(
+            'ALTER TABLE void_order_items_v20tmp RENAME TO void_order_items');
+        debugPrint('[LocalDb] v20: void_order_items rebuilt with promo columns');
+      } catch (e) {
+        debugPrint('[LocalDb] v20: void_order_items migration error ($e)');
+      }
+    }
   }
+
+
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRODUCTS
@@ -834,6 +1027,132 @@ class LocalDbService {
       });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // PROMOS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Full replace — mirrors upsertVariants' pattern (server is source of
+  /// truth; local cache is read-through only, so a full replace per business
+  /// is simpler and safer than diffing individual promo rows).
+  Future<void> replacePromos(String businessId, List<Promo> promos) =>
+      _write((d) async {
+        final now = DateTime.now().toIso8601String();
+        await d.transaction((txn) async {
+          final existingIds = (await txn.query(
+            'promos',
+            columns: ['id'],
+            where: 'business_id = ?',
+            whereArgs: [businessId],
+          )).map((r) => r['id'] as String).toList();
+
+          if (existingIds.isNotEmpty) {
+            final placeholders = List.filled(existingIds.length, '?').join(',');
+            await txn.delete('promo_items',
+                where: 'promo_id IN ($placeholders)', whereArgs: existingIds);
+            await txn.delete('promos',
+                where: 'business_id = ?', whereArgs: [businessId]);
+          }
+
+          for (final p in promos) {
+            await txn.insert(
+              'promos',
+              {
+                'id': p.id,
+                'business_id': p.businessId,
+                'name': p.name,
+                'description': p.description,
+                'image_url': p.imageUrl,
+                'promo_type': p.promoType.value,
+                'bundle_price': p.bundlePrice,
+                'buy_quantity': p.buyQuantity,
+                'get_quantity': p.getQuantity,
+                'get_discount_percent': p.getDiscountPercent,
+                'is_active': p.isActive ? 1 : 0,
+                'start_date': p.startDate?.toIso8601String(),
+                'end_date': p.endDate?.toIso8601String(),
+                'synced_at': now,
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+            for (final i in p.items) {
+              await txn.insert(
+                'promo_items',
+                {
+                  'id': i.id,
+                  'promo_id': p.id,
+                  'product_id': i.productId,
+                  'variant_id': i.variantId,
+                  'quantity': i.quantity,
+                  'role': i.role.value,
+                  'product_name': i.productName,
+                  'variant_name': i.variantName,
+                  'product_price': i.productPrice,
+                  'product_track_inventory':
+                      i.productTrackInventory == true ? 1 : 0,
+                  'product_send_to_kitchen':
+                      i.productSendToKitchen == true ? 1 : 0,
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          }
+        });
+      });
+
+  Future<List<Promo>> getPromos(String businessId) async {
+    final d = await db;
+    final promoRows = await d.query(
+      'promos',
+      where: 'business_id = ?',
+      whereArgs: [businessId],
+      orderBy: 'name',
+    );
+
+    final itemRows = await d.query(
+      'promo_items',
+      where:
+          'promo_id IN (SELECT id FROM promos WHERE business_id = ?)',
+      whereArgs: [businessId],
+    );
+
+    final itemsByPromo = <String, List<PromoItem>>{};
+    for (final r in itemRows) {
+      final item = PromoItem(
+        id: r['id'] as String,
+        promoId: r['promo_id'] as String,
+        productId: r['product_id'] as String,
+        variantId: r['variant_id'] as String?,
+        quantity: r['quantity'] as int,
+        role: PromoItemRoleX.fromString(r['role'] as String),
+        productName: r['product_name'] as String?,
+        variantName: r['variant_name'] as String?,
+        productPrice: (r['product_price'] as num?)?.toDouble(),
+        productTrackInventory: (r['product_track_inventory'] as int?) == 1,
+        productSendToKitchen: (r['product_send_to_kitchen'] as int?) == 1,
+      );
+      itemsByPromo.putIfAbsent(item.promoId, () => []).add(item);
+    }
+
+    return promoRows.map((row) {
+      final id = row['id'] as String;
+      return Promo.fromMap({
+        'id': id,
+        'business_id': row['business_id'],
+        'name': row['name'],
+        'description': row['description'],
+        'image_url': row['image_url'],
+        'promo_type': row['promo_type'],
+        'bundle_price': row['bundle_price'],
+        'buy_quantity': row['buy_quantity'],
+        'get_quantity': row['get_quantity'],
+        'get_discount_percent': row['get_discount_percent'],
+        'is_active': (row['is_active'] as int) == 1,
+        'start_date': row['start_date'],
+        'end_date': row['end_date'],
+      }, items: itemsByPromo[id] ?? []);
+    }).toList();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // ORDERS
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -870,22 +1189,66 @@ class LocalDbService {
 
       for (int i = 0; i < order.items.length; i++) {
         final item = order.items[i];
+        if (!item.isPromo) {
+          await txn.insert(
+            'order_items',
+            {
+              'id': '${order.id}_${item.product.id}_$i',
+              'order_id': order.id,
+              'product_id': item.product.id,
+              'product_name': item.product.name,
+              'unit_price': item.product.price,
+              'cost_at_sale': item.costAtSale,
+              'quantity': item.quantity,
+              'subtotal': item.total,
+              'notes': item.notes,
+              'variant_id': item.selectedVariant?.id,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          continue;
+        }
+
+        final groupId = '${order.id}_promo_$i';
         await txn.insert(
           'order_items',
           {
-            'id': '${order.id}_${item.product.id}_$i',
+            'id': '${order.id}_${item.product.id}_${i}_hdr',
             'order_id': order.id,
-            'product_id': item.product.id,
+            'product_id': null,
             'product_name': item.product.name,
             'unit_price': item.product.price,
             'cost_at_sale': item.costAtSale,
             'quantity': item.quantity,
             'subtotal': item.total,
             'notes': item.notes,
-            'variant_id': item.selectedVariant?.id,
+            'variant_id': null,
+            'promo_id': item.promoId,
+            'promo_group_id': groupId,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+        for (int j = 0; j < item.promoComponents!.length; j++) {
+          final c = item.promoComponents![j];
+          await txn.insert(
+            'order_items',
+            {
+              'id': '${order.id}_${item.product.id}_${i}_c$j',
+              'order_id': order.id,
+              'product_id': c.productId,
+              'product_name': c.productName,
+              'unit_price': 0,
+              'cost_at_sale': 0,
+              'quantity': c.quantity * item.quantity,
+              'subtotal': 0,
+              'notes': null,
+              'variant_id': c.variantId,
+              'promo_id': item.promoId,
+              'promo_group_id': groupId,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
     });
   }
@@ -952,6 +1315,49 @@ class LocalDbService {
           }
         });
       });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ORDER PAYMENTS (split payments)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Future<void> insertOrderPayments(
+    List<Map<String, dynamic>> rows, {
+    required String orderId,
+    required PaymentMethod primaryMethod,
+    required double amountTendered,
+    required double changeAmount,
+  }) =>
+      _write((d) async {
+        await d.transaction((txn) async {
+          for (final row in rows) {
+            await txn.insert('order_payments', row,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+          await txn.update(
+            'orders',
+            {
+              'payment_method': primaryMethod.value,
+              'amount_tendered': amountTendered,
+              'change_amount': changeAmount,
+              'is_split_payment': 1,
+              'paid_at': DateTime.now().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [orderId],
+          );
+        });
+      });
+
+  Future<List<OrderPayment>> getOrderPayments(String orderId) async {
+    final d = await db;
+    final rows = await d.query(
+      'order_payments',
+      where: 'order_id = ?',
+      whereArgs: [orderId],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(OrderPayment.fromMap).toList();
+  }
 
   Future<void> updateOrderPayment({
     required String orderId,
@@ -1048,29 +1454,56 @@ class LocalDbService {
       where: 'order_id = ?',
       whereArgs: [orderId],
     );
-    return rows.map((r) {
-      final product = Product(
-        id: r['product_id'] as String,
-        businessId: '',
-        name: r['product_name'] as String,
-        price: (r['unit_price'] as num).toDouble(),
-      );
-      final variantId = r['variant_id'] as String?;
-      final selectedVariant = variantId != null
-          ? ProductVariant(
-              id: variantId,
-              productId: r['product_id'] as String,
-              name: '',
-            )
-          : null;
-      return CartItem(
-        product: product,
+    return CartItem.groupOrderItemRows<Map<String, dynamic>>(
+      rows,
+      promoGroupId: (r) => r['promo_group_id'] as String?,
+      isHeaderRow: (r) => r['product_id'] == null,
+      buildItem: (r) {
+        if (r['product_id'] == null) {
+          return CartItem(
+            product: Product.promo(
+              id: 'promo_${r['promo_id']}',
+              name: r['product_name'] as String,
+              price: (r['unit_price'] as num).toDouble(),
+            ),
+            quantity: r['quantity'] as int,
+            costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
+            notes: r['notes'] as String?,
+            promoId: r['promo_id'] as String?,
+          );
+        }
+        final product = Product(
+          id: r['product_id'] as String,
+          businessId: '',
+          name: r['product_name'] as String,
+          price: (r['unit_price'] as num).toDouble(),
+        );
+        final variantId = r['variant_id'] as String?;
+        final selectedVariant = variantId != null
+            ? ProductVariant(
+                id: variantId,
+                productId: r['product_id'] as String,
+                name: '',
+              )
+            : null;
+        return CartItem(
+          product: product,
+          quantity: r['quantity'] as int,
+          costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
+          notes: r['notes'] as String?,
+          selectedVariant: selectedVariant,
+        );
+      },
+      buildComponent: (r) => PromoComponent(
+        promoId: r['promo_id'] as String? ?? '',
+        productId: r['product_id'] as String,
+        variantId: r['variant_id'] as String?,
+        productName: r['product_name'] as String,
         quantity: r['quantity'] as int,
-        costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
-        notes: r['notes'] as String?,
-        selectedVariant: selectedVariant,
-      );
-    }).toList();
+        trackInventory: false, // historical row — not needed for local display
+        sendToKitchen: true,
+      ),
+    );
   }
 
   Order _orderFromRow(Map<String, dynamic> row, List<CartItem> items) =>
@@ -1197,6 +1630,20 @@ class LocalDbService {
             );
           }
         });
+      });
+
+  /// Writes pre-built void_order_items rows in one batch — used by a
+  /// whole-order void (see OrderService.voidOrder), which unlike
+  /// voidOrderItem needs to record N rows (a promo's header + components,
+  /// or one row per plain item) rather than a single row.
+  Future<void> recordVoidedItems(List<Map<String, dynamic>> rows) =>
+      _write((d) async {
+        final batch = d.batch();
+        for (final row in rows) {
+          batch.insert('void_order_items', row,
+              conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await batch.commit(noResult: true);
       });
 
   Future<List<Map<String, dynamic>>> getVoidedItemsForOrder(

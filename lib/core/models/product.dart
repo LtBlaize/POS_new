@@ -153,4 +153,29 @@ class Product {
   }
 
   bool get isCustom => id.startsWith('custom_');
+
+  /// Synthetic product representing one promo/bundle line in the cart.
+  /// trackInventory is always false — deduction for promos is handled
+  /// specially via CartItem.promoComponents, not this product's own stock.
+  factory Product.promo({
+    required String id,
+    required String name,
+    required double price,
+    String? imageUrl,
+  }) {
+    return Product(
+      id: id,
+      businessId: '',
+      name: name,
+      price: price,
+      imageUrl: imageUrl,
+      trackInventory: false,
+      sendToKitchen: false, // the promo header itself never goes to kitchen
+      isAvailable: true,
+      isActive: true,
+      category: 'Promos',
+    );
+  }
+
+  bool get isPromo => id.startsWith('promo_');
 }

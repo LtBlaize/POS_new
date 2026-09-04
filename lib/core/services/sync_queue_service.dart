@@ -139,7 +139,8 @@ class SyncQueueService {
       case 'insert_order_items':
       case 'update_order_status':
       case 'process_payment':
-        // recordId is the order id for all four of these.
+      case 'process_split_payment':
+        // recordId is the order id for all five of these.
         return 'order:$recordId';
       case 'insert_receipt':
       case 'void_order_item':
@@ -255,6 +256,29 @@ class SyncQueueService {
           'change_amount': payload['change_amount'],
           'reference_number': payload['reference_number'],
           'paid_at': payload['paid_at'],
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', recordId);
+
+      case 'process_split_payment':
+        final payments =
+            (payload['payments'] as List).cast<Map<String, dynamic>>();
+        // Idempotency: skip legs already present (checked by id).
+        final existingIds = await _client
+            .from('order_payments')
+            .select('id')
+            .eq('order_id', recordId);
+        final existing =
+            (existingIds as List).map((r) => r['id'] as String).toSet();
+        final toInsert =
+            payments.where((p) => !existing.contains(p['id'])).toList();
+        if (toInsert.isNotEmpty) {
+          await _client.from('order_payments').insert(toInsert);
+        }
+        await _client.from('orders').update({
+          'payment_method': payload['primary_method'],
+          'amount_tendered': payload['amount_tendered'],
+          'change_amount': payload['change_amount'],
+          'is_split_payment': true,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/order.dart';
+import '../../../core/models/order_payment.dart';
 import '../../../core/providers/cart_provider.dart';
 import '../../../core/services/checkout_service.dart';
 import '../../../core/services/feature_manager.dart';
@@ -30,6 +31,70 @@ import '../../../core/services/credit_service.dart';
 
 final _selectedPaymentProvider =
     StateProvider.autoDispose<PaymentMethod>((ref) => PaymentMethod.cash);
+
+// ── Split payment support ─────────────────────────────────────────────────────
+
+/// One row in the split-payment editor. Owns its own controllers so typing
+/// doesn't rebuild the whole dialog on every keystroke via Riverpod state.
+class _SplitLeg {
+  PaymentMethod method;
+  final TextEditingController amountController = TextEditingController();
+  final TextEditingController refController = TextEditingController();
+
+  _SplitLeg(this.method);
+
+  void dispose() {
+    amountController.dispose();
+    refController.dispose();
+  }
+}
+
+class _SplitBreakdown {
+  /// Amount actually applied to the order for each leg, same order as the
+  /// legs list. For a cash leg this may be less than what was typed (the
+  /// rest becomes change); for every other method it equals what was typed.
+  final List<double> appliedAmounts;
+  final double remaining;
+  final double change;
+
+  const _SplitBreakdown({
+    required this.appliedAmounts,
+    required this.remaining,
+    required this.change,
+  });
+}
+
+double _parseAmount(TextEditingController c) =>
+    double.tryParse(c.text.replaceAll(',', '').trim()) ?? 0;
+
+/// Cash legs are treated as "tendered" — only the portion still needed to
+/// cover the order is applied; any excess becomes change. Every other
+/// method is applied in full as typed (no change on non-cash legs).
+_SplitBreakdown _computeSplitBreakdown(List<_SplitLeg> legs, double subtotal) {
+  double nonCashApplied = 0;
+  for (final leg in legs) {
+    if (leg.method != PaymentMethod.cash) {
+      nonCashApplied += _parseAmount(leg.amountController);
+    }
+  }
+  double cashNeedRemaining = (subtotal - nonCashApplied).clamp(0.0, double.infinity);  double totalChange = 0;
+  final applied = <double>[];
+
+  for (final leg in legs) {
+    if (leg.method == PaymentMethod.cash) {
+      final tendered = _parseAmount(leg.amountController);
+      final legApplied = tendered <= cashNeedRemaining ? tendered : cashNeedRemaining;
+      applied.add(legApplied);
+      cashNeedRemaining -= legApplied;
+      totalChange += (tendered - legApplied);
+    } else {
+      applied.add(_parseAmount(leg.amountController));
+    }
+  }
+
+  final totalApplied = applied.fold(0.0, (s, a) => s + a);
+  final remaining = (subtotal - totalApplied).clamp(0.0, double.infinity);  return _SplitBreakdown(appliedAmounts: applied, remaining: remaining, change: totalChange);
+}
 
 // ── CheckoutDialog ────────────────────────────────────────────────────────────
 
@@ -58,6 +123,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   bool _sentToKitchenOnly = false;
   double _savedTendered = 0;
   double _savedChange = 0;
+  List<PaymentSplitInput>? _paymentBreakdown;
+
+  bool _splitMode = false;
+  final List<_SplitLeg> _splitLegs = [];
 
   bool get _isRestaurant =>
       widget.featureManager.hasFeature('kitchen') ||
@@ -79,7 +148,40 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     _refController.removeListener(_rebuild);
     _tenderedController.dispose();
     _refController.dispose();
+    for (final leg in _splitLegs) {
+      leg.dispose();
+    }
     super.dispose();
+  }
+
+  // ── Split payment helpers ────────────────────────────────────────────────
+
+  void _toggleSplitMode(bool value) {
+    setState(() {
+      _splitMode = value;
+      if (value && _splitLegs.isEmpty) {
+        _addSplitLeg(PaymentMethod.cash);
+        _addSplitLeg(PaymentMethod.gcash);
+      }
+    });
+  }
+
+  void _addSplitLeg([PaymentMethod method = PaymentMethod.cash]) {
+    final leg = _SplitLeg(method);
+    leg.amountController.addListener(_rebuild);
+    leg.refController.addListener(_rebuild);
+    setState(() => _splitLegs.add(leg));
+  }
+
+  void _removeSplitLeg(int index) {
+    setState(() {
+      _splitLegs[index].dispose();
+      _splitLegs.removeAt(index);
+    });
+  }
+
+  void _setSplitLegMethod(int index, PaymentMethod method) {
+    setState(() => _splitLegs[index].method = method);
   }
 
   double _computeSubtotal() => ref.read(cartProvider.notifier).grandTotal;
@@ -88,11 +190,25 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       double.tryParse(_tenderedController.text.replaceAll(',', '')) ?? 0;
 
   double _computeChange(double subtotal) =>
-      (_tendered - subtotal).clamp(0, double.infinity);
+      (_tendered - subtotal).clamp(0.0, double.infinity);
 
   bool _computeCanConfirm(double subtotal) {
     final items = ref.read(cartProvider);
     if (items.isEmpty && widget.existingOrderId == null) return false;
+
+    if (_splitMode) {
+      if (_splitLegs.length < 2) return false;
+      for (final leg in _splitLegs) {
+        if (_parseAmount(leg.amountController) <= 0) return false;
+        if (leg.method != PaymentMethod.cash &&
+            leg.refController.text.trim().isEmpty) {
+          return false;
+        }
+      }
+      final breakdown = _computeSplitBreakdown(_splitLegs, subtotal);
+      return breakdown.remaining <= 0.005;
+    }
+
     final method = ref.read(_selectedPaymentProvider);
     if (method == PaymentMethod.cash) {
       if (subtotal == 0) return true;
@@ -103,8 +219,6 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
 
   Future<void> _placeOrder({required bool payNow}) async {
     final subtotal = _computeSubtotal();
-    final tendered = _tendered;
-    final change = _computeChange(subtotal);
     final items = ref.read(cartProvider);
 
     if (items.isEmpty && widget.existingOrderId == null) return;
@@ -113,7 +227,41 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       return;
     }
 
-    final method = ref.read(_selectedPaymentProvider);
+    PaymentMethod method;
+    double tendered;
+    double change;
+    List<PaymentSplitInput>? splitPayments;
+    double splitChangeAmount = 0;
+
+    if (_splitMode && payNow) {
+      final breakdown = _computeSplitBreakdown(_splitLegs, subtotal);
+      splitChangeAmount = breakdown.change;
+      splitPayments = [];
+      for (int i = 0; i < _splitLegs.length; i++) {
+        final applied = breakdown.appliedAmounts[i];
+        if (applied <= 0) continue; // fully offset by another leg's overpayment
+        final leg = _splitLegs[i];
+        splitPayments.add(PaymentSplitInput(
+          method: leg.method,
+          amount: applied,
+          referenceNumber: leg.method == PaymentMethod.cash
+              ? null
+              : leg.refController.text.trim(),
+        ));
+      }
+      // Dominant leg — used for orders.payment_method / receipt display only;
+      // order_payments (written by processSplitPayment) is the real breakdown.
+      final dominant =
+          splitPayments.reduce((a, b) => b.amount > a.amount ? b : a);
+      method = dominant.method;
+      tendered = splitPayments.fold(0.0, (s, p) => s + p.amount) + splitChangeAmount;
+      change = splitChangeAmount;
+    } else {
+      method = ref.read(_selectedPaymentProvider);
+      tendered = _tendered;
+      change = _computeChange(subtotal);
+    }
+
     setState(() => payNow ? _placing = true : _sendingToKitchen = true);
 
     try {
@@ -131,10 +279,14 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             items: items,
             discountAmount: ref.read(cartProvider.notifier).orderDiscountValue,
             tipAmount: ref.read(cartProvider.notifier).tipAmount,
-            referenceNumber: _refController.text.trim().isEmpty
+            referenceNumber: _splitMode
                 ? null
-                : _refController.text.trim(),
+                : (_refController.text.trim().isEmpty
+                    ? null
+                    : _refController.text.trim()),
             tableNumber: tableState.selectedTableName,
+            splitPayments: splitPayments,
+            splitChangeAmount: splitChangeAmount,
           );
 
       if (!mounted) return;
@@ -179,6 +331,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             _sentToKitchenOnly = false;
             _savedTendered = result.tendered;
             _savedChange = result.change;
+            _paymentBreakdown = splitPayments;
             _placing = false;
           });
       }
@@ -234,12 +387,14 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
               showKitchenBanner: widget.existingOrderId == null,
               tableNumber: tableState.selectedTableName,
               roomName: null,
+              paymentBreakdown: _paymentBreakdown,
             )
           : RetailReceiptView(
               order: _completedOrder!,
               tendered: _savedTendered,
               change: _savedChange,
               onDone: () => Navigator.of(context).pop(_completedOrder),
+              paymentBreakdown: _paymentBreakdown,
             );
     }
 
@@ -259,6 +414,12 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       onConfirm: () => _placeOrder(payNow: true),
       onSendToKitchen: () => _placeOrder(payNow: false),
       onCancel: () => Navigator.of(context).pop(),
+      splitMode: _splitMode,
+      splitLegs: _splitLegs,
+      onToggleSplit: _toggleSplitMode,
+      onAddSplitLeg: () => _addSplitLeg(PaymentMethod.gcash),
+      onRemoveSplitLeg: _removeSplitLeg,
+      onSetSplitLegMethod: _setSplitLegMethod,
     );
   }
 }
@@ -281,6 +442,12 @@ class _CheckoutForm extends ConsumerStatefulWidget {
   final VoidCallback onConfirm;
   final VoidCallback onSendToKitchen;
   final VoidCallback onCancel;
+  final bool splitMode;
+  final List<_SplitLeg> splitLegs;
+  final ValueChanged<bool> onToggleSplit;
+  final VoidCallback onAddSplitLeg;
+  final void Function(int) onRemoveSplitLeg;
+  final void Function(int, PaymentMethod) onSetSplitLegMethod;
 
   const _CheckoutForm({
     required this.featureManager,
@@ -298,6 +465,12 @@ class _CheckoutForm extends ConsumerStatefulWidget {
     required this.onConfirm,
     required this.onSendToKitchen,
     required this.onCancel,
+    required this.splitMode,
+    required this.splitLegs,
+    required this.onToggleSplit,
+    required this.onAddSplitLeg,
+    required this.onRemoveSplitLeg,
+    required this.onSetSplitLegMethod,
   });
 
   @override
@@ -435,67 +608,112 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                       _TipSection(isBusy: isBusy),
                       const SizedBox(height: 16),
 
-                      const CheckoutSectionLabel('Payment Method'),
-                      const SizedBox(height: 8),
-                      PaymentMethodRow(
-                        selected: method,
-                        isBusy: isBusy,
-                        onSelect: (m) {
-                          ref
-                              .read(_selectedPaymentProvider.notifier)
-                              .state = m;
-                          widget.refController.clear();
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      if (isCash) ...[
-                        const CheckoutSectionLabel('Amount Tendered'),
-                        const SizedBox(height: 8),
-                        TenderedDisplay(
-                          tendered: widget.tendered,
-                          subtotal: widget.subtotal,
-                          change: widget.change,
-                          onExact: isBusy ? null : _setExact,
-                        ),
-
-                        if (widget.change > 0) ...[
-                          const SizedBox(height: 8),
-                          ChangeBreakdown(change: widget.change),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: CheckoutSectionLabel('Payment Method'),
+                          ),
+                          GestureDetector(
+                            onTap: isBusy
+                                ? null
+                                : () => widget.onToggleSplit(!widget.splitMode),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Split Payment',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: widget.splitMode
+                                          ? CheckoutTheme.mint
+                                          : CheckoutTheme.textMid),
+                                ),
+                                const SizedBox(width: 6),
+                                Switch(
+                                  value: widget.splitMode,
+                                  onChanged:
+                                      isBusy ? null : widget.onToggleSplit,
+                                  activeThumbColor: CheckoutTheme.mint,
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
+                      ),
+                      const SizedBox(height: 8),
 
-                        const SizedBox(height: 10),
-                        QuickAmountRow(
-                          subtotal: widget.subtotal,
+                      if (!widget.splitMode) ...[
+                        PaymentMethodRow(
+                          selected: method,
                           isBusy: isBusy,
-                          onSelect: (v) {
-                            widget.tenderedController.text =
-                                v.toStringAsFixed(2);
-                            HapticFeedback.mediumImpact();
+                          onSelect: (m) {
+                            ref
+                                .read(_selectedPaymentProvider.notifier)
+                                .state = m;
+                            widget.refController.clear();
                           },
                         ),
-                        const SizedBox(height: 10),
-                        Numpad(onTap: isBusy ? null : _numpadTap),
-                        const SizedBox(height: 12),
-                        if (!widget.isRestaurant) ...[
-                          _UtangButton(
+                        const SizedBox(height: 16),
+
+                        if (isCash) ...[
+                          const CheckoutSectionLabel('Amount Tendered'),
+                          const SizedBox(height: 8),
+                          TenderedDisplay(
+                            tendered: widget.tendered,
+                            subtotal: widget.subtotal,
+                            change: widget.change,
+                            onExact: isBusy ? null : _setExact,
+                          ),
+
+                          if (widget.change > 0) ...[
+                            const SizedBox(height: 8),
+                            ChangeBreakdown(change: widget.change),
+                          ],
+
+                          const SizedBox(height: 10),
+                          QuickAmountRow(
+                            subtotal: widget.subtotal,
+                            isBusy: isBusy,
+                            onSelect: (v) {
+                              widget.tenderedController.text =
+                                  v.toStringAsFixed(2);
+                              HapticFeedback.mediumImpact();
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          Numpad(onTap: isBusy ? null : _numpadTap),
+                          const SizedBox(height: 12),
+                          if (!widget.isRestaurant) ...[
+                            _UtangButton(
+                              isBusy: isBusy,
+                              subtotal: widget.subtotal,
+                              existingOrderId: widget.existingOrderId,
+                              featureManager: widget.featureManager,
+                              isRestaurant: widget.isRestaurant,
+                              onDone: widget.onCancel,
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        ],
+
+                        if (!isCash) ...[
+                          ReferenceNumberPanel(
+                            method: method,
+                            controller: widget.refController,
                             isBusy: isBusy,
                             subtotal: widget.subtotal,
-                            existingOrderId: widget.existingOrderId,
-                            featureManager: widget.featureManager,
-                            isRestaurant: widget.isRestaurant,
-                            onDone: widget.onCancel,
                           ),
                           const SizedBox(height: 12),
                         ],
-                      ],
-
-                      if (!isCash) ...[
-                        ReferenceNumberPanel(
-                          method: method,
-                          controller: widget.refController,
-                          isBusy: isBusy,
+                      ] else ...[
+                        _SplitPaymentSection(
                           subtotal: widget.subtotal,
+                          legs: widget.splitLegs,
+                          isBusy: isBusy,
+                          onAddLeg: widget.onAddSplitLeg,
+                          onRemoveLeg: widget.onRemoveSplitLeg,
+                          onSetMethod: widget.onSetSplitLegMethod,
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -512,7 +730,7 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                   return ActionBar(
                     isRestaurant: widget.isRestaurant,
                     existingOrderId: widget.existingOrderId,
-                    isCash: isCash,
+                    isCash: widget.splitMode ? false : isCash,
                     tendered: widget.tendered,
                     canConfirm: widget.canConfirm,
                     placing: widget.placing,
@@ -520,7 +738,7 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                     isBusy: isBusy,
                     onConfirm: widget.onConfirm,
                     onSendToKitchen: widget.onSendToKitchen,
-                    method: method,
+                    method: widget.splitMode ? PaymentMethod.credit : method,
                     currentOrder: widget.existingOrder,
                     tableNumber: selectedTable,
                     businessName: businessName,
@@ -629,8 +847,289 @@ class ChangeBreakdown extends StatelessWidget {
   }
 }
 
-// ── _CheckoutHeader ───────────────────────────────────────────────────────────
+// ── _SplitPaymentSection ──────────────────────────────────────────────────────
 
+class _SplitPaymentSection extends StatelessWidget {
+  final double subtotal;
+  final List<_SplitLeg> legs;
+  final bool isBusy;
+  final VoidCallback onAddLeg;
+  final void Function(int) onRemoveLeg;
+  final void Function(int, PaymentMethod) onSetMethod;
+
+  const _SplitPaymentSection({
+    required this.subtotal,
+    required this.legs,
+    required this.isBusy,
+    required this.onAddLeg,
+    required this.onRemoveLeg,
+    required this.onSetMethod,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final breakdown = _computeSplitBreakdown(legs, subtotal);
+    final isSettled = breakdown.remaining <= 0.005;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < legs.length; i++) ...[
+          _SplitLegRow(
+            leg: legs[i],
+            isBusy: isBusy,
+            canRemove: legs.length > 2,
+            onRemove: () => onRemoveLeg(i),
+            onSetMethod: (m) => onSetMethod(i, m),
+          ),
+          const SizedBox(height: 10),
+        ],
+
+        if (legs.length < 4)
+          GestureDetector(
+            onTap: isBusy ? null : onAddLeg,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: CheckoutTheme.elevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: CheckoutTheme.border),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_rounded,
+                      size: 16, color: CheckoutTheme.textMid),
+                  SizedBox(width: 6),
+                  Text('Add Payment Method',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: CheckoutTheme.textMid)),
+                ],
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 12),
+
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSettled
+                ? CheckoutTheme.mint.withValues(alpha: 0.08)
+                : CheckoutTheme.rose.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSettled
+                  ? CheckoutTheme.mintBorder
+                  : CheckoutTheme.rose.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    isSettled ? 'Fully covered' : 'Remaining',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSettled
+                            ? CheckoutTheme.mint
+                            : CheckoutTheme.rose),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₱${breakdown.remaining.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: isSettled
+                            ? CheckoutTheme.mint
+                            : CheckoutTheme.rose),
+                  ),
+                ],
+              ),
+              if (breakdown.change > 0) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Text(
+                      'Change (cash)',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: CheckoutTheme.textMid,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '₱${breakdown.change.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: CheckoutTheme.mint),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SplitLegRow extends StatelessWidget {
+  final _SplitLeg leg;
+  final bool isBusy;
+  final bool canRemove;
+  final VoidCallback onRemove;
+  final ValueChanged<PaymentMethod> onSetMethod;
+
+  const _SplitLegRow({
+    required this.leg,
+    required this.isBusy,
+    required this.canRemove,
+    required this.onRemove,
+    required this.onSetMethod,
+  });
+
+  String _label(PaymentMethod m) => switch (m) {
+        PaymentMethod.cash => 'Cash',
+        PaymentMethod.gcash => 'GCash',
+        PaymentMethod.maya => 'Maya',
+        PaymentMethod.card => 'Card',
+        PaymentMethod.credit => 'Utang',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final isCash = leg.method == PaymentMethod.cash;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CheckoutTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: CheckoutTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: CheckoutTheme.elevated,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<PaymentMethod>(
+                      value: leg.method,
+                      isDense: true,
+                      isExpanded: true,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: CheckoutTheme.textHigh),
+                      dropdownColor: CheckoutTheme.card,
+                      items: PaymentMethod.values
+                          .where((m) => m != PaymentMethod.credit)
+                          .map((m) => DropdownMenuItem(
+                                value: m,
+                                child: Text(_label(m)),
+                              ))
+                          .toList(),
+                      onChanged: isBusy
+                          ? null
+                          : (m) {
+                              if (m != null) onSetMethod(m);
+                            },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 110,
+                child: TextField(
+                  controller: leg.amountController,
+                  enabled: !isBusy,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: CheckoutTheme.textHigh),
+                  decoration: InputDecoration(
+                    prefixText: '₱',
+                    prefixStyle: const TextStyle(
+                        fontSize: 13, color: CheckoutTheme.textMid),
+                    hintText: '0.00',
+                    hintStyle:
+                        const TextStyle(color: CheckoutTheme.textLow),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 9),
+                    filled: true,
+                    fillColor: CheckoutTheme.elevated,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(9),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              if (canRemove) ...[
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: isBusy ? null : onRemove,
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.close_rounded,
+                        size: 16, color: CheckoutTheme.rose),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (!isCash) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: leg.refController,
+              enabled: !isBusy,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(
+                  fontSize: 12, color: CheckoutTheme.textHigh),
+              decoration: InputDecoration(
+                hintText: '${_label(leg.method)} reference number',
+                hintStyle:
+                    const TextStyle(fontSize: 12, color: CheckoutTheme.textLow),
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                filled: true,
+                fillColor: CheckoutTheme.elevated,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── _CheckoutHeader ───────────────────────────────────────────────────────────
 class _CheckoutHeader extends StatelessWidget {
   final bool isRestaurant;
   final String? tableNumber;

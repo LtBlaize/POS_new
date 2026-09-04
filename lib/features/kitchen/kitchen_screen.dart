@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/order.dart';
 import '../../core/models/cart_item.dart';
 import '../../core/models/product.dart';
+import '../../core/models/promo.dart';
 import '../../core/providers/lan_orders_notifier.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
@@ -98,24 +99,58 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
   }
 
   Order _parseDbOrder(Map<String, dynamic> m) {
-    final rawItems = m['order_items'] as List? ?? [];
-    final items = rawItems.map((i) {
-      final map = i as Map<String, dynamic>;
-      final product = map['products'] as Map<String, dynamic>? ?? {};
-      return CartItem(
-        product: Product(
-          id: product['id'] as String? ?? '',
-          businessId: product['business_id'] as String? ?? '',
-          name: product['name'] as String? ?? map['product_name'] as String? ?? '',
-          price: (product['price'] as num?)?.toDouble() ?? 0.0,
+    final rawItems = (m['order_items'] as List? ?? []).cast<Map<String, dynamic>>();
+
+    final items = CartItem.groupOrderItemRows<Map<String, dynamic>>(
+      rawItems,
+      promoGroupId: (map) => map['promo_group_id'] as String?,
+      isHeaderRow: (map) => map['product_id'] == null,
+      buildItem: (map) {
+        if (map['product_id'] == null) {
+          return CartItem(
+            product: Product.promo(
+              id: 'promo_${map['promo_id']}',
+              name: map['product_name'] as String? ?? 'Promo',
+              price: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
+            ),
+            quantity: map['quantity'] as int? ?? 1,
+            costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
+            notes: map['notes'] as String?,
+            promoId: map['promo_id'] as String?,
+          );
+        }
+        final product = map['products'] as Map<String, dynamic>? ?? {};
+        return CartItem(
+          product: Product(
+            id: product['id'] as String? ?? '',
+            businessId: product['business_id'] as String? ?? '',
+            name: product['name'] as String? ?? map['product_name'] as String? ?? '',
+            price: (product['price'] as num?)?.toDouble() ?? 0.0,
+            sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
+          ),
+          quantity: map['quantity'] as int? ?? 1,
+          costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
+          notes: map['notes'] as String?,
+        );
+      },
+      buildComponent: (map) {
+        final product = map['products'] as Map<String, dynamic>? ?? {};
+        return PromoComponent(
+          promoId: map['promo_id'] as String? ?? '',
+          productId: map['product_id'] as String,
+          productName:
+              product['name'] as String? ?? map['product_name'] as String? ?? '',
+          quantity: map['quantity'] as int? ?? 1,
+          trackInventory: false,
           sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
-        ),
-        quantity: map['quantity'] as int? ?? 1,
-        costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
-        notes: map['notes'] as String?,
-      );
+        );
+      },
+    );
+
+    final kitchenItems = items.where((i) {
+      if (i.isPromo) return i.promoComponents!.any((c) => c.sendToKitchen);
+      return i.product.sendToKitchen;
     }).toList();
-    final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 
     return Order(
       id: m['id'] as String,
@@ -126,7 +161,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       createdAt: DateTime.parse(m['created_at'] as String),
       subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (m['total_amount'] as num?)?.toDouble() ?? 0.0,
-      items: kitchenItems,  // 
+      items: kitchenItems,
     );
   }
 }
@@ -695,53 +730,28 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
           const SizedBox(height: 8),
 
           if (order.items.isNotEmpty)
-            ...order.items.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 20, height: 20,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha:0.1),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${item.quantity}',
-                            style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.product.name,
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textPrimary)),
-                            if (item.selectedVariant != null)
-                              Text(item.selectedVariant!.name,
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.info)),
-                            if (item.notes != null && item.notes!.isNotEmpty)
-                              Text(item.notes!,
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.warning,
-                                      fontStyle: FontStyle.italic)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ))
+            ...order.items.expand((item) {
+              if (item.isPromo) {
+                return item.promoComponents!
+                    .where((c) => c.sendToKitchen)
+                    .map((c) => _kitchenLine(
+                          quantity: c.quantity * item.quantity,
+                          name: c.variantName != null
+                              ? '${c.productName} (${c.variantName})'
+                              : c.productName,
+                          subtitle: item.product.name, // which promo this belongs to
+                        ));
+              }
+              return [
+                _kitchenLine(
+                  quantity: item.quantity,
+                  name: item.product.name,
+                  subtitle: item.selectedVariant?.name,
+                  subtitleColor: AppColors.info,
+                  notes: item.notes,
+                ),
+              ];
+            })
           else
             const Text('Loading items...',
                 style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
@@ -781,6 +791,61 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     if (d.inMinutes < 1) return '< 1 min';
     if (d.inMinutes < 60) return '${d.inMinutes} min';
     return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
+  }
+
+  Widget _kitchenLine({
+    required int quantity,
+    required String name,
+    String? subtitle,
+    Color subtitleColor = AppColors.warning,
+    String? notes,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        children: [
+          Container(
+            width: 20, height: 20,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Center(
+              child: Text(
+                '$quantity',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary),
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textPrimary)),
+                if (subtitle != null)
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: subtitleColor)),
+                if (notes != null && notes.isNotEmpty)
+                  Text(notes,
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.warning,
+                          fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

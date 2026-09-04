@@ -1,8 +1,92 @@
 // lib/features/pos/widgets/restaurant_receipt_view.dart
 import 'package:flutter/material.dart';
 import '../../../../core/models/order.dart';
+import '../../../../core/models/order_payment.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../../../shared/components/receipt_widgets.dart';
+
+String _splitLegLabel(PaymentMethod m) => switch (m) {
+      PaymentMethod.cash => 'Cash',
+      PaymentMethod.gcash => 'GCash',
+      PaymentMethod.maya => 'Maya',
+      PaymentMethod.card => 'Card',
+      PaymentMethod.credit => 'Utang',
+    };
+
+// Renders one line for a plain item, or a header + indented component
+// lines for a promo — same grouping the kitchen ticket uses, so a promo
+// reads consistently across every surface that shows order contents.
+List<Widget> _receiptItemRows(dynamic item) {
+  const dark = RestaurantReceiptView._dark;
+  Widget qtyBadge(int qty, {double size = 24, double fontSize = 11}) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: dark.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Center(
+          child: Text('$qty',
+              style: TextStyle(
+                  fontSize: fontSize, fontWeight: FontWeight.w800, color: dark)),
+        ),
+      );
+
+  if (!item.isPromo) {
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            qtyBadge(item.quantity),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(item.product.name,
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+            ),
+            Text('₱${item.total.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: dark)),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  return [
+    Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Row(
+        children: [
+          qtyBadge(item.quantity),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(item.product.name,
+                style: const TextStyle(fontSize: 13, color: dark, fontWeight: FontWeight.w700)),
+          ),
+          Text('₱${item.total.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: dark)),
+        ],
+      ),
+    ),
+    for (final c in item.promoComponents!)
+      Padding(
+        padding: const EdgeInsets.only(left: 34, bottom: 3),
+        child: Row(
+          children: [
+            Text('${c.quantity}× ',
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            Expanded(
+              child: Text(
+                c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+  ];
+}
 
 class RestaurantReceiptView extends StatelessWidget {
   final Order order;
@@ -12,6 +96,7 @@ class RestaurantReceiptView extends StatelessWidget {
   final bool showKitchenBanner; 
   final String? tableNumber;        // ← add this
   final String? roomName;  // ← add this
+  final List<PaymentSplitInput>? paymentBreakdown;
 
   const RestaurantReceiptView({
     super.key,
@@ -22,14 +107,96 @@ class RestaurantReceiptView extends StatelessWidget {
     this.showKitchenBanner = true, 
     this.tableNumber,             // ← add this
     this.roomName,   // ← default true for new orders
+    this.paymentBreakdown,
   });
 
   static const _dark = Color(0xFF1A1A2E);
   static const _gold = Color(0xFFE8B84B);
 
+  List<Widget> _buildPaymentRows() {
+    final isSplit = order.isSplitPayment && (paymentBreakdown?.isNotEmpty ?? false);
+
+    if (isSplit) {
+      return [
+        for (final leg in paymentBreakdown!)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.payments_outlined,
+                    size: 14, color: AppColors.success),
+                const SizedBox(width: 6),
+                Text(
+                  _splitLegLabel(leg.method),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const Spacer(),
+                Text(
+                  '₱${leg.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+      ];
+    }
+
+    final isCash = order.paymentMethod == PaymentMethod.cash;
+    return [
+      Row(
+        children: [
+          const Icon(Icons.payments_outlined,
+              size: 14, color: AppColors.success),
+          const SizedBox(width: 6),
+          const Text(
+            'Payment',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const Spacer(),
+          Text(
+            paymentLabel(order.paymentMethod),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+      if (isCash) ...[
+        const SizedBox(height: 6),
+        Row(children: [
+          const SizedBox(width: 20),
+          const Text('Tendered',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          const Spacer(),
+          Text(
+            '₱${tendered.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ]),
+        Row(children: [
+          const SizedBox(width: 20),
+          const Text('Change',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          const Spacer(),
+          Text(
+            '₱${change.toStringAsFixed(2)}',
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.success),
+          ),
+        ]),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isCash = order.paymentMethod == PaymentMethod.cash;
     final tableId = order.tableId;
 
     return Dialog(
@@ -160,56 +327,7 @@ class RestaurantReceiptView extends StatelessWidget {
                         ),
                         child: Column(
                           children: order.items
-                              .map((item) => Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            vertical: 4),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 24,
-                                          height: 24,
-                                          decoration: BoxDecoration(
-                                            color: _dark.withValues(alpha:
-                                                0.07),
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    6),
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              '${item.quantity}',
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800,
-                                                  color: _dark),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            item.product.name,
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                color: AppColors
-                                                    .textPrimary,
-                                                fontWeight:
-                                                    FontWeight.w500),
-                                          ),
-                                        ),
-                                        Text(
-                                          '₱${item.total.toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight:
-                                                  FontWeight.w700,
-                                              color: _dark),
-                                        ),
-                                      ],
-                                    ),
-                                  ))
+                              .expand((item) => _receiptItemRows(item))
                               .toList(),
                         ),
                       ),
@@ -298,61 +416,7 @@ class RestaurantReceiptView extends StatelessWidget {
                                 AppColors.success.withValues(alpha:0.2)),
                       ),
                       child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.payments_outlined,
-                                  size: 14, color: AppColors.success),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'Payment',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary),
-                              ),
-                              const Spacer(),
-                              Text(
-                                paymentLabel(order.paymentMethod),
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary),
-                              ),
-                            ],
-                          ),
-                          if (isCash) ...[
-                            const SizedBox(height: 6),
-                            Row(children: [
-                              const SizedBox(width: 20),
-                              const Text('Tendered',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary)),
-                              const Spacer(),
-                              Text(
-                                '₱${tendered.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ]),
-                            Row(children: [
-                              const SizedBox(width: 20),
-                              const Text('Change',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary)),
-                              const Spacer(),
-                              Text(
-                                '₱${change.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.success),
-                              ),
-                            ]),
-                          ],
-                        ],
+                        children: _buildPaymentRows(),
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -1,14 +1,77 @@
 // lib/features/pos/widgets/retail_receipt_view.dart
 import 'package:flutter/material.dart';
 import '../../../../core/models/order.dart';
+import '../../../../core/models/order_payment.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../../../shared/components/receipt_widgets.dart';
+
+String _splitLegLabel(PaymentMethod m) => switch (m) {
+      PaymentMethod.cash => 'Cash',
+      PaymentMethod.gcash => 'GCash',
+      PaymentMethod.maya => 'Maya',
+      PaymentMethod.card => 'Card',
+      PaymentMethod.credit => 'Utang',
+    };
+
+List<Widget> _retailItemRows(dynamic item) {
+  if (!item.isPromo) {
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Text('${item.quantity}×',
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(item.product.name,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+            ),
+            Text('₱${item.total.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  return [
+    Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Row(
+        children: [
+          Text('${item.quantity}×',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(item.product.name,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w700)),
+          ),
+          Text('₱${item.total.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    ),
+    for (final c in item.promoComponents!)
+      Padding(
+        padding: const EdgeInsets.only(left: 20, bottom: 2),
+        child: Text(
+          '${c.quantity}× ${c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName}',
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ),
+  ];
+}
 
 class RetailReceiptView extends StatelessWidget {
   final Order order;
   final double tendered;
   final double change;
   final VoidCallback onDone;
+  final List<PaymentSplitInput>? paymentBreakdown;
 
   const RetailReceiptView({
     super.key,
@@ -16,6 +79,7 @@ class RetailReceiptView extends StatelessWidget {
     required this.tendered,
     required this.change,
     required this.onDone,
+    this.paymentBreakdown,
   });
 
   @override
@@ -76,36 +140,7 @@ class RetailReceiptView extends StatelessWidget {
                 child: Column(
                   children: [
                     if (order.items.isNotEmpty) ...[
-                      ...order.items.map((item) => Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '${item.quantity}×',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    item.product.name,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textPrimary),
-                                  ),
-                                ),
-                                Text(
-                                  '₱${item.total.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          )),
+                      ...order.items.expand((item) => _retailItemRows(item)),
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: DashedDivider(),
@@ -140,7 +175,23 @@ class RetailReceiptView extends StatelessWidget {
                       bold: true,
                       large: true,
                     ),
-                    if (isCash) ...[
+                    if (order.isSplitPayment &&
+                        (paymentBreakdown?.isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 8),
+                      const DashedDivider(),
+                      const SizedBox(height: 8),
+                      for (final leg in paymentBreakdown!)
+                        ReceiptRow(
+                          label: 'Payment (${_splitLegLabel(leg.method)})',
+                          value: '₱${leg.amount.toStringAsFixed(2)}',
+                        ),
+                      if (change > 0)
+                        ReceiptRow(
+                          label: 'Change',
+                          value: '₱${change.toStringAsFixed(2)}',
+                          valueColor: AppColors.success,
+                        ),
+                    ] else if (isCash) ...[
                       const SizedBox(height: 8),
                       const DashedDivider(),
                       const SizedBox(height: 8),
