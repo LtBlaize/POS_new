@@ -17,7 +17,6 @@ import 'local_db_service.dart';
 import 'connectivity_service.dart';
 import 'sync_queue_service.dart';
 
-
 final lanServerServiceProvider = Provider<LanServerService>((ref) {
   final s = LanServerService(ref);   // pass ref instead of just localDb
   ref.onDispose(s.stop);
@@ -31,8 +30,12 @@ class LanServerService {
 
   HttpServer? _server;
   final Set<WebSocketChannel> _clients = {};
+  // Injected from outside (see featureManagerProvider in auth_provider.dart)
+  // so this core service never imports a feature-layer provider directly.
+  // null = unlimited / not yet known.
+  int? maxTerminals;
 
-  LanServerService(this._ref);      
+  LanServerService(this._ref);   
 
   Future<void> start() async {
     if (_server != null) return;
@@ -85,17 +88,45 @@ class LanServerService {
   }
 
   // ── WebSocket handler ──────────────────────────────────────────────────────
+  //
+  // FIX: this endpoint previously accepted any connection with no auth
+  // check at all — unlike every REST handler below, which validates
+  // x-pos-key. webSocketHandler's inner callback doesn't receive the
+  // original Request, so the key can't be checked there; instead we wrap
+  // the upgrade itself and reject before ever calling into webSocketHandler.
+  // WebSocketChannel.connect() (the client) can't set custom headers, so
+  // the key travels as a query param on the /ws URL instead — see the
+  // matching change in lan_client_service.dart's _wsUrl getter.
+  Handler get _handleWs {
+    final upgrade = webSocketHandler((WebSocketChannel ws, _) {
+      // Main POS device is terminal #1; connected LAN clients are capped
+      // at maxTerminals - 1. null = unlimited (Pro).
+      final cap = maxTerminals;
+      if (cap != null && _clients.length >= cap - 1) {
+        ws.sink.close(4001, 'Terminal limit reached for your plan');
+        return;
+      }
+      _clients.add(ws);
+      // Remove client when it disconnects
+      ws.stream.listen(
+        (_) {}, // kitchen doesn't send via WS (uses HTTP PATCH instead)
+        onDone: () => _clients.remove(ws),
+        onError: (_) => _clients.remove(ws),
+        cancelOnError: true,
+      );
+    });
 
-  Handler get _handleWs => webSocketHandler((WebSocketChannel ws, _) {
-        _clients.add(ws);
-        // Remove client when it disconnects
-        ws.stream.listen(
-          (_) {}, // kitchen doesn't send via WS (uses HTTP PATCH instead)
-          onDone: () => _clients.remove(ws),
-          onError: (_) => _clients.remove(ws),
-          cancelOnError: true,
+    return (Request req) {
+      final key = req.url.queryParameters['key'];
+      if (key == null || key != _posKey) {
+        return Response.forbidden(
+          jsonEncode({'error': 'unauthorized'}),
+          headers: {'content-type': 'application/json'},
         );
-      });
+      }
+      return upgrade(req);
+    };
+  }
 
   /// Called by ParkedOrderService to push park/restore events to LAN clients.
   void broadcastParkedOrderEvent(

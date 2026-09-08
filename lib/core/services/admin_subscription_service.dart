@@ -35,12 +35,14 @@ class AdminSubscriptionService {
     required String businessId,
     required String newPlan,
     DateTime? trialEndsAt,
+    int? durationMonths,
     String? reason,
   }) => _invoke({
         'action': 'change_plan',
         'business_id': businessId,
         'new_plan': newPlan,
         if (trialEndsAt != null) 'trial_ends_at': trialEndsAt.toUtc().toIso8601String(),
+        if (durationMonths != null) 'duration_months': durationMonths,
         if (reason != null) 'reason': reason,
       });
 
@@ -67,11 +69,15 @@ class AdminSubscriptionService {
         if (reason != null) 'reason': reason,
       });
 
-  Future<void> cancel({required String businessId, String? reason}) => _invoke({
-        'action': 'cancel',
-        'business_id': businessId,
-        if (reason != null) 'reason': reason,
-      });
+  /// `cancel` was removed as its own edge-function action (2026-09) — it
+  /// previously defaulted new_plan to 'free', a tier that no longer exists
+  /// in the starter/growth/pro model. Cancelling a subscription with no
+  /// free tier to fall back to is the same operation as suspend(): keep
+  /// the business's data and plan record intact, just mark it inactive.
+  /// This method is kept only so existing call sites don't need to be
+  /// hunted down individually — it's a thin alias for suspend().
+  Future<void> cancel({required String businessId, String? reason}) =>
+      suspend(businessId: businessId, reason: reason);
 }
 
 final adminSubscriptionServiceProvider = Provider<AdminSubscriptionService>((ref) {

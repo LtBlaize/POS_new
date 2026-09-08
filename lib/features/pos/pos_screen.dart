@@ -24,6 +24,8 @@ import 'widgets/product/promo_grid.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../features/shifts/close_shift_screen.dart';
 import '../../shared/widgets/app_colors.dart';
+import '../../core/config/access_enforcement_flag.dart';
+import '../auth/subscription_expired_screen.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -75,6 +77,13 @@ class POSScreen extends ConsumerWidget {
     // resolved yet when /pos was first navigated to.
     final fm = ref.watch(featureManagerProvider);
 
+    // Business-wide lockout — distinct from the per-tab hasFeature() checks
+    // below, which still govern Kitchen/Inventory/Utang for businesses that
+    // DO have core access. Gated behind kEnforceCoreAccess until the
+    // subscription backfill is confirmed complete — see that file's comment.
+    if (kEnforceCoreAccess && !fm.hasCoreAccess) {
+      return const SubscriptionExpiredScreen();
+    }
     final screens = _buildScreens(
       fm,
       activeStaff?.role ?? StaffRole.cashier,

@@ -3,10 +3,16 @@
 // Phase 7. Multiplexed successor to admin-change-plan's pattern — same
 // two-step auth (caller JWT check, then service_role write), same
 // validate-before-any-DB-call discipline, but one function handling
-// change_plan / extend / suspend / reactivate / cancel via an `action`
-// field, instead of five near-duplicate files. If you'd rather keep them
-// as separate functions for audit/log isolation, this is the one place
-// that needs splitting — the SQL functions it calls are already separate.
+// change_plan / extend / suspend / reactivate via an `action` field,
+// instead of five near-duplicate files. If you'd rather keep them as
+// separate functions for audit/log isolation, this is the one place that
+// needs splitting — the SQL functions it calls are already separate.
+//
+// `cancel` was removed as a distinct action (2026-09): it previously
+// defaulted new_plan to 'free', a plan tier that no longer exists in the
+// starter/growth/pro model. Cancelling a subscription with no free tier to
+// fall back to is the same operation as `suspend` (admin_set_business_active
+// false) — it doesn't need its own plan-change RPC call. Use `suspend`.
 
 import { serve } from "jsr:@std/http@1.0.12/server";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -15,15 +21,17 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const ALLOWED_PLANS = ["free", "pro", "enterprise"] as const;
-const ALLOWED_ACTIONS = ["change_plan", "extend", "suspend", "reactivate", "cancel"] as const;
+// Keep this in sync with the `subscription_plan` Postgres enum.
+const ALLOWED_PLANS = ["starter", "growth", "pro"] as const;
+const ALLOWED_ACTIONS = ["change_plan", "extend", "suspend", "reactivate"] as const;
 type Action = (typeof ALLOWED_ACTIONS)[number];
 
 interface ActionBody {
   action: Action;
   business_id: string;
-  new_plan?: string;        // required for change_plan / cancel(implicit 'free')
-  trial_ends_at?: string;   // required for extend
+  new_plan?: string;         // required for change_plan
+  trial_ends_at?: string;    // required for extend
+  duration_months?: number;  // optional for change_plan — paid access duration
   reason?: string;
 }
 
@@ -61,10 +69,18 @@ serve(async (req: Request) => {
   if (!isUuid(body.business_id)) {
     return jsonRes({ error: "business_id must be a uuid" }, 400);
   }
-  if (body.action === "change_plan" || body.action === "cancel") {
-    const plan = body.action === "cancel" ? "free" : body.new_plan;
-    if (!ALLOWED_PLANS.includes(plan as (typeof ALLOWED_PLANS)[number])) {
+  if (body.action === "change_plan") {
+    if (!ALLOWED_PLANS.includes(body.new_plan as (typeof ALLOWED_PLANS)[number])) {
       return jsonRes({ error: `new_plan must be one of: ${ALLOWED_PLANS.join(", ")}` }, 400);
+    }
+    if (body.duration_months !== undefined) {
+      if (
+        !Number.isInteger(body.duration_months) ||
+        body.duration_months <= 0 ||
+        body.duration_months > 24
+      ) {
+        return jsonRes({ error: "duration_months must be a positive integer, max 24" }, 400);
+      }
     }
   }
   if (body.action === "extend") {
@@ -110,17 +126,8 @@ serve(async (req: Request) => {
         p_new_plan: body.new_plan,
         p_admin_user_id: adminRow.id,
         p_trial_ends_at: body.trial_ends_at ?? null,
+        p_duration_months: body.duration_months ?? null,
         p_metadata: metadata,
-      }));
-      break;
-    }
-    case "cancel": {
-      ({ error: rpcError } = await serviceClient.rpc("admin_change_plan", {
-        p_business_id: body.business_id,
-        p_new_plan: "free",
-        p_admin_user_id: adminRow.id,
-        p_trial_ends_at: null,
-        p_metadata: { ...metadata, cancelled: true },
       }));
       break;
     }

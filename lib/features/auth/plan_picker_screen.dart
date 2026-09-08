@@ -14,16 +14,11 @@ class PlanPickerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
-  String _selectedPlan = 'premium';
+  String _selectedPlan = 'growth';
   bool   _isLoading    = false;
   String? _error;
 
   Future<void> _submit() async {
-    if (_selectedPlan == 'enterprise') {
-      _launchEnterpriseSales();
-      return;
-    }
-
     final userId = ref.read(pendingUserIdProvider);
     if (userId == null) {
       setState(() => _error = 'Session expired. Please register again.');
@@ -52,7 +47,7 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
       ref.read(pendingFullNameProvider.notifier).state     = null;
       ref.read(pendingBusinessNameProvider.notifier).state = null;
       ref.read(pendingBusinessTypeProvider.notifier).state = null;
-      ref.read(pendingSelectedPlanProvider.notifier).state = 'premium';
+      ref.read(pendingSelectedPlanProvider.notifier).state = 'growth';
 
       // FIX: MyApp's authStateProvider listener already fired once during
       // OTP verification and bailed out via the "Mid-registration" guard.
@@ -126,60 +121,62 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
               // ── Plan cards ─────────────────────────────────────────────────
               _PlanCard(
-                plan:        'free',
-                title:       'Free',
-                price:       '₱0 / month',
-                description: 'Basic POS for a single location.',
+                plan:        'starter',
+                title:       'Starter',
+                price:       '₱499 / month',
+                description: '1 terminal, up to 2 staff — everything a growing tindahan needs.',
                 features: const [
-                  _Feature('POS & orders',       true),
-                  _Feature('Basic inventory',    true),
-                  _Feature('Credits (utang)',    true),
-                  _Feature('Shifts',             true),
-                  _Feature('Reports & exports',  false),
-                  _Feature('Kitchen display',    false),
-                  _Feature('Table management',   false),
+                  _Feature('POS & orders',            true),
+                  _Feature('Unlimited products',      true),
+                  _Feature('Credits (utang)',         true),
+                  _Feature('Shifts',                  true),
+                  _Feature('Up to 5 active promos',   true),
+                  _Feature('Reports & Excel export',  false),
+                  _Feature('Kitchen display',         false),
+                  _Feature('Table management',        false),
                 ],
-                isSelected: _selectedPlan == 'free',
+                isSelected: _selectedPlan == 'starter',
                 isBestValue: false,
-                onTap: () => setState(() => _selectedPlan = 'free'),
+                onTap: () => setState(() => _selectedPlan = 'starter'),
               ),
               const SizedBox(height: 12),
 
               _PlanCard(
-                plan:        'premium',
-                title:       'Pro',
-                price:       '₱X / month',
-                description: 'Full access free for 7 days, then ₱X/mo.',
+                plan:        'growth',
+                title:       'Growth',
+                price:       '₱799 / month',
+                description: 'Full access free for 7 days, then ₱799/mo. Up to 3 terminals, unlimited staff.',
                 features: const [
-                  _Feature('POS & orders',       true),
-                  _Feature('Basic inventory',    true),
-                  _Feature('Credits (utang)',    true),
-                  _Feature('Shifts',             true),
-                  _Feature('Reports & exports',  true),
-                  _Feature('Kitchen display',    true),
-                  _Feature('Table management',   true),
+                  _Feature('POS & orders',              true),
+                  _Feature('Unlimited products',        true),
+                  _Feature('Credits (utang)',           true),
+                  _Feature('Shifts',                    true),
+                  _Feature('Unlimited promos',          true),
+                  _Feature('Reports & Excel export',    true),
+                  _Feature('Kitchen display (1 station)', true),
+                  _Feature('Tables (up to 6, 1 room)',  true),
                 ],
-                isSelected:  _selectedPlan == 'premium',
+                isSelected:  _selectedPlan == 'growth',
                 isBestValue: true,
-                onTap: () => setState(() => _selectedPlan = 'premium'),
+                onTap: () => setState(() => _selectedPlan = 'growth'),
               ),
               const SizedBox(height: 12),
 
               _PlanCard(
-                plan:        'enterprise',
-                title:       'Enterprise',
-                price:       'Contact us',
-                description: 'Multiple locations, dedicated support & SLA.',
+                plan:        'pro',
+                title:       'Pro',
+                price:       '₱1,299 / month',
+                description: 'Full access free for 7 days, then ₱1,299/mo. Unlimited terminals & tables.',
                 features: const [
-                  _Feature('Everything in Pro',      true),
-                  _Feature('Unlimited branches',     true),
-                  _Feature('Dedicated support',      true),
-                  _Feature('Custom integrations',    true),
-                  _Feature('SLA guarantee',          true),
+                  _Feature('Everything in Growth',     true),
+                  _Feature('Unlimited terminals',      true),
+                  _Feature('Unlimited tables & rooms', true),
+                  _Feature('Multi-station kitchen',    true),
+                  _Feature('Custom role permissions',  true),
                 ],
-                isSelected:  _selectedPlan == 'enterprise',
+                isSelected:  _selectedPlan == 'pro',
                 isBestValue: false,
-                onTap: () => setState(() => _selectedPlan = 'enterprise'),
+                onTap: () => setState(() => _selectedPlan = 'pro'),
               ),
 
               if (_error != null) ...[
@@ -208,9 +205,7 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
               const SizedBox(height: 12),
               Text(
-                _selectedPlan == 'premium'
-                    ? 'No credit card required. Trial ends in 7 days.'
-                    : ' ',
+                'No credit card required. Trial ends in 7 days.',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -225,29 +220,11 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
     );
   }
 
-  void _launchEnterpriseSales() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Contact Sales'),
-        content: const Text(
-          'For Enterprise pricing and onboarding, reach us at:\n\nsales@yourapp.com',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String get _ctaLabel => switch (_selectedPlan) {
-        'free'       => 'Start with Free',
-        'premium'    => 'Start 7-day trial',
-        'enterprise' => 'Contact sales',
-        _            => 'Continue',
+        'starter' => 'Start 7-day trial',
+        'growth'  => 'Start 7-day trial',
+        'pro'     => 'Start 7-day trial',
+        _         => 'Continue',
       };
 }
 

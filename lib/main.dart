@@ -17,6 +17,7 @@ import 'core/services/lan_server_service.dart';
 import 'core/services/local_db_service.dart';
 import 'core/services/sync_queue_service.dart';
 import 'features/auth/auth_provider.dart';
+import 'features/auth/profile_refresh_service.dart';
 import 'features/auth/register_screen.dart'; // for pendingUserIdProvider
 
 // ── Device role ────────────────────────────────────────────────────────────────
@@ -126,6 +127,7 @@ if (existingSession != null) {
 
   await container.read(connectivityServiceProvider).init();
   container.read(syncQueueServiceProvider).init();
+  container.read(profileRefreshServiceProvider).init();
 
   if (isPos) {
     final savedKey = prefs.getString('pos_lan_key');

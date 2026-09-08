@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/business.dart';
 import '../../core/services/feature_manager.dart';
+import '../../core/services/lan_server_service.dart';
 import '../../core/models/staff.dart';
 
 
@@ -120,7 +121,9 @@ final featureManagerProvider = Provider<FeatureManager>((ref) {
     configKitchenEnabled: config?['enable_kitchen_display']  as bool? ?? false,
     configTablesEnabled:  config?['enable_table_management'] as bool? ?? false,
   );
-  debugPrint('[FM] hasFullAccess=${fm.hasFullAccess} hasFeature(kitchen)=${fm.hasFeature('kitchen')}');
+  // Keep the LAN server's terminal cap in sync whenever plan/business changes.
+  ref.read(lanServerServiceProvider).maxTerminals = fm.limits.maxTerminals;
+  debugPrint('[FM] hasCoreAccess=${fm.hasCoreAccess} plan=${fm.currentPlan.value} hasFeature(kitchen)=${fm.hasFeature('kitchen')}');
   return fm;
 });
 
@@ -244,7 +247,7 @@ class AuthService {
     required String businessName,
     required String businessType,
     String ownerPin = '0000',
-    String selectedPlan = 'basic',
+    String selectedPlan = 'growth',
   }) async {
     try {
       debugPrint('=== completeRegistration START ===');
@@ -263,18 +266,17 @@ class AuthService {
 
       // 1. Business
       debugPrint('[Auth] Inserting business...');
-      final now = DateTime.now().toUtc();
-      // Only insert trial dates when user picked a paid plan.
-      // Enterprise is handled manually so treat it like premium for now.
-      final bool startTrial = selectedPlan != 'free' && selectedPlan != 'enterprise';
+      // Every plan is paid now (Starter/Growth/Pro) — all get the 7-day trial.
       final businessId = _generateUuidV4();
+      // trial_started_at / trial_ends_at are intentionally NOT sent —
+      // they're now set unconditionally by a server-side trigger
+      // (trg_set_business_trial_defaults) so the client can never
+      // influence its own trial period.
       await _client.from('businesses').insert({
         'id':                businessId,
         'name':              businessName,
         'business_type':     businessType,
-        'subscription_plan': selectedPlan == 'enterprise' ? 'premium' : selectedPlan,
-        if (startTrial) 'trial_started_at': now.toIso8601String(),
-        if (startTrial) 'trial_ends_at':    now.add(const Duration(days: 7)).toIso8601String(),
+        'subscription_plan': selectedPlan,
       });
       debugPrint('[Auth] Business inserted: $businessId');
 

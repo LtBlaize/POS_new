@@ -183,8 +183,22 @@ class SyncQueueService {
         await _replay(entry);
         await _local.dequeue(id);
         synced++;
-      } catch (e) {
+       } catch (e) {
         debugPrint('[SyncQueue] Entry $id failed: $e');
+
+        // Plan-limit rejections (e.g. add_staff hitting the Starter cap via
+        // the DB trigger) are business-rule failures, not transient network
+        // errors — retrying with backoff will never succeed since the limit
+        // doesn't change on its own. Dead-letter immediately with a
+        // friendly message instead of burning kMaxRetries attempts.
+        final limitMessage = _planLimitMessage(e);
+        if (limitMessage != null) {
+          await _local.incrementRetry(id, limitMessage);
+          await _local.markQueueDead(id);
+          await _refreshFailedCount();
+          continue;
+        }
+
         await _local.incrementRetry(id, e.toString());
         // Stop this group here: later entries for the same order/product
         // (e.g. a status update after its insert_order just failed) would
@@ -592,6 +606,23 @@ class SyncQueueService {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  /// Maps a known DB-level plan-limit trigger rejection to a friendly,
+  /// non-technical message. Returns null for any other error, so the
+  /// normal retry/backoff path is unaffected.
+  String? _planLimitMessage(Object error) {
+    final msg = error.toString();
+    if (msg.contains('staff_limit_exceeded')) {
+      return 'This staff account couldn\'t be added — your plan\'s staff limit was reached before this synced. Remove a staff member or upgrade your plan, then re-add them from Settings.';
+    }
+    if (msg.contains('promo_limit_exceeded')) {
+      return 'This promo couldn\'t be activated — your plan\'s active promo limit was reached before this synced. Deactivate another promo or upgrade your plan.';
+    }
+    if (msg.contains('table_limit_exceeded')) {
+      return 'This table couldn\'t be added — your plan\'s table limit was reached before this synced. Upgrade your plan to add more tables.';
+    }
+    return null;
+  }
 
   Future<void> _refreshCount() async {
     final count = await _local.pendingQueueCount();

@@ -192,7 +192,7 @@ class Sidebar extends ConsumerWidget {
         final isPlanGated = item.requiredFeature == AppFeature.reports ||
             item.requiredFeature == AppFeature.kitchen ||
             item.requiredFeature == AppFeature.tables ||
-            item.requiredFeature == AppFeature.export;
+            item.requiredFeature == AppFeature.excelExport;
         if (!isPlanGated) return false;
         // Plan-gated: stay visible so lock badge shows.
       }

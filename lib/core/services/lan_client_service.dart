@@ -53,7 +53,13 @@ class LanClientService {
 
   String? get _wsUrl {
     final ip = _ref.read(cashierIpProvider);
-    return ip == null ? null : 'ws://$ip:8080/ws';
+    if (ip == null) return null;
+    // Key travels as a query param, not a header — WebSocketChannel.connect()
+    // takes a bare URI and can't attach custom headers the way the plain
+    // HTTP calls in this file do. Matches the server-side check added to
+    // lan_server_service.dart's _handleWs.
+    final key = Uri.encodeQueryComponent(_posKey ?? '');
+    return 'ws://$ip:8080/ws?key=$key';
   }
 
   static String? _posKey;

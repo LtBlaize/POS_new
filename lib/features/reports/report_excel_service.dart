@@ -164,6 +164,13 @@ class ReportExcelService {
     required List<ShiftEntry> shiftEntries,
     DateRange? dateRange,
   }) async {
+    // Enforce at the actual export action, not just the UI button.
+    final fm = _ref.read(featureManagerProvider);
+    if (!fm.canExportExcel) {
+      throw Exception(
+          '${fm.currentPlan.displayName} does not include Excel export. Upgrade to Growth or Pro to export reports.');
+    }
+
     final profile    = await _ref.read(profileProvider.future);
     final businessId = profile?.businessId ?? '';
     final isOnline   = _ref.read(isOnlineProvider);

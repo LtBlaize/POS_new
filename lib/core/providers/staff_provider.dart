@@ -154,8 +154,25 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
     required String name,
     required StaffRole role,
     required String pin,
+    int? maxStaffAccounts,
   }) async {
     if (_businessId == null) return;
+
+    if (maxStaffAccounts != null) {
+      // "2 staff" means non-owner staff — matches the existing UI
+      // convention (nonOwners filter in staff_settings_section.dart).
+      // Owner is separate and unlimited.
+      final currentCount = (state.asData?.value ?? [])
+          .where((m) => m.role != StaffRole.owner)
+          .length;
+      if (currentCount >= maxStaffAccounts) {
+        state = AsyncValue.error(
+          'Staff limit reached for your plan ($maxStaffAccounts max).',
+          StackTrace.current,
+        );
+        return;
+      }
+    }
 
     final salt = StaffMember.generateSalt();
     final member = StaffMember(

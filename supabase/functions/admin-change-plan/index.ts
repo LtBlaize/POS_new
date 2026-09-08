@@ -27,7 +27,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // clean way to introspect an enum from inside an Edge Function at request
 // time without an extra round trip, so it's duplicated here deliberately —
 // update both places if the enum ever changes.
-const ALLOWED_PLANS = ["free", "pro", "enterprise"] as const;
+const ALLOWED_PLANS = ["starter", "growth", "pro"] as const;
 
 interface ChangePlanBody {
   business_id: string;

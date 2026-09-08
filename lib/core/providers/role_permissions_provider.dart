@@ -94,6 +94,14 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
 
 
   Future<void> toggle(String role, String tab) async {
+    // Custom role/permission editing is Pro-only — Starter/Growth use the
+    // fixed defaults from registration (kDefaultPermissions /
+    // kDefaultPermissionsRetail). Reading tabs (activeStaffTabsProvider)
+    // stays unrestricted — that's core navigation, not customization.
+    if (!ref.read(featureManagerProvider).canEditCustomRoles) {
+      throw Exception(
+          'Custom role permissions require the Pro plan. Upgrade to customize staff access.');
+    }
     final current = state.value ?? _defaults();
     final updated = Map<String, Set<String>>.from(
       current.map((r, tabs) => MapEntry(r, Set<String>.from(tabs))),
@@ -138,6 +146,50 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
       debugPrint('[RolePermissions] save failed: $e');
       // Revert optimistic update on failure
       state = AsyncData(current);
+    }
+  }
+
+  /// Toggles a single capability flag (e.g. 'can_void_item') for [role].
+  /// Same Pro-only gate as toggle(), and same read-merge-write pattern so
+  /// concurrent screens/capability edits never clobber each other's keys.
+  /// Reloads from Supabase afterward (rather than an optimistic local
+  /// update) so _cachedRaw — which capabilitiesFor() reads from — stays
+  /// authoritative.
+  Future<void> toggleCapability(String role, String key) async {
+    if (!ref.read(featureManagerProvider).canEditCustomRoles) {
+      throw Exception(
+          'Custom role permissions require the Pro plan. Upgrade to customize staff access.');
+    }
+    final profile = ref.read(profileProvider).value;
+    if (profile?.businessId == null) return;
+
+    final client = ref.read(supabaseClientProvider);
+    try {
+      final row = await client
+          .from('business_configs')
+          .select('role_permissions')
+          .eq('business_id', profile!.businessId!)
+          .maybeSingle();
+
+      final raw = Map<String, dynamic>.from(
+          (row?['role_permissions'] as Map<String, dynamic>?) ?? {});
+
+      final existing = raw[role] is Map
+          ? Map<String, dynamic>.from(raw[role] as Map)
+          : <String, dynamic>{};
+
+      existing[key] = !(existing[key] as bool? ?? false);
+      raw[role] = existing;
+
+      await client
+          .from('business_configs')
+          .update({'role_permissions': raw}).eq(
+              'business_id', profile.businessId!);
+
+      ref.invalidateSelf();
+    } catch (e) {
+      debugPrint('[RolePermissions] capability save failed: $e');
+      rethrow;
     }
   }
 
@@ -229,6 +281,17 @@ class RoleCapabilities {
         maxDiscountPercent:
             (json['max_discount_percent'] as num?)?.toInt() ?? 0,
       );
+
+  /// Maps a raw JSONB capability key (e.g. 'can_void_item') to its typed
+  /// field. Used by the settings UI to read/render an arbitrary capability
+  /// by its string key without exposing the JSONB shape to the widget.
+  bool valueFor(String key) => switch (key) {
+        'can_void_item' => canVoidItem,
+        'can_void_order' => canVoidOrder,
+        'can_apply_discount' => canApplyDiscount,
+        'can_issue_refund' => canIssueRefund,
+        _ => false,
+      };
 
   static const owner = RoleCapabilities(
     canVoidItem: true,

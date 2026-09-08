@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/promo.dart';
 import '../../../core/providers/promo_provider.dart';
+import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 import 'promo_builder_dialog.dart';
 
@@ -229,8 +230,29 @@ class _PromoTile extends ConsumerWidget {
         }
         break;
       case 'toggle':
-        await repo.setActive(promo.id, !promo.isActive);
-        ref.invalidate(promoListProvider);
+        try {
+          final fm = ref.read(featureManagerProvider);
+          final activeCount = ref
+                  .read(promoListProvider)
+                  .asData
+                  ?.value
+                  .where((p) => p.isActive)
+                  .length ??
+              0;
+          await repo.setActive(
+            promo.id,
+            !promo.isActive,
+            maxActivePromos: fm.limits.maxActivePromos,
+            currentActiveCount: activeCount,
+          );
+          ref.invalidate(promoListProvider);
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+            );
+          }
+        }
         break;
       case 'delete':
         final confirmed = await showDialog<bool>(
@@ -255,10 +277,44 @@ class _PromoTile extends ConsumerWidget {
             await repo.delete(promo.id);
             ref.invalidate(promoListProvider);
           } catch (e) {
-            if (context.mounted) {
+            final message = e.toString().replaceFirst('Exception: ', '');
+            final usedInOrders = message.contains('used in past orders');
+            if (!context.mounted) return;
+
+            if (usedInOrders) {
+              final deactivateInstead = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Can't Delete Promo"),
+                  content: Text(message),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Deactivate Instead'),
+                    ),
+                  ],
+                ),
+              );
+              if (deactivateInstead == true) {
+                try {
+                  await repo.setActive(promo.id, false);
+                  ref.invalidate(promoListProvider);
+                } catch (e2) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$e2'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              }
+            } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text('Could not delete: $e'),
+                    content: Text('Could not delete: $message'),
                     backgroundColor: Colors.red),
               );
             }

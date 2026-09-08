@@ -1,13 +1,17 @@
 // lib/features/admin/businesses/admin_business_detail_screen.dart
 //
-// Phase 6. /admin/businesses/:id — info, subscription, payments, staff,
-// activity. Read-only for now; Phase 7 adds the action buttons (Change
-// Plan / Extend / Suspend / etc.) into the subscription card below.
+// Phase 6/7. /admin/businesses/:id — info, subscription, payments, staff,
+// activity, plus the subscription action buttons (Change Plan / Extend /
+// Suspend / Reactivate). Change Plan now supports an optional paid-access
+// duration alongside the plan itself (Phase 5/8): the RPC treats plan and
+// subscription_expires_at as independent — this dialog reflects that by
+// letting you set either, both, or neither.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/admin_colors.dart';
 import 'admin_businesses_providers.dart';
 import '../../../core/services/admin_subscription_service.dart';
+import '../../../core/utils/subscription_expiry_preview.dart';
 
 class AdminBusinessDetailScreen extends ConsumerWidget {
   final String businessId;
@@ -43,6 +47,8 @@ class AdminBusinessDetailScreen extends ConsumerWidget {
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AdminColors.textPrimary)),
                 const SizedBox(width: 12),
                 _pill(biz.isActive ? 'Active' : 'Inactive', biz.isActive ? 'active' : 'suspended'),
+                const SizedBox(width: 8),
+                _AccessStatusPill(biz: biz),
               ],
             ),
             const SizedBox(height: 20),
@@ -78,6 +84,32 @@ Widget _pill(String label, String statusKey) {
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
     child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
   );
+}
+
+/// Small pill next to the business name summarizing trial-vs-paid-vs-neither.
+/// Purely a display convenience over the three existing fields — does NOT
+/// touch hasCoreAccess or any enforcement logic (that's still Gap A, still
+/// open, still gated behind the backfill).
+class _AccessStatusPill extends StatelessWidget {
+  final BusinessDetail biz;
+  const _AccessStatusPill({required this.biz});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!biz.isActive) return const SizedBox.shrink(); // "Inactive" pill already covers this
+
+    final now = DateTime.now();
+    final paidActive = biz.subscriptionExpiresAt != null && biz.subscriptionExpiresAt!.isAfter(now);
+    final trialActive = biz.trialEndsAt != null && biz.trialEndsAt!.isAfter(now);
+
+    if (paidActive) {
+      return _pill('Paid · through ${_fmtDate(biz.subscriptionExpiresAt!)}', 'active');
+    }
+    if (trialActive) {
+      return _pill('Trial · until ${_fmtDate(biz.trialEndsAt!)}', 'trial');
+    }
+    return _pill('No active access', 'suspended');
+  }
 }
 
 class _Card extends StatelessWidget {
@@ -182,14 +214,17 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
   }
 
   Future<void> _changePlan() async {
-    final plan = await showDialog<String>(
+    final result = await showDialog<_PlanDurationResult>(
       context: context,
-      builder: (_) => _PlanPickerDialog(currentPlan: widget.biz.subscriptionPlan),
+      builder: (_) => _PlanDurationDialog(biz: widget.biz),
     );
-    if (plan == null || plan == widget.biz.subscriptionPlan) return;
+    if (result == null) return;
+    if (result.plan == widget.biz.subscriptionPlan && result.durationMonths == null) return;
+
     await _run(() => ref.read(adminSubscriptionServiceProvider).changePlan(
           businessId: widget.biz.id,
-          newPlan: plan,
+          newPlan: result.plan,
+          durationMonths: result.durationMonths,
         ));
   }
 
@@ -241,6 +276,8 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
           _KeyValueRow('Plan', biz.subscriptionPlan),
           _KeyValueRow('Trial started', biz.trialStartedAt != null ? _fmtDate(biz.trialStartedAt!) : ''),
           _KeyValueRow('Trial ends', biz.trialEndsAt != null ? _fmtDate(biz.trialEndsAt!) : ''),
+          _KeyValueRow(
+              'Paid through', biz.subscriptionExpiresAt != null ? _fmtDate(biz.subscriptionExpiresAt!) : ''),
           const SizedBox(height: 12),
           if (_busy)
             const Padding(
@@ -266,30 +303,143 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
   }
 }
 
-class _PlanPickerDialog extends StatelessWidget {
-  final String currentPlan;
-  const _PlanPickerDialog({required this.currentPlan});
+// ── Change Plan dialog: two-step (select → preview/confirm) ───────────────
+
+class _PlanDurationResult {
+  final String plan;
+  final int? durationMonths; // null = "No change"
+  const _PlanDurationResult({required this.plan, required this.durationMonths});
+}
+
+const _durationOptions = <int?>[null, 1, 3, 6, 12]; // null = "No change"
+
+String _durationLabel(int? months) => months == null ? 'No change' : '$months month${months == 1 ? '' : 's'}';
+
+class _PlanDurationDialog extends StatefulWidget {
+  final BusinessDetail biz;
+  const _PlanDurationDialog({required this.biz});
+
+  @override
+  State<_PlanDurationDialog> createState() => _PlanDurationDialogState();
+}
+
+class _PlanDurationDialogState extends State<_PlanDurationDialog> {
+  late String _plan = widget.biz.subscriptionPlan;
+  int? _duration; // starts as "No change"
+  bool _preview = false;
+
+  // Mirrors the Edge Function's ALLOWED_PLANS list (starter/growth/pro).
+  // Keep these in sync — see the Edge Function's own comment about this
+  // being duplicated deliberately.
+  static const _plans = ['starter', 'growth', 'pro'];
+
   @override
   Widget build(BuildContext context) {
-    // ASSUMPTION: mirrors the Edge Function's ALLOWED_PLANS list
-    // (free/pro/enterprise). Keep these in sync — see the Edge Function's
-    // own comment about this being duplicated deliberately.
-    const plans = ['free', 'pro', 'enterprise'];
     return AlertDialog(
-      title: const Text('Change plan'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: plans
-            .map((p) => RadioListTile<String>(
-                  title: Text(p),
-                  value: p,
-                  groupValue: currentPlan,
-                  onChanged: (v) => Navigator.pop(context, v),
-                ))
-            .toList(),
+      title: Text(_preview ? 'Confirm change' : 'Change plan'),
+      content: SizedBox(
+        width: 360,
+        child: _preview ? _buildPreview() : _buildSelect(),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      actions: _preview
+          ? [
+              TextButton(onPressed: () => setState(() => _preview = false), child: const Text('Back')),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _PlanDurationResult(plan: _plan, durationMonths: _duration),
+                ),
+                child: const Text('Confirm'),
+              ),
+            ]
+          : [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              FilledButton(onPressed: () => setState(() => _preview = true), child: const Text('Next')),
+            ],
+    );
+  }
+
+  Widget _buildSelect() {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Plan', style: TextStyle(fontSize: 12, color: AdminColors.textMuted)),
+          ..._plans.map((p) => RadioListTile<String>(
+                dense: true,
+                title: Text(p),
+                value: p,
+                groupValue: _plan,
+                onChanged: (v) => setState(() => _plan = v!),
+              )),
+          const Divider(height: 24),
+          const Text('Paid access duration', style: TextStyle(fontSize: 12, color: AdminColors.textMuted)),
+          const SizedBox(height: 4),
+          ..._durationOptions.map((d) => RadioListTile<int?>(
+                dense: true,
+                title: Text(_durationLabel(d)),
+                value: d,
+                groupValue: _duration,
+                onChanged: (v) => setState(() => _duration = v),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreview() {
+    final planChanged = _plan != widget.biz.subscriptionPlan;
+    final hadNoExpiry = widget.biz.subscriptionExpiresAt == null;
+
+    // Client-side only, for display — NOT authoritative. The RPC recomputes
+    // this server-side against the DB's clock when it actually runs.
+    final previewExpiry = SubscriptionExpiryPreview.calculate(
+      currentExpiresAt: widget.biz.subscriptionExpiresAt,
+      durationMonths: _duration,
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _KeyValueRow('Plan', planChanged ? '${widget.biz.subscriptionPlan} → $_plan' : _plan),
+        _KeyValueRow('Duration', _durationLabel(_duration)),
+        _KeyValueRow(
+          'Expires',
+          _duration == null
+              ? (widget.biz.subscriptionExpiresAt != null
+                  ? '${_fmtDate(widget.biz.subscriptionExpiresAt!)} (unchanged)'
+                  : 'Not set (unchanged)')
+              : previewExpiry != null
+                  ? '${_fmtDate(previewExpiry)} (preview only)'
+                  : '',
+        ),
+        if (_duration == null && hadNoExpiry) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AdminColors.warning.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AdminColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: AdminColors.warning),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This business has no paid access period set. With no duration selected, '
+                    'this will only change the plan — it will not grant paid access.',
+                    style: TextStyle(fontSize: 12, color: AdminColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

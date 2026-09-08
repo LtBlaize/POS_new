@@ -129,6 +129,7 @@ class BusinessDetail {
   final String timezone;
   final DateTime? trialStartedAt;
   final DateTime? trialEndsAt;
+  final DateTime? subscriptionExpiresAt;
   final DateTime createdAt;
   final List<RecentPayment> payments;
   final List<StaffSummary> staff;
@@ -147,6 +148,7 @@ class BusinessDetail {
     required this.timezone,
     required this.trialStartedAt,
     required this.trialEndsAt,
+    required this.subscriptionExpiresAt,
     required this.createdAt,
     required this.payments,
     required this.staff,
@@ -244,7 +246,7 @@ final businessDetailProvider =
     final bizRow = await client
         .from('businesses')
         .select(
-            'id, name, business_type, subscription_plan, is_active, address, phone, email, currency, timezone, trial_started_at, trial_ends_at, created_at')
+            'id, name, business_type, subscription_plan, is_active, address, phone, email, currency, timezone, trial_started_at, trial_ends_at, subscription_expires_at, created_at')
         .eq('id', businessId)
         .maybeSingle();
 
@@ -293,6 +295,9 @@ final businessDetailProvider =
           : null,
       trialEndsAt: bizRow['trial_ends_at'] != null
           ? DateTime.parse(bizRow['trial_ends_at'] as String).toLocal()
+          : null,
+      subscriptionExpiresAt: bizRow['subscription_expires_at'] != null
+          ? DateTime.parse(bizRow['subscription_expires_at'] as String).toLocal()
           : null,
       createdAt: DateTime.parse(bizRow['created_at'] as String).toLocal(),
       payments: (paymentsRows as List)

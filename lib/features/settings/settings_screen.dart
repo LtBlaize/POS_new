@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/models/business.dart' show SubscriptionPlan;
 
 import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
@@ -361,6 +364,36 @@ class _LogoutSection extends ConsumerWidget {
 }
 
 // ── Subscription section ──────────────────────────────────────────────────────
+//
+// Rewritten for the starter/growth/pro model (2026-09). The previous
+// version assumed a single-tier Basic/Premium/Enterprise trial: it only
+// showed an upgrade CTA when `!plan.isPaid`, which meant Starter and
+// Growth — both paid tiers with a real plan above them — never showed
+// any way to upgrade at all. There's still no self-serve payment
+// integration (Phase 8 is manual-payments-only), so "upgrade" opens a
+// contact dialog (call/SMS/email) with the business id and current plan
+// pre-filled, rather than a stubbed "coming soon" snackbar.
+
+const _upgradePhone = '09065790889';
+const _upgradeEmail = 'noblezaravenblair@gmail.com';
+
+// What each plan unlocks beyond the one below it — shown under "Upgrade
+// to X includes" so the CTA is specific to the business's actual next
+// step, not a generic Pro feature list.
+const _growthIncludes = [
+  'Up to 3 terminals',
+  'Unlimited staff',
+  'Unlimited active promos',
+  'Reports & Excel export',
+  '1 kitchen station',
+  'Up to 6 tables / 1 room',
+];
+const _proIncludes = [
+  'Unlimited terminals',
+  'Unlimited tables & rooms',
+  'Multi-station kitchen',
+  'Custom role permissions',
+];
 
 class _SubscriptionSection extends ConsumerWidget {
   const _SubscriptionSection();
@@ -370,29 +403,42 @@ class _SubscriptionSection extends ConsumerWidget {
     final fm = ref.watch(featureManagerProvider);
     final plan = fm.currentPlan;
     final isOnTrial = fm.isOnActiveTrial;
+    final trialExpired = !plan.isPaid && !isOnTrial;
     final daysLeft = fm.trialDaysLeft;
 
     final Color statusColor;
     final String statusLabel;
     final String statusSub;
 
-    if (plan.isPaid) {
-      statusColor = Colors.green.shade600;
-      statusLabel = plan.displayName;
-      statusSub   = 'Full access active';
-    } else if (isOnTrial) {
+    if (isOnTrial) {
       statusColor = daysLeft <= 2
           ? Colors.orange.shade700
           : Colors.blue.shade700;
-      statusLabel = 'Pro Trial';
-      statusSub   = daysLeft == 0
+      statusLabel = '${plan.displayName} Trial';
+      statusSub = daysLeft == 0
           ? 'Expires today'
           : '$daysLeft day${daysLeft == 1 ? '' : 's'} remaining';
+    } else if (plan.isPaid) {
+      statusColor = Colors.green.shade600;
+      statusLabel = plan.displayName;
+      statusSub = 'Full access active';
     } else {
       statusColor = AppColors.textSecondary;
-      statusLabel = 'Free';
-      statusSub   = 'Trial ended — upgrade to restore Pro features';
+      statusLabel = '${plan.displayName} — Trial Ended';
+      statusSub = 'Contact us to reactivate';
     }
+
+    // Plans are Starter → Growth → Pro. Pro has nothing above it.
+    final nextPlanLabel = switch (plan) {
+      SubscriptionPlan.starter => 'Growth',
+      SubscriptionPlan.growth => 'Pro',
+      SubscriptionPlan.pro => null,
+    };
+    final nextPlanIncludes = switch (plan) {
+      SubscriptionPlan.starter => _growthIncludes,
+      SubscriptionPlan.growth => _proIncludes,
+      SubscriptionPlan.pro => const <String>[],
+    };
 
     return Container(
       width: double.infinity,
@@ -432,11 +478,11 @@ class _SubscriptionSection extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  plan.isPaid
-                      ? Icons.verified_rounded
+                  trialExpired
+                      ? Icons.lock_outline_rounded
                       : isOnTrial
                           ? Icons.hourglass_top_rounded
-                          : Icons.lock_outline_rounded,
+                          : Icons.verified_rounded,
                   size: 20,
                   color: statusColor,
                 ),
@@ -467,35 +513,34 @@ class _SubscriptionSection extends ConsumerWidget {
               ),
             ],
           ),
-          if (!plan.isPaid) ...[
+          // Show an upgrade path whenever there's a plan above the current
+          // one — regardless of paid/trial/expired status. Pro has none.
+          if (nextPlanLabel != null) ...[
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 14),
-            const Text(
-              'Pro plan includes',
-              style: TextStyle(
+            Text(
+              'Upgrade to $nextPlanLabel includes',
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
-            ...[
-              'Reports & sales exports',
-              'Kitchen display system',
-              'Table management',
-              'Unlimited branches',
-            ].map((f) => Padding(
+            ...nextPlanIncludes.map((f) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
                       Icon(Icons.check_circle_outline_rounded,
                           size: 14, color: Colors.green.shade600),
                       const SizedBox(width: 8),
-                      Text(f,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textPrimary)),
+                      Expanded(
+                        child: Text(f,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textPrimary)),
+                      ),
                     ],
                   ),
                 )),
@@ -503,14 +548,12 @@ class _SubscriptionSection extends ConsumerWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // Wire to PayMongo / GCash billing URL here.
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Billing integration coming soon.'),
-                    ),
-                  );
-                },
+                onPressed: () => _showContactDialog(
+                  context,
+                  ref,
+                  currentPlan: plan.displayName,
+                  targetPlan: nextPlanLabel,
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -520,7 +563,9 @@ class _SubscriptionSection extends ConsumerWidget {
                   ),
                 ),
                 child: Text(
-                  isOnTrial ? 'Upgrade now' : 'Restore Pro access',
+                  trialExpired
+                      ? 'Contact Us to Reactivate'
+                      : 'Upgrade to $nextPlanLabel',
                   style: const TextStyle(
                       fontSize: 14, fontWeight: FontWeight.w700),
                 ),
@@ -529,6 +574,109 @@ class _SubscriptionSection extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+
+  void _showContactDialog(
+    BuildContext context,
+    WidgetRef ref, {
+    required String currentPlan,
+    required String targetPlan,
+  }) {
+    final business = ref.read(profileProvider).asData?.value?.business;
+    final businessName = business?.name ?? 'your business';
+    final businessId = business?.id ?? '';
+
+    showDialog(
+      context: context,
+      builder: (_) => _ContactUpgradeDialog(
+        businessName: businessName,
+        businessId: businessId,
+        currentPlan: currentPlan,
+        targetPlan: targetPlan,
+      ),
+    );
+  }
+}
+
+class _ContactUpgradeDialog extends StatelessWidget {
+  final String businessName;
+  final String businessId;
+  final String currentPlan;
+  final String targetPlan;
+
+  const _ContactUpgradeDialog({
+    required this.businessName,
+    required this.businessId,
+    required this.currentPlan,
+    required this.targetPlan,
+  });
+
+  String get _message =>
+      'Hi, I\'d like to upgrade "$businessName" from $currentPlan to '
+      '$targetPlan.\nBusiness ID: $businessId';
+
+  Future<void> _launch(BuildContext context, Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open ${uri.scheme}')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text('Upgrade to $targetPlan'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'We don\'t have automatic billing yet — reach out and we\'ll '
+            'get "$businessName" upgraded manually.',
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.call_rounded, color: AppColors.primary),
+            title: const Text('Call or text',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text(_upgradePhone),
+            onTap: () =>
+                _launch(context, Uri(scheme: 'tel', path: _upgradePhone)),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading:
+                const Icon(Icons.email_outlined, color: AppColors.primary),
+            title: const Text('Email',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text(_upgradeEmail),
+            onTap: () => _launch(
+              context,
+              Uri(
+                scheme: 'mailto',
+                path: _upgradeEmail,
+                query:
+                    'subject=${Uri.encodeComponent('Upgrade request — $businessName')}'
+                    '&body=${Uri.encodeComponent(_message)}',
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

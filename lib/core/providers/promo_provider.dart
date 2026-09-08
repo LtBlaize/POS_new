@@ -195,7 +195,18 @@ class PromoRepository {
     }
   }
 
-  Future<void> setActive(String promoId, bool isActive) async {
+  Future<void> setActive(
+    String promoId,
+    bool isActive, {
+    int? maxActivePromos,
+    int? currentActiveCount,
+  }) async {
+    if (isActive &&
+        maxActivePromos != null &&
+        (currentActiveCount ?? 0) >= maxActivePromos) {
+      throw Exception(
+          'Active promo limit reached for your plan ($maxActivePromos max). Deactivate another promo first.');
+    }
     await _client
         .from('promos')
         .update({'is_active': isActive, 'updated_at': DateTime.now().toIso8601String()})
@@ -203,11 +214,23 @@ class PromoRepository {
   }
 
   Future<void> delete(String promoId) async {
-    // promo_items has ON DELETE CASCADE on promo_id — verify this in
-    // Supabase (see Phase 5 note). If it's NOT set, this delete will fail
-    // with a FK violation instead of silently orphaning rows, which is the
-    // safer failure mode either way.
-    await _client.from('promos').delete().eq('id', promoId);
+    // promo_items has ON DELETE CASCADE on promo_id — verified against the
+    // live schema. order_items/void_order_items reference promos.id with
+    // NO ACTION, so Postgres blocks deletion of any promo with order
+    // history (23503 foreign_key_violation) instead of corrupting past
+    // transactions. Caught below and turned into a friendly message so
+    // the UI can offer "deactivate instead" rather than a raw DB error.
+    try {
+      await _client.from('promos').delete().eq('id', promoId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        throw Exception(
+          'This promo has been used in past orders and can\'t be deleted. '
+          'Deactivate it instead to keep it out of the POS grid.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<Promo> duplicate(Promo promo) async {

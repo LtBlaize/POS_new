@@ -30,9 +30,9 @@ enum BusinessType {
 }
 
 enum SubscriptionPlan {
-  free('free'),
-  basic('basic'),
-  premium('premium');
+  starter('starter'),
+  growth('growth'),
+  pro('pro');
 
   final String value;
   const SubscriptionPlan(this.value);
@@ -40,17 +40,16 @@ enum SubscriptionPlan {
   factory SubscriptionPlan.fromString(String v) =>
       SubscriptionPlan.values.firstWhere(
         (e) => e.value == v,
-        orElse: () => SubscriptionPlan.free,
+        orElse: () => SubscriptionPlan.starter,
       );
 
   String get displayName => switch (this) {
-        SubscriptionPlan.free    => 'Free',
-        SubscriptionPlan.basic   => 'Basic',
-        SubscriptionPlan.premium => 'Premium',
+        SubscriptionPlan.starter => 'Starter',
+        SubscriptionPlan.growth  => 'Growth',
+        SubscriptionPlan.pro     => 'Pro',
       };
 
-  bool get isPaid =>
-      this == SubscriptionPlan.basic || this == SubscriptionPlan.premium;
+  bool get isPaid => true; // no free tier anymore
 }
 
 class Business {
@@ -69,12 +68,13 @@ class Business {
   final DateTime updatedAt;
   final DateTime? trialStartedAt;
   final DateTime? trialEndsAt;
+  final DateTime? subscriptionExpiresAt;
 
   const Business({
     required this.id,
     required this.name,
     required this.businessType,
-    this.subscriptionPlan = SubscriptionPlan.free,
+    this.subscriptionPlan = SubscriptionPlan.starter,
     this.logoUrl,
     this.address,
     this.phone,
@@ -86,6 +86,7 @@ class Business {
     required this.updatedAt,
     this.trialStartedAt,
     this.trialEndsAt,
+    this.subscriptionExpiresAt,
   });
 
   // ── Trial state ─────────────────────────────────────────────────────────────
@@ -101,6 +102,22 @@ class Business {
     return diff < 0 ? 0 : diff;
   }
 
+  // ── Paid-access state (Gap A) ───────────────────────────────────────────────
+  // Independent of trial state — a business can have a paid subscription
+  // with no trial data at all (renewed past its original trial), or a live
+  // trial with no subscription_expires_at yet (never converted to paid).
+
+  bool get isSubscriptionActive {
+    if (subscriptionExpiresAt == null) return false;
+    return DateTime.now().isBefore(subscriptionExpiresAt!);
+  }
+
+  int get subscriptionDaysLeft {
+    if (subscriptionExpiresAt == null) return 0;
+    final diff = subscriptionExpiresAt!.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
   // ── Serialisation ────────────────────────────────────────────────────────────
 
   factory Business.fromMap(Map<String, dynamic> map) => Business(
@@ -109,7 +126,7 @@ class Business {
         businessType:
             BusinessType.fromString(map['business_type'] as String),
         subscriptionPlan: SubscriptionPlan.fromString(
-            map['subscription_plan'] as String? ?? 'free'),
+            map['subscription_plan'] as String? ?? 'starter'),
         logoUrl:  map['logo_url']  as String?,
         address:  map['address']   as String?,
         phone:    map['phone']     as String?,
@@ -124,6 +141,9 @@ class Business {
             : null,
         trialEndsAt: map['trial_ends_at'] != null
             ? DateTime.parse(map['trial_ends_at'] as String)
+            : null,
+        subscriptionExpiresAt: map['subscription_expires_at'] != null
+            ? DateTime.parse(map['subscription_expires_at'] as String)
             : null,
       );
 
@@ -143,6 +163,7 @@ class Business {
         'updated_at':        updatedAt.toIso8601String(),
         'trial_started_at':  trialStartedAt?.toIso8601String(),
         'trial_ends_at':     trialEndsAt?.toIso8601String(),
+        'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
       };
 
   Business copyWith({
@@ -161,6 +182,7 @@ class Business {
     DateTime? updatedAt,
     DateTime? trialStartedAt,
     DateTime? trialEndsAt,
+    DateTime? subscriptionExpiresAt,
   }) =>
       Business(
         id:               id               ?? this.id,
@@ -178,6 +200,7 @@ class Business {
         updatedAt:        updatedAt        ?? this.updatedAt,
         trialStartedAt:   trialStartedAt   ?? this.trialStartedAt,
         trialEndsAt:      trialEndsAt      ?? this.trialEndsAt,
+        subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
       );
 
   @override

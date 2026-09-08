@@ -5,7 +5,6 @@ import '../../../core/models/staff.dart';
 import '../../../core/providers/staff_provider.dart';
 import '../../../core/providers/role_permissions_provider.dart';
 import '../../../features/auth/auth_provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/widgets/app_colors.dart';
 
 class StaffSettingsSection extends ConsumerWidget {
@@ -94,14 +93,28 @@ class StaffSettingsSection extends ConsumerWidget {
 
   void _showAddStaffDialog(
       BuildContext context, WidgetRef ref, bool isRestaurant) {
+    final fm = ref.read(featureManagerProvider);
+    final maxStaff = fm.limits.maxStaffAccounts;
+    final currentCount = (ref.read(staffListProvider).asData?.value ?? [])
+        .where((s) => s.role != StaffRole.owner)
+        .length;
+    if (maxStaff != null && currentCount >= maxStaff) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${fm.currentPlan.displayName} allows up to $maxStaff staff accounts. Upgrade for unlimited staff.'),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => _StaffDialog(
         isRestaurant: isRestaurant,
         onSave: (name, role, pin) async {
-          await ref
-              .read(staffListProvider.notifier)
-              .addStaff(name: name, role: role, pin: pin);
+          await ref.read(staffListProvider.notifier).addStaff(
+              name: name, role: role, pin: pin, maxStaffAccounts: maxStaff);
         },
       ),
     );
@@ -293,9 +306,24 @@ class _RolePermissionsCard extends ConsumerWidget {
                             style: const TextStyle(fontSize: 13)),
                         value: enabled,
                         activeThumbColor: color,
-                        onChanged: (_) => ref
-                            .read(rolePermissionsProvider.notifier)
-                            .toggle(roleKey, tab),
+                        onChanged: (_) async {
+                          try {
+                            await ref
+                                .read(rolePermissionsProvider.notifier)
+                                .toggle(roleKey, tab);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '')),
+                                  backgroundColor: Colors.orange.shade700,
+                                ),
+                              );
+                            }
+                          }
+                        },
                       );
                     }),
                     Padding(
@@ -308,12 +336,10 @@ class _RolePermissionsCard extends ConsumerWidget {
                     ),
                     ..._capabilityLabels.entries.map((entry) {
                       final (label, icon) = entry.value;
-                      // Read capability value directly from the already-loaded
-                      // rolePermissionsProvider state (no extra FutureBuilder needed)
-                      // rolePermissionsProvider stores Set<String> for screens only;
-                      // capabilities live in the raw JSONB under the role key.
-                      // We piggyback on perms map's raw source via a separate read.
-                      final enabled = false; // placeholder — see note below
+                      final capabilities = ref
+                          .read(rolePermissionsProvider.notifier)
+                          .capabilitiesFor(role);
+                      final enabled = capabilities.valueFor(entry.key);
                       return SwitchListTile(
                         dense: true,
                         secondary: Icon(icon,
@@ -323,33 +349,22 @@ class _RolePermissionsCard extends ConsumerWidget {
                         value: enabled,
                         activeThumbColor: color,
                         onChanged: (_) async {
-                          final client = Supabase.instance.client;
-                          final bizId = ref
-                                  .read(profileProvider)
-                                  .asData
-                                  ?.value
-                                  ?.businessId ??
-                              '';
-                          final currentRow = await client
-                              .from('business_configs')
-                              .select('role_permissions')
-                              .eq('business_id', bizId)
-                              .maybeSingle();
-                          final current = Map<String, dynamic>.from(
-                              currentRow?['role_permissions']
-                                  as Map<String, dynamic>? ??
-                                  {});
-                          final roleMap = Map<String, dynamic>.from(
-                              current[roleKey] as Map<String, dynamic>? ??
-                                  {});
-                          roleMap[entry.key] = !(roleMap[entry.key] as bool? ?? false);
-                          current[roleKey] = roleMap;
-                          await client
-                              .from('business_configs')
-                              .update({'role_permissions': current})
-                              .eq('business_id', bizId);
-                          // ✅ Invalidate so the provider re-fetches fresh data
-                          ref.invalidate(rolePermissionsProvider);
+                          try {
+                            await ref
+                                .read(rolePermissionsProvider.notifier)
+                                .toggleCapability(roleKey, entry.key);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '')),
+                                  backgroundColor: Colors.orange.shade700,
+                                ),
+                              );
+                            }
+                          }
                         },
                       );
                     }),

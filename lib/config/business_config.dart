@@ -217,7 +217,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   }
 
   // ── Table CRUD ──────────────────────────────────────────────────────────────
-  Future<void> addTables(int count, String? roomId) async {
+  // maxTables: null = unlimited. Caller (UI) is responsible for reading this
+  // from FeatureManager.limits.maxTables and passing the current count check.
+  Future<void> addTables(int count, String? roomId, {int? maxTables}) async {
     if (_businessId == null) return;
     try {
       final existing = await _client
@@ -225,6 +227,14 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
           .select('table_number')
           .eq('business_id', _businessId)
           .eq('is_active', true);
+
+      if (maxTables != null &&
+          (existing as List).length + count > maxTables) {
+        state = state.copyWith(
+          error: 'Table limit reached for your plan ($maxTables max).',
+        );
+        return;
+      }
 
       final existingNumbers = (existing as List)
           .map((row) => int.tryParse(row['table_number'].toString()) ?? 0)
@@ -269,8 +279,14 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   }
 
   // ── Room CRUD ───────────────────────────────────────────────────────────────
-  Future<void> addRoom(String name) async {
+  Future<void> addRoom(String name, {int? maxRooms}) async {
     if (_businessId == null) return;
+    if (maxRooms != null && state.rooms.length >= maxRooms) {
+      state = state.copyWith(
+        error: 'Room limit reached for your plan ($maxRooms max).',
+      );
+      return;
+    }
     try {
       await _client.from('restaurant_rooms').insert({
         'business_id': _businessId,
