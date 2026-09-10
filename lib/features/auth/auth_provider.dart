@@ -80,11 +80,18 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
   debugPrint('[Profile] fetching from Supabase for ${user.id}');
 
   final client = ref.watch(supabaseClientProvider);
-  final map = await client
-      .from('profiles')
-      .select('*, businesses(*)')
-      .eq('id', user.id)
-      .maybeSingle();
+  Map<String, dynamic>? map;
+  try {
+    map = await client
+        .from('profiles')
+        .select('*, businesses(*)')
+        .eq('id', user.id)
+        .maybeSingle()
+        .timeout(const Duration(seconds: 8));
+  } catch (e) {
+    debugPrint('[Profile] query failed or timed out: $e');
+    rethrow;
+  }
 
   return map != null ? Profile.fromMap(map) : null;
 });
@@ -175,7 +182,9 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    await _client.auth.signInWithPassword(email: email, password: password);
+    await _client.auth
+        .signInWithPassword(email: email, password: password)
+        .timeout(const Duration(seconds: 10));
     // ✅ Return immediately. MyApp's ref.listen on authStateProvider
     //    will fire and handle navigation to /pos or /role-select.
   }

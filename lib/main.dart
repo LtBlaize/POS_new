@@ -92,15 +92,8 @@ Future<void> main() async {
 
 final existingSession = Supabase.instance.client.auth.currentSession;
 if (existingSession != null) {
-    try {
-      await Supabase.instance.client.auth.refreshSession();
-      debugPrint('[Boot] Session refreshed successfully');
-    } on AuthException catch (e) {
-      debugPrint('[Boot] Auth error ($e) — signing out');
-      await Supabase.instance.client.auth.signOut();
-    } catch (e) {
-      debugPrint('[Boot] Network error during refresh ($e) — keeping session');
-    }
+    debugPrint('[Boot] Cached session found for ${existingSession.user.id} — '
+        'letting SDK auto-refresh handle validity (autoRefreshToken: true)');
   }
 
   final prefs     = await SharedPreferences.getInstance();
@@ -259,32 +252,14 @@ class _MyAppState extends ConsumerState<MyApp> {
               return;
             }
 
-            debugPrint('[Auth] Signed in: ${currentUser.id} → loading profile');
-
             try {
-              ref.invalidate(profileProvider);
-              final profile = await ref.read(profileProvider.future);
+              // Authentication succeeded.
+              // Let the dedicated pending screen resolve admin/profile/role.
+              // Do not perform network-dependent initialization here.
+              debugPrint('[Auth] Signed in: ${currentUser.id} → /pending');
 
-              if (profile?.business?.id != null) {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('business_id', profile!.business!.id);
-              }
-
-              final prefs        = await SharedPreferences.getInstance();
-              final savedRole    = prefs.getString('device_role');
-              final isRestaurant = profile?.businessType?.isRestaurant ?? false;
-
-              if (savedRole == null && isRestaurant) {
-                debugPrint('[Auth] Restaurant first launch → /role-select');
-                nav.pushNamedAndRemoveUntil('/role-select', (_) => false);
-              } else {
-                if (savedRole == null) {
-                  await prefs.setString('device_role', DeviceRole.pos.name);
-                  ref.read(deviceRoleProvider.notifier).state = DeviceRole.pos;
-                }
-                debugPrint('[Auth] → /pos');
-                nav.pushNamedAndRemoveUntil('/pos', (_) => false);
-              }
+              nav.pushNamedAndRemoveUntil('/pending', (_) => false);
+              return;
             } catch (e) {
               debugPrint('[Auth] Profile load error: $e — falling back to /pos');
               nav.pushNamedAndRemoveUntil('/pos', (_) => false);

@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/admin_colors.dart';
 import '../../../core/services/admin_payments_service.dart';
+import '../../../core/services/admin_subscription_service.dart';
 import 'admin_payments_providers.dart';
+
+// Keep in sync with the subscription_plan enum / pricing elsewhere in the
+// admin dashboard (starter/growth/pro, ₱499/₱799/₱1,299).
+const kPlanPrices = <String, double>{
+  'starter': 499,
+  'growth': 799,
+  'pro': 1299,
+};
 
 class AdminPaymentsScreen extends ConsumerWidget {
   const AdminPaymentsScreen({super.key});
@@ -266,18 +275,16 @@ class _RecordPaymentDialog extends ConsumerStatefulWidget {
 
 class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   final _businessCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
   BusinessOption? _selectedBusiness;
-  String _status = 'completed';
+  String? _selectedPlan; // 'starter' | 'growth' | 'pro'
   bool _submitting = false;
   String? _error;
 
   @override
   void dispose() {
     _businessCtrl.dispose();
-    _amountCtrl.dispose();
     _referenceCtrl.dispose();
     _reasonCtrl.dispose();
     super.dispose();
@@ -285,34 +292,55 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
 
   Future<void> _submit() async {
     final biz = _selectedBusiness;
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    final plan = _selectedPlan;
     if (biz == null) {
       setState(() => _error = 'Select a business first');
       return;
     }
-    if (amount == null || amount <= 0) {
-      setState(() => _error = 'Enter a valid amount');
+    if (plan == null) {
+      setState(() => _error = 'Select a plan');
       return;
     }
+    final amount = kPlanPrices[plan]!;
 
     setState(() {
       _submitting = true;
       _error = null;
     });
 
+    // Two separate Edge Function calls, not one atomic operation server-side.
+    // If the plan-change call fails after the payment already succeeded,
+    // surface that specifically rather than folding both into one generic
+    // error — the payment is still recorded either way, only the plan/expiry
+    // update is left undone.
     try {
       await ref.read(adminPaymentsServiceProvider).recordManualPayment(
             businessId: biz.id,
             amount: amount,
-            status: _status,
+            status: 'completed',
             reference: _referenceCtrl.text.trim(),
             reason: _reasonCtrl.text.trim(),
+          );
+    } catch (e) {
+      setState(() {
+        _error = 'Payment failed: $e';
+        _submitting = false;
+      });
+      return;
+    }
+
+    try {
+      await ref.read(adminSubscriptionServiceProvider).changePlan(
+            businessId: biz.id,
+            newPlan: plan,
+            durationMonths: 1,
           );
       ref.invalidate(paymentListProvider);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error =
+            'Payment recorded, but applying the plan failed: $e. Use Change Plan on the business to finish this manually.';
         _submitting = false;
       });
     }
@@ -320,6 +348,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final businessesAsync = ref.watch(allBusinessOptionsProvider);
+    final allBusinesses = businessesAsync.value ?? const <BusinessOption>[];
+
     return AlertDialog(
       title: const Text('Record manual payment'),
       content: SizedBox(
@@ -330,36 +361,75 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
           children: [
             Autocomplete<BusinessOption>(
               displayStringForOption: (b) => b.name,
-              optionsBuilder: (value) async {
-                if (value.text.trim().length < 2) return const [];
-                return ref.read(businessSearchProvider(value.text).future);
+              optionsBuilder: (value) {
+                final q = value.text.trim().toLowerCase();
+                if (q.isEmpty) return allBusinesses; // shows the full list as soon as the field is tapped
+                final starts = <BusinessOption>[];
+                final contains = <BusinessOption>[];
+                for (final b in allBusinesses) {
+                  final name = b.name.toLowerCase();
+                  if (name.startsWith(q)) {
+                    starts.add(b);
+                  } else if (name.contains(q)) {
+                    contains.add(b);
+                  }
+                }
+                return [...starts, ...contains]; // prefix matches ranked above mid-string matches
               },
               onSelected: (b) => setState(() => _selectedBusiness = b),
               fieldViewBuilder: (context, controller, focusNode, onSubmit) {
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
-                  decoration: const InputDecoration(labelText: 'Business', hintText: 'Search by name…'),
+                  decoration: InputDecoration(
+                    labelText: 'Business',
+                    hintText: businessesAsync.isLoading ? 'Loading businesses…' : 'Tap to browse or type to filter…',
+                  ),
                 );
               },
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount (PHP)'),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _status,
-              decoration: const InputDecoration(labelText: 'Status'),
-              items: const [
-                DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                DropdownMenuItem(value: 'failed', child: Text('Failed')),
-                DropdownMenuItem(value: 'refunded', child: Text('Refunded')),
-              ],
-              onChanged: (v) => setState(() => _status = v ?? 'completed'),
+            const SizedBox(height: 16),
+            const Text('Plan', style: TextStyle(fontSize: 12, color: AdminColors.textMuted)),
+            const SizedBox(height: 8),
+            Row(
+              children: kPlanPrices.entries.map((e) {
+                final selected = _selectedPlan == e.key;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedPlan = e.key),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: selected ? AdminColors.infoBg : AdminColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected ? AdminColors.primary : AdminColors.border,
+                            width: selected ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              e.key[0].toUpperCase() + e.key.substring(1),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: selected ? AdminColors.primary : AdminColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('₱${e.value.toStringAsFixed(0)}',
+                                style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 12),
             TextField(

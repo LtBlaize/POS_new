@@ -72,9 +72,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passCtrl.text,
           );
 
-      // ✅ Done. Do not call Navigator here.
-      // The auth listener in MyApp (main.dart) takes over from here.
-      // _isLoading will naturally reset when the widget is replaced.
+      // Login succeeded. Navigation is handled by MyApp's auth listener.
+      // If navigation takes a moment, keep the button disabled.
+      if (!mounted) return;
 
     } catch (e) {
       // login() throws if credentials are wrong or network fails.

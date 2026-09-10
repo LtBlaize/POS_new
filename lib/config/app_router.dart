@@ -24,6 +24,7 @@ import '../features/admin/admin_shell.dart';                  // ADD (Phase 4)
 import '../features/admin/dashboard/admin_dashboard_screen.dart';  // ADD (Phase 4)
 import '../features/admin/businesses/admin_businesses_screen.dart';
 import '../features/admin/businesses/admin_business_detail_screen.dart';
+import '../features/admin/subscriptions/admin_subscriptions_screen.dart';
 import '../features/admin/payments/admin_payments_screen.dart';
 import '../features/admin/plans/admin_plans_screen.dart';
 import '../features/admin/activity/admin_activity_screen.dart';
@@ -135,19 +136,14 @@ class AppRouter {
       // topbar persist across navigation) instead of a bare placeholder
       // scaffold. The placeholder content itself is unchanged — only what
       // wraps it changed.
-      if (name.startsWith(_adminBusinessDetailPrefix)) {
-        final id = name.substring(_adminBusinessDetailPrefix.length);
-        return _route(AdminShell(
-          currentRoute: name,
-          child: AdminPlaceholderScreen(title: 'Business Detail: $id'),
-        ));
-      }
-            final title = _adminRouteTitles[name] ?? _adminRouteTitles['/admin']!;
+      final title = _adminRouteTitles[name] ?? _adminRouteTitles['/admin']!;
       Widget content;
       if (name == '/admin' || name == '/admin/dashboard') {
         content = const AdminDashboardScreen();
       } else if (name == '/admin/businesses') {
         content = const AdminBusinessesScreen();
+      } else if (name == '/admin/subscriptions') {
+        content = const AdminSubscriptionsScreen();
       } else if (name.startsWith(_adminBusinessDetailPrefix)) {
         final id = name.substring(_adminBusinessDetailPrefix.length);
         content = AdminBusinessDetailScreen(businessId: id);

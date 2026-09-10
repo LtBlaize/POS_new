@@ -79,6 +79,7 @@ class BusinessListItem {
   final String subscriptionPlan;
   final bool isActive;
   final DateTime? trialEndsAt;
+  final DateTime? subscriptionExpiresAt;
   final DateTime createdAt;
 
   const BusinessListItem({
@@ -88,6 +89,7 @@ class BusinessListItem {
     required this.subscriptionPlan,
     required this.isActive,
     required this.trialEndsAt,
+    required this.subscriptionExpiresAt,
     required this.createdAt,
   });
 }
@@ -168,7 +170,7 @@ final businessListProvider =
   try {
     final client = Supabase.instance.client;
     var query = client.from('businesses').select(
-        'id, name, business_type, subscription_plan, is_active, trial_ends_at, created_at');
+        'id, name, business_type, subscription_plan, is_active, trial_ends_at, subscription_expires_at, created_at');
 
     if (filter.search.trim().isNotEmpty) {
       query = query.ilike('name', '%${filter.search.trim()}%');
@@ -205,6 +207,9 @@ final businessListProvider =
               isActive: r['is_active'] as bool? ?? false,
               trialEndsAt: r['trial_ends_at'] != null
                   ? DateTime.parse(r['trial_ends_at'] as String).toLocal()
+                  : null,
+              subscriptionExpiresAt: r['subscription_expires_at'] != null
+                  ? DateTime.parse(r['subscription_expires_at'] as String).toLocal()
                   : null,
               createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
             ))
@@ -338,3 +343,36 @@ final businessDetailProvider =
     return null;
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACCESS STATUS (shared logic, mirrors _AccessStatusPill in
+// admin_business_detail_screen.dart — keep the two in sync if either changes)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum AccessStatus { paidActive, trialActive, expired, suspended }
+
+AccessStatus computeAccessStatus(BusinessListItem b) {
+  if (!b.isActive) return AccessStatus.suspended;
+  final now = DateTime.now();
+  if (b.subscriptionExpiresAt != null && b.subscriptionExpiresAt!.isAfter(now)) {
+    return AccessStatus.paidActive;
+  }
+  if (b.trialEndsAt != null && b.trialEndsAt!.isAfter(now)) {
+    return AccessStatus.trialActive;
+  }
+  return AccessStatus.expired;
+}
+
+String accessStatusPillKey(AccessStatus s) => switch (s) {
+      AccessStatus.paidActive => 'active',
+      AccessStatus.trialActive => 'trial',
+      AccessStatus.expired => 'expired',
+      AccessStatus.suspended => 'suspended',
+    };
+
+String accessStatusLabel(AccessStatus s) => switch (s) {
+      AccessStatus.paidActive => 'Paid',
+      AccessStatus.trialActive => 'Trial',
+      AccessStatus.expired => 'Expired',
+      AccessStatus.suspended => 'Suspended',
+    };

@@ -119,7 +119,12 @@ final paymentListProvider = FutureProvider.autoDispose<PaymentListPage>((ref) as
   }
 });
 
-// ── Business search, for the "Add manual payment" form's autocomplete ────
+// ── Business list, for the "Add manual payment" form's autocomplete ──────
+// Small table (a handful of businesses) — fetched once and filtered
+// client-side in the dialog instead of round-tripping to Postgres on every
+// keystroke. Replaces the old per-query ilike search, which required 2+
+// typed characters before showing anything and added network latency to
+// every keystroke.
 
 class BusinessOption {
   final String id;
@@ -127,17 +132,10 @@ class BusinessOption {
   const BusinessOption(this.id, this.name);
 }
 
-final businessSearchProvider =
-    FutureProvider.family.autoDispose<List<BusinessOption>, String>((ref, query) async {
-  if (query.trim().length < 2) return [];
+final allBusinessOptionsProvider = FutureProvider.autoDispose<List<BusinessOption>>((ref) async {
   try {
     final client = Supabase.instance.client;
-    final rows = await client
-        .from('businesses')
-        .select('id, name')
-        .ilike('name', '%${query.trim()}%')
-        .order('name')
-        .limit(10);
+    final rows = await client.from('businesses').select('id, name').order('name');
     return (rows as List)
         .map((r) => BusinessOption(r['id'] as String, r['name'] as String))
         .toList();

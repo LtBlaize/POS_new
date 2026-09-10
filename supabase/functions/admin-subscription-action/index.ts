@@ -14,7 +14,7 @@
 // fall back to is the same operation as `suspend` (admin_set_business_active
 // false) — it doesn't need its own plan-change RPC call. Use `suspend`.
 
-import { serve } from "jsr:@std/http@1.0.12/server";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

@@ -27,7 +27,8 @@ final isPlatformAdminProvider = FutureProvider<bool>((ref) async {
   if (user == null) return false;
 
   try {
-    final result = await Supabase.instance.client.rpc('is_platform_admin');
+    final result = await Supabase.instance.client
+        .rpc('is_platform_admin', params: {'required_role': null});
     return result as bool? ?? false;
   } catch (e) {
     debugPrint('[AdminCheck] RPC failed: $e');
