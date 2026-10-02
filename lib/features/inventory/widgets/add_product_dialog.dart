@@ -235,7 +235,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     }
 
     // ← added: block non-owners from reducing stock when editing
-    if (widget.product != null && _trackInventory) {
+    if (widget.product != null && _trackInventory && _variants.isEmpty) {
       final staff = ref.read(activeStaffProvider);
       final isOwner = staff?.role == StaffRole.owner;
       final newStock = int.tryParse(_stockController.text) ?? 0;
@@ -265,7 +265,8 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
         'cost_price':      double.tryParse(_costController.text) ?? 0,
         'track_inventory': _trackInventory,
-        'stock_quantity':  _trackInventory ? (int.tryParse(_stockController.text) ?? 0) : 0,
+        'stock_quantity':  (_trackInventory && _variants.isEmpty) ? (int.tryParse(_stockController.text) ?? 0) : 0,
+        if (_variants.isNotEmpty) 'is_available': true,
         'send_to_kitchen': _sendToKitchen,
       };
 
@@ -278,7 +279,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
             .insert({
               ...data,
               'business_id': profile!.businessId,
-              'is_available': !_trackInventory || (int.tryParse(_stockController.text) ?? 0) > 0,
+              'is_available': !_trackInventory || _variants.isNotEmpty || (int.tryParse(_stockController.text) ?? 0) > 0,
               'is_active': true,
             })
             .select('id')
@@ -329,12 +330,29 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'price_delta': v.priceDelta,
         'sku': v.sku?.trim().isEmpty == true ? null : v.sku,
         'barcode': v.barcode?.trim().isEmpty == true ? null : v.barcode,
-        'stock_quantity': v.stockQuantity,
         'cost_price': v.costPrice,
         'is_active': true,
       };
       if (v.id.startsWith('new_')) {
-        await client.from('product_variants').insert(payload);
+        final row = await client
+            .from('product_variants')
+            .insert({...payload, 'stock_quantity': v.stockQuantity})
+            .select('id')
+            .single();
+        if (v.stockQuantity > 0) {
+          await client.from('inventory_logs').insert({
+            'business_id':
+                ref.read(profileProvider).asData?.value?.businessId,
+            'product_id': productId,
+            'variant_id': row['id'],
+            'action': 'restock',
+            'quantity_change': v.stockQuantity,
+            'quantity_before': 0,
+            'quantity_after': v.stockQuantity,
+            'performed_by': client.auth.currentUser?.id,
+            'notes': 'Opening stock',
+          });
+        }
       } else {
         await client
             .from('product_variants')
@@ -537,8 +555,16 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       ),
                       
                       
-                      // Stock quantity — only visible when tracking
-                      if (_trackInventory) ...[
+                      // Stock quantity — only when tracking and no variants
+                      if (_trackInventory && _variants.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Stock is tracked per variant. Restock them from the Inventory list.',
+                          style: TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                      if (_trackInventory && _variants.isEmpty) ...[
                         const SizedBox(height: 14),
                         // ← changed: label differs for add vs edit
                         _label(isEdit ? 'Stock Quantity' : 'Initial Stock Quantity'),
@@ -1370,7 +1396,10 @@ class _VariantRowState extends State<_VariantRow> {
                     Expanded(
                       child: _miniField(
                         controller: _stockCtrl,
-                        label: 'Stock',
+                        label: widget.variant.id.startsWith('new_')
+                            ? 'Opening stock'
+                            : 'Stock (edit in list)',
+                        enabled: widget.variant.id.startsWith('new_'),
                         hint: '0',
                         keyboardType: TextInputType.number,
                         onChanged: (_) => _pushUpdate(),
@@ -1436,6 +1465,7 @@ class _VariantRowState extends State<_VariantRow> {
     String? hint,
     TextInputType? keyboardType,
     required void Function(String) onChanged,
+    bool enabled = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1448,6 +1478,7 @@ class _VariantRowState extends State<_VariantRow> {
         const SizedBox(height: 4),
         TextField(
           controller: controller,
+          enabled: enabled,
           keyboardType: keyboardType,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 12),

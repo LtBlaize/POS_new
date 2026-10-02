@@ -31,7 +31,7 @@ class InventoryExportService {
         _escape(p.name),
         p.price.toStringAsFixed(2),
         p.costPrice.toStringAsFixed(2),
-        p.stockQuantity,
+        p.effectiveStock,
         p.trackInventory ? 'true' : 'false',
         _escape(p.category),
         _escape(p.barcode ?? ''),

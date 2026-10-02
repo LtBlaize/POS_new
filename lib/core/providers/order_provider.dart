@@ -19,6 +19,7 @@ import '../providers/app_context_provider.dart';
 import '../services/event_bus.dart';
 import 'product_provider.dart';
 import '../models/order_payment.dart';
+import '../models/product_variant.dart';
 
 
 // ── Cache invalidation signal ─────────────────────────────────────────────────
@@ -100,7 +101,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
           final allItemRows = await client
               .from('order_items')
               .select(
-                  '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen)')
+'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
               .inFilter('order_id', uncachedIds);
 
           final rowsByOrder = <String, List<Map<String, dynamic>>>{};
@@ -136,8 +137,11 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                   'category': '',
                   'business_id': pMap['business_id'] ?? '',
                 });
+                final vMap = row['product_variants'] as Map<String, dynamic>?;
                 return CartItem(
                   product: product,
+                  selectedVariant:
+                      vMap != null ? ProductVariant.fromMap(vMap) : null,
                   quantity: row['quantity'] as int,
                   costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
                   notes: row['notes'] as String?,
@@ -150,6 +154,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                   productId: row['product_id'] as String,
                   productName: row['product_name'] as String,
                   quantity: row['quantity'] as int,
+                  variantId: row['variant_id'] as String?,
                   trackInventory: pMap['track_inventory'] as bool? ?? false,
                   sendToKitchen: pMap['send_to_kitchen'] as bool? ?? true,
                 );
@@ -295,7 +300,7 @@ class OrderService {
     final orderId = orderRow['id'] as String;
 
     final orderItems = items
-        .expand((item) => _buildOnlineRows(orderId, item))
+        .expand((item) => _withVariant(_buildOnlineRows(orderId, item), item))
         .toList();
 
     await _client.from('order_items').insert(orderItems);
@@ -355,7 +360,7 @@ class OrderService {
     await _local.insertOfflineOrder(order);
 
     final itemPayloads = items
-        .expand((i) => _buildOfflineRows(i))
+        .expand((i) => _withVariant(_buildOfflineRows(i), i))
         .toList();
 
     await _syncQueue.enqueue(
@@ -607,6 +612,7 @@ class OrderService {
     //    recalculate order totals (or cancel if last item).
     await _local.voidOrderItem(
       voidId: voidId,
+      variantId: variantId,
       orderId: orderId,
       productId: productId,
       productName: productName,
@@ -625,7 +631,19 @@ class OrderService {
     if (trackInventory) {
       try {
         final inventoryService = _ref.read(inventoryServiceProvider);
-        // variantId is non-null when the voided item was a variant sale
+        // variantId is non-null when the voided item was a variant sale.
+        // Re-read stock so a stale snapshot can't overwrite newer sales.
+        if (variantId != null) {
+          final fv = (await _local.getVariantsForProduct(productId))
+              .where((v) => v.id == variantId)
+              .firstOrNull;
+          currentStock = fv?.stockQuantity ?? currentStock;
+        } else {
+          final fp = (await _local.getProducts(businessId))
+              .where((p) => p.id == productId)
+              .firstOrNull;
+          currentStock = fp?.stockQuantity ?? currentStock;
+        }
         if (variantId != null) {
           await inventoryService.adjustVariantStock(
             businessId: businessId,
@@ -671,15 +689,19 @@ class OrderService {
         // Insert the void record
         await _client
             .from('void_order_items')
-            .insert(voidRecord.toMap());
+            .insert({
+              ...voidRecord.toMap(),
+              if (variantId != null) 'variant_id': variantId,
+            });
 
         // Remove item from Supabase order_items
-        await _client
+        var del = _client
             .from('order_items')
             .delete()
             .eq('order_id', orderId)
-            .eq('product_id', productId)
-            .limit(1);
+            .eq('product_id', productId);
+        if (variantId != null) del = del.eq('variant_id', variantId);
+        await del.limit(1);
 
         // Fetch remaining items to decide order fate
         final remaining = await _client
@@ -753,6 +775,7 @@ class OrderService {
       recordId: voidId,
       payload: {
         ...voidRecord.toMap(),
+        if (variantId != null) 'variant_id': variantId,
         'track_inventory': trackInventory,
         'current_stock': currentStock,
         'business_id': businessId,
@@ -932,7 +955,7 @@ class OrderService {
         final itemRows = await _client
             .from('order_items')
             .select(
-                '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active)')
+'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
             .eq('order_id', orderId);
 
         final cartItems = (itemRows as List).map((row) {
@@ -943,8 +966,11 @@ class OrderService {
               'category': '',
               'business_id': pMap['business_id'] ?? '',
             });
+            final vMap = row['product_variants'] as Map<String, dynamic>?;
             return CartItem(
                 product: product,
+                selectedVariant:
+                    vMap != null ? ProductVariant.fromMap(vMap) : null,
                 quantity: row['quantity'] as int,
                 costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
                 notes: row['notes'] as String?);
@@ -1121,7 +1147,25 @@ class OrderService {
     ];
   }
 
-  // ── Inventory deduction ─────────────────────────────────────────────────────
+  /// Adds variant_id to the rows built above: the plain item's chosen
+  /// variant, or each promo component's variant (row 0 is the promo header).
+  List<Map<String, dynamic>> _withVariant(
+      List<Map<String, dynamic>> rows, CartItem item) {
+    if (item.isPromo) {
+      final comps = item.promoComponents!;
+      return [
+        for (var i = 0; i < rows.length; i++)
+          i == 0
+              ? rows[i]
+              : {...rows[i], 'variant_id': comps[i - 1].variantId},
+      ];
+    }
+    return [
+      {...rows.first, 'variant_id': item.selectedVariant?.id},
+    ];
+  }
+
+  // ── Inventory deduction─────────────────────────────────────────────────────
 
   Future<void> _deductInventory(
       String businessId, List<CartItem> items) async {

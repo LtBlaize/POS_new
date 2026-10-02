@@ -11,6 +11,7 @@ import 'inventory_shared.dart';
 import '../../../shared/widgets/marquee_text.dart';
 import '../../../core/providers/staff_provider.dart';
 import '../../../core/models/staff.dart';
+import '../../../core/models/product_variant.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TABLE HEADER (tablet / desktop only)
@@ -148,6 +149,78 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
     );
   }
 
+  bool _expanded = false;
+  String? _adjustingVariantId;
+
+  Future<void> _adjustVariant(ProductVariant v, int delta) async {
+    if (_adjustingVariantId != null) return;
+    setState(() => _adjustingVariantId = v.id);
+    try {
+      await ref.read(inventoryProvider.notifier).adjustVariant(
+            widget.entry.product.id,
+            v.id,
+            delta,
+            action: delta > 0 ? 'restock' : 'adjustment',
+            notes: delta > 0 ? 'Restock' : 'Manual decrease',
+          );
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _adjustingVariantId = null);
+    }
+  }
+
+  void _showSetVariantDialog(ProductVariant v) {
+    final isOwner = ref.read(activeStaffProvider)?.role == StaffRole.owner;
+    final current = v.stockQuantity;
+    final controller = TextEditingController(text: '$current');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Set stock — ${widget.entry.product.name} (${v.name})',
+            style: const TextStyle(fontSize: 16)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Quantity',
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            helperText:
+                isOwner ? null : 'Minimum: $current (cannot reduce stock)',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white),
+            onPressed: () {
+              final n = int.tryParse(controller.text);
+              if (n == null) return;
+              if (!isOwner && n < current) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Cannot reduce stock below $current'),
+                  backgroundColor: AppColors.danger,
+                ));
+                return;
+              }
+              ref.read(inventoryProvider.notifier).setVariantStock(
+                  widget.entry.product.id, v.id, n);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditDialog() {
     showDialog(
       context: context,
@@ -160,6 +233,35 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
   Widget build(BuildContext context) {
     final staff = ref.watch(activeStaffProvider);
     final isOwner = staff?.role == StaffRole.owner;
+
+    if (widget.entry.product.hasVariants) {
+      final phone = widget.layout == InventoryLayout.phone;
+      final p = widget.entry.product;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _VariantParentRow(
+            entry: widget.entry,
+            phone: phone,
+            expanded: _expanded,
+            onToggle: () => setState(() => _expanded = !_expanded),
+            onEdit: _showEditDialog,
+          ),
+          if (_expanded)
+            for (final v in p.activeVariants)
+              _VariantStockRow(
+                variant: v,
+                price: p.priceForVariant(v),
+                threshold: widget.entry.lowStockThreshold,
+                phone: phone,
+                isOwner: isOwner,
+                busy: _adjustingVariantId == v.id,
+                onAdjust: (d) => _adjustVariant(v, d),
+                onSet: () => _showSetVariantDialog(v),
+              ),
+        ],
+      );
+    }
 
     return widget.layout == InventoryLayout.phone
         ? _PhoneCard(
@@ -595,6 +697,249 @@ class _TableRow extends StatelessWidget {
                   style:
                       TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// VARIANT PARENT ROW + VARIANT STOCK ROW
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VariantParentRow extends StatelessWidget {
+  final InventoryEntry entry;
+  final bool phone;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback onEdit;
+
+  const _VariantParentRow({
+    required this.entry,
+    required this.phone,
+    required this.expanded,
+    required this.onToggle,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = entry.product;
+    final vs = p.activeVariants;
+    final out = vs.where((v) => v.stockQuantity <= 0).length;
+    final low = vs
+        .where((v) =>
+            v.stockQuantity > 0 && v.stockQuantity <= entry.lowStockThreshold)
+        .length;
+    final prices = vs.map((v) => p.priceForVariant(v)).toList()..sort();
+    final priceText = prices.first == prices.last
+        ? '₱${prices.first.toStringAsFixed(0)}'
+        : '₱${prices.first.toStringAsFixed(0)}–${prices.last.toStringAsFixed(0)}';
+
+    Widget? badge;
+    if (out > 0 || low > 0) {
+      final c = out > 0 ? AppColors.danger : const Color(0xFFF59E0B);
+      badge = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(out > 0 ? '$out out' : '$low low',
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w700, color: c)),
+      );
+    }
+
+    final chevron = Icon(
+        expanded ? Icons.expand_less : Icons.expand_more,
+        size: 18,
+        color: AppColors.textSecondary);
+
+    final nameCol = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(p.name,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+        Text('${vs.length} variants',
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary)),
+      ],
+    );
+
+    final editBtn = TextButton(
+      onPressed: onEdit,
+      style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+      child: const Text('Edit',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+
+    if (phone) {
+      return InkWell(
+        onTap: onToggle,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+          padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            children: [
+              chevron,
+              const SizedBox(width: 8),
+              Expanded(child: nameCol),
+              if (badge != null) ...[badge, const SizedBox(width: 8)],
+              Text('${entry.stock}',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
+              editBtn,
+            ],
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Row(children: [
+                chevron,
+                const SizedBox(width: 8),
+                Expanded(child: nameCol),
+              ]),
+            ),
+            Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(6)),
+                  child: Text(p.category,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary)),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(priceText,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+            ),
+            Expanded(
+              flex: 3,
+              child: Row(children: [
+                Text('${entry.stock}',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 6),
+                const Text('total',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary)),
+                if (badge != null) ...[const SizedBox(width: 8), badge],
+              ]),
+            ),
+            const SizedBox(width: 72),
+            SizedBox(width: 72, child: editBtn),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VariantStockRow extends StatelessWidget {
+  final ProductVariant variant;
+  final double price;
+  final int threshold;
+  final bool phone;
+  final bool isOwner;
+  final bool busy;
+  final ValueChanged<int> onAdjust;
+  final VoidCallback onSet;
+
+  const _VariantStockRow({
+    required this.variant,
+    required this.price,
+    required this.threshold,
+    required this.phone,
+    required this.isOwner,
+    required this.busy,
+    required this.onAdjust,
+    required this.onSet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final q = variant.stockQuantity;
+    final color = q <= 0
+        ? AppColors.danger
+        : q <= threshold
+            ? const Color(0xFFF59E0B)
+            : AppColors.textPrimary;
+
+    return Container(
+      color: AppColors.surface,
+      padding: EdgeInsets.fromLTRB(phone ? 32 : 56, 8, phone ? 16 : 24, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(variant.name,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          Text('₱${price.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(width: 16),
+          StepperButton(
+            icon: Icons.remove,
+            onTap: (isOwner && !busy) ? () => onAdjust(-1) : null,
+          ),
+          SizedBox(
+            width: 44,
+            child: busy
+                ? const Center(
+                    child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2)))
+                : Text('$q',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: color)),
+          ),
+          StepperButton(
+            icon: Icons.add,
+            onTap: busy ? null : () => onAdjust(1),
+            positive: true,
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onSet,
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text('Set',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

@@ -54,6 +54,12 @@ class Product {
   List<ProductVariant> get activeVariants =>
       variants.where((v) => v.isActive).toList();
 
+  /// The single stock number to show. With variants it is the sum of the
+  /// active variants; the parent's own stock_quantity is ignored.
+  int get effectiveStock => hasVariants
+      ? activeVariants.fold<int>(0, (s, v) => s + v.stockQuantity)
+      : stockQuantity;
+
   /// Resolved price for a given variant (base + delta)
   double priceForVariant(ProductVariant variant) =>
       variant.resolvedPrice(price);

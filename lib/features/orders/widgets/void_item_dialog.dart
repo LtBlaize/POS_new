@@ -151,7 +151,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             orderId: widget.orderId,
             productId: widget.item.product.id,
             productName: widget.item.product.name,
-            unitPrice: widget.item.product.price,
+            unitPrice: widget.item.effectivePrice,
             quantity: widget.item.quantity,
             reason: _selectedReason!,
             voidedByStaffId: widget.authorisedStaff.id,

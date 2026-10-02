@@ -337,11 +337,27 @@ class InventoryImportService {
       }
 
       // Update existing products one by one (Supabase batch update not supported)
+      final updateIds = toUpdate.map((r) => r.existingProduct!.id).toList();
+      final withVariants = <String>{};
+      if (updateIds.isNotEmpty) {
+        final vr = await _client
+            .from('product_variants')
+            .select('product_id')
+            .eq('is_active', true)
+            .inFilter('product_id', updateIds);
+        withVariants
+            .addAll((vr as List).map((r) => r['product_id'] as String));
+      }
+
       for (final r in toUpdate) {
-        await _client
-            .from('products')
-            .update(_toUpdatePayload(r))
-            .eq('id', r.existingProduct!.id);
+        final id = r.existingProduct!.id;
+        final payload = _toUpdatePayload(r);
+        if (withVariants.contains(id)) {
+          // Stock lives on the variants — never overwrite from the parent row.
+          payload.remove('stock_quantity');
+          payload.remove('is_available');
+        }
+        await _client.from('products').update(payload).eq('id', id);
         updated++;
       }
 

@@ -1549,6 +1549,7 @@ class LocalDbService {
     required String reason,
     required String voidedByStaffId,
     required String voidedByStaffName,
+    String? variantId,
   }) =>
       _write((d) async {
         final now = DateTime.now().toIso8601String();
@@ -1575,8 +1576,10 @@ class LocalDbService {
 
           await txn.delete(
             'order_items',
-            where: 'order_id = ? AND product_id = ?',
-            whereArgs: [orderId, productId],
+            where: variantId != null
+                ? 'order_id = ? AND product_id = ? AND variant_id = ?'
+                : 'order_id = ? AND product_id = ?',
+            whereArgs: [orderId, productId, if (variantId != null) variantId],
           );
 
           final remaining = await txn.query(

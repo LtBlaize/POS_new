@@ -115,6 +115,11 @@ class CheckoutService {
           }
           if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
+          if (item.selectedVariant != null) {
+            final err = await _checkVariantStock(item);
+            if (err != null) return CheckoutResult.error(err);
+            continue;
+          }
           try {
             final row = await client
                 .from('products')
@@ -147,12 +152,17 @@ class CheckoutService {
         final cached = await local.getProducts(businessId);
         for (final item in items) {
           if (item.isPromo) {
-            final err = _checkPromoStockLocal(cached, item);
+            final err = await _checkPromoStockLocal(cached, item);
             if (err != null) return CheckoutResult.error(err);
             continue;
           }
           if (item.product.isCustom) continue;
           if (!item.product.trackInventory) continue;
+          if (item.selectedVariant != null) {
+            final err = await _checkVariantStock(item);
+            if (err != null) return CheckoutResult.error(err);
+            continue;
+          }
           final p =
               cached.where((p) => p.id == item.product.id).firstOrNull;
           if (p != null && item.quantity > p.stockQuantity) {
@@ -337,6 +347,57 @@ class CheckoutService {
     );
   }
 
+  Future<int?> _variantStockLeft(String productId, String variantId) async {
+    if (_isOnline) {
+      try {
+        final row = await _ref
+            .read(supabaseClientProvider)
+            .from('product_variants')
+            .select('stock_quantity')
+            .eq('id', variantId)
+            .single();
+        return row['stock_quantity'] as int? ?? 0;
+      } catch (_) {}
+    }
+    final vs = await _ref
+        .read(localDbServiceProvider)
+        .getVariantsForProduct(productId);
+    return vs.where((v) => v.id == variantId).firstOrNull?.stockQuantity;
+  }
+
+  Future<String?> _checkVariantStock(CartItem item) async {
+    final id = item.selectedVariant!.id;
+    int? available;
+    var name = item.selectedVariant!.name;
+
+    if (_isOnline) {
+      try {
+        final row = await _ref
+            .read(supabaseClientProvider)
+            .from('product_variants')
+            .select('stock_quantity, name')
+            .eq('id', id)
+            .single();
+        available = row['stock_quantity'] as int? ?? 0;
+        name = row['name'] as String? ?? name;
+      } catch (_) {}
+    }
+    if (available == null) {
+      final vs = await _ref
+          .read(localDbServiceProvider)
+          .getVariantsForProduct(item.product.id);
+      final v = vs.where((v) => v.id == id).firstOrNull;
+      if (v == null) return null;
+      available = v.stockQuantity;
+      name = v.name;
+    }
+    if (item.quantity > available) {
+      return '${item.product.name} ($name) only has $available in stock '
+          '(you have ${item.quantity} in cart).';
+    }
+    return null;
+  }
+
   String _methodLabel(PaymentMethod method) => switch (method) {
         PaymentMethod.gcash => 'GCash',
         PaymentMethod.maya => 'Maya',
@@ -350,6 +411,14 @@ class CheckoutService {
     for (final c in item.promoComponents!) {
       if (!c.trackInventory) continue;
       final needed = c.quantity * item.quantity;
+      if (c.variantId != null) {
+        final left = await _variantStockLeft(c.productId, c.variantId!);
+        if (left != null && needed > left) {
+          return '${c.productName}${c.variantName != null ? ' (${c.variantName})' : ''} only has $left in stock '
+              '(this order needs $needed for "${item.product.name}").';
+        }
+        continue;
+      }
       try {
         final row = await client
             .from('products')
@@ -374,10 +443,18 @@ class CheckoutService {
     return null;
   }
 
-  String? _checkPromoStockLocal(List cached, CartItem item) {
+  Future<String?> _checkPromoStockLocal(List cached, CartItem item) async {
     for (final c in item.promoComponents!) {
       if (!c.trackInventory) continue;
       final needed = c.quantity * item.quantity;
+      if (c.variantId != null) {
+        final left = await _variantStockLeft(c.productId, c.variantId!);
+        if (left != null && needed > left) {
+          return '${c.productName}${c.variantName != null ? ' (${c.variantName})' : ''} only has $left in stock '
+              '(this order needs $needed for "${item.product.name}").';
+        }
+        continue;
+      }
       final p = cached.where((p) => p.id == c.productId).firstOrNull;
       if (p != null && needed > p.stockQuantity) {
         return '${p.name} only has ${p.stockQuantity} in stock '

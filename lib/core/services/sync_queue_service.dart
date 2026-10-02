@@ -312,14 +312,14 @@ class SyncQueueService {
 
       case 'adjust_stock':
         // Check if this adjustment was already logged (idempotency)
-        final existingLog = await _client
-            .from('inventory_logs')
-            .select('id')
-            .eq('product_id', recordId)
-            .eq('action', payload['action'] as String)
-            .eq('notes', payload['notes'] ?? '')
-            .gte('created_at', payload['performed_at'] ?? '')
-            .maybeSingle();
+        final adjustKey = payload['_idempotency_key'] as String?;
+        final existingLog = adjustKey == null
+            ? null
+            : await _client
+                .from('inventory_logs')
+                .select('id')
+                .eq('idempotency_key', adjustKey)
+                .maybeSingle();
 
         if (existingLog != null) {
           debugPrint('[SyncQueue] adjust_stock already applied, skipping');
@@ -349,7 +349,7 @@ class SyncQueueService {
           'quantity_after': newStock,
           'performed_by': payload['performed_by'],
           'notes': payload['notes'],
-          'performed_at': payload['performed_at'],
+          'idempotency_key': adjustKey,
         });
 
       case 'upload_product_image':
@@ -390,21 +390,26 @@ class SyncQueueService {
             ..remove('business_id');
           await _client.from('void_order_items').insert(voidPayload);
 
-          await _client
+          var del = _client
               .from('order_items')
               .delete()
               .eq('order_id', payload['order_id'] as String)
               .eq('product_id', payload['product_id'] as String);
+          if (payload['variant_id'] != null) {
+            del = del.eq('variant_id', payload['variant_id'] as String);
+          }
+          await del;
         }
 
       case 'adjust_variant_stock':
-        final existingVariantLog = await _client
-            .from('inventory_logs')
-            .select('id')
-            .eq('product_id', payload['product_id'] as String)
-            .eq('action', payload['action'] as String)
-            .eq('notes', payload['notes'] ?? '')
-            .maybeSingle();
+        final variantKey = payload['_idempotency_key'] as String?;
+        final existingVariantLog = variantKey == null
+            ? null
+            : await _client
+                .from('inventory_logs')
+                .select('id')
+                .eq('idempotency_key', variantKey)
+                .maybeSingle();
         if (existingVariantLog != null) {
           debugPrint('[SyncQueue] adjust_variant_stock already applied, skipping');
           break;
@@ -426,6 +431,8 @@ class SyncQueueService {
         await _client.from('inventory_logs').insert({
           'business_id': payload['business_id'],
           'product_id': payload['product_id'],
+          'variant_id': recordId,
+          'idempotency_key': variantKey,
           'action': payload['action'],
           'quantity_change': variantDelta,
           'quantity_before': currentVariantStock,

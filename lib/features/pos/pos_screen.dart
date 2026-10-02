@@ -419,6 +419,15 @@ class _POSMainState extends ConsumerState<_POSMain> {
       return;
     }
 
+    if (match.hasVariants) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${match.name} has variants. Tap it in the grid to choose one.'),
+        backgroundColor: AppColors.info,
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+
     if (match.trackInventory && match.stockQuantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('${match.name} is out of stock.'),

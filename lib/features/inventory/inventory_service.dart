@@ -9,6 +9,7 @@ import '../../features/auth/auth_provider.dart';
 import '../../core/providers/product_provider.dart'; // ✅ REQUIRED IMPORT
 import '../../config/business_config.dart';
 import '../../core/providers/app_context_provider.dart';
+import '../../core/models/product_variant.dart';
 
 // ── InventoryEntry ────────────────────────────────────────────────────────────
 
@@ -21,8 +22,16 @@ class InventoryEntry {
     this.lowStockThreshold = 5,
   });
 
-  int get stock => product.stockQuantity;
-  bool get isLowStock => stock <= lowStockThreshold && product.trackInventory;
+  int get stock => product.effectiveStock;
+
+  bool get isLowStock {
+    if (!product.trackInventory) return false;
+    if (product.hasVariants) {
+      return product.activeVariants
+          .any((v) => v.stockQuantity <= lowStockThreshold);
+    }
+    return stock <= lowStockThreshold;
+  }
 
   InventoryEntry copyWith({Product? product, int? lowStockThreshold}) {
     return InventoryEntry(
@@ -135,6 +144,12 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
               _load();
             },
           )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'product_variants',
+            callback: (_) => _load(),
+          )
           .subscribe();
     } catch (e) {
       debugPrint('[Inventory] Realtime subscribe failed (offline?): $e');
@@ -190,6 +205,18 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           .toList();
 
       await _local.upsertProducts(products);
+
+      if (products.isNotEmpty) {
+        final variantRows = await _client
+            .from('product_variants')
+            .select()
+            .eq('is_active', true)
+            .inFilter('product_id', products.map((p) => p.id).toList());
+        final variants = (variantRows as List)
+            .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
+            .toList();
+        if (variants.isNotEmpty) await _local.upsertAllVariants(variants);
+      }
 
       // Re-read from local cache so local_image_path (preserved through the
       // upsert) shows up immediately, not just the bare Supabase row.
@@ -465,7 +492,58 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     );
   }
 
-  // ── Variant stock adjustment ───────────────────────────────────────────────
+  // ── Variant stock (used by the inventory list) ────────────────────────────
+
+  Future<void> adjustVariant(
+    String productId,
+    String variantId,
+    int delta, {
+    String action = 'adjustment',
+    String? notes,
+  }) async {
+    final index = state.entries.indexWhere((e) => e.product.id == productId);
+    if (index < 0) return;
+    final entry = state.entries[index];
+    final vIdx = entry.product.variants.indexWhere((v) => v.id == variantId);
+    if (vIdx < 0) return;
+
+    final before = entry.product.variants[vIdx].stockQuantity;
+    final after = (before + delta).clamp(0, 9999);
+    if (after == before) return;
+
+    final newVariants = List<ProductVariant>.from(entry.product.variants);
+    newVariants[vIdx] = newVariants[vIdx].copyWith(stockQuantity: after);
+    _updateEntry(index,
+        entry.copyWith(product: entry.product.copyWith(variants: newVariants)));
+
+    await adjustVariantStock(
+      businessId: _businessId,
+      productId: productId,
+      variantId: variantId,
+      quantityChange: after - before,
+      quantityBefore: before,
+      action: action,
+      notes: notes,
+    );
+    _refreshProductList();
+  }
+
+  Future<void> restockVariant(String productId, String variantId, int qty,
+          {String? notes}) =>
+      adjustVariant(productId, variantId, qty,
+          action: 'restock', notes: notes ?? 'Restock');
+
+  Future<void> setVariantStock(String productId, String variantId, int value,
+      {String? notes}) async {
+    final entry = state.entries.firstWhere((e) => e.product.id == productId);
+    final current = entry.product.variants
+        .firstWhere((v) => v.id == variantId)
+        .stockQuantity;
+    await adjustVariant(productId, variantId, value.clamp(0, 9999) - current,
+        notes: notes ?? 'Manual stock set');
+  }
+
+  // ── Variant stock adjustment (low-level) ──────────────────────────────────
 
   Future<void> adjustVariantStock({
     required String businessId,
@@ -495,7 +573,8 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
             'quantity_before': quantityBefore,
             'quantity_after': after,
             'performed_by': _client.auth.currentUser?.id,
-            'notes': notes ?? 'Variant sale: $variantId',
+            'variant_id': variantId,
+            'notes': notes,
           }),
         ]);
       } catch (e) {
@@ -507,6 +586,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           payload: {
             'business_id': businessId,
             'product_id': productId,
+            'variant_id': variantId,        
             'quantity_change': quantityChange,
             'action': action,
             'performed_by': _client.auth.currentUser?.id,
@@ -522,6 +602,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         payload: {
           'business_id': businessId,
           'product_id': productId,
+          'variant_id': variantId,
           'quantity_change': quantityChange,
           'action': action,
           'performed_by': _client.auth.currentUser?.id,

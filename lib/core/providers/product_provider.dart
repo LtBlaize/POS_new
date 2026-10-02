@@ -352,7 +352,8 @@ class InventoryService {
           'quantity_before': quantityBefore,
           'quantity_after': quantityAfter,
           'performed_by': _client.auth.currentUser?.id,
-          'notes': notes ?? 'Variant: $variantId',
+          'variant_id': variantId,
+          'notes': notes,
         });
       } catch (e) {
         debugPrint(
@@ -364,6 +365,7 @@ class InventoryService {
           action: action,
           notes: notes,
           isVariant: true,
+          parentProductId: productId,
         );
       }
     } else {
@@ -374,6 +376,7 @@ class InventoryService {
         action: action,
         notes: notes,
         isVariant: true,
+        parentProductId: productId,
       );
     }
   }
@@ -385,6 +388,7 @@ class InventoryService {
     required String action,
     String? notes,
     bool isVariant = false,
+    String? parentProductId,
   }) async {
     await _syncQueue.enqueue(
       operation: isVariant ? 'adjust_variant_stock' : 'adjust_stock',
@@ -392,6 +396,8 @@ class InventoryService {
       recordId: productId,
       payload: {
         'business_id': businessId,
+        if (parentProductId != null) 'product_id': parentProductId,
+        if (isVariant) 'variant_id': productId,
         'quantity_change': quantityChange,
         'action': action,
         'performed_by': _client.auth.currentUser?.id,
