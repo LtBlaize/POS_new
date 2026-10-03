@@ -48,7 +48,7 @@ final localDbServiceProvider = Provider<LocalDbService>((ref) {
   return LocalDbService();
 });
 
-const _kDbVersion = 21;
+const _kDbVersion = 23;
 const _kDbName = 'pos_offline.db';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -56,6 +56,14 @@ const _kDbName = 'pos_offline.db';
 class LocalDbService {
   static Database? _db;
   static Future<void> _current = Future.value();
+
+  Future<Set<String>> getOrderIdsWithPendingQueue() async {
+    final d = await db;
+    final rows = await d.rawQuery(
+        "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'");
+    return rows.map((r) => r['record_id'] as String).toSet();
+  }  
+  
 
   Future<T> _write<T>(Future<T> Function(Database db) action) async {
     final prev = _current;
@@ -80,6 +88,53 @@ class LocalDbService {
         );
       });
 
+  // ── Boot cache (profile, config, permissions, tables) ──────────────────────
+  Future<void> setKv(String key, Object value) => _write((d) async {
+        await d.insert(
+          'kv_cache',
+          {
+            'key': key,
+            'json': jsonEncode(value),
+            'saved_at': DateTime.now().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      });
+
+  Future<dynamic> getKv(String key) async {
+    final d = await db;
+    final rows = await d.query('kv_cache',
+        where: 'key = ?', whereArgs: [key], limit: 1);
+    if (rows.isEmpty) return null;
+    return jsonDecode(rows.first['json'] as String);
+  }
+
+    /// Offline-opened shift lost to an existing server shift: drop the local
+  /// duplicate (if still open) and keep the server's row instead.
+  Future<void> adoptServerShift({
+    required String localId,
+    required Map<String, dynamic> server,
+  }) =>
+      _write((d) async {
+        await d.transaction((txn) async {
+          final local = await txn.query('cashier_shifts',
+              columns: ['status'], where: 'id = ?', whereArgs: [localId], limit: 1);
+          if (local.isNotEmpty && local.first['status'] == 'open') {
+            await txn.delete('cashier_shifts',
+                where: 'id = ?', whereArgs: [localId]);
+          }
+          final cols = (await txn.rawQuery('PRAGMA table_info(cashier_shifts)'))
+              .map((r) => r['name'] as String)
+              .toSet();
+          final row = {
+            for (final e in server.entries)
+              if (cols.contains(e.key)) e.key: e.value,
+          };
+          await txn.insert('cashier_shifts', row,
+              conflictAlgorithm: ConflictAlgorithm.replace);
+        });
+      });
+
   Future<Database> get db async {
     _db ??= await _open();
     return _db!;
@@ -95,6 +150,9 @@ class LocalDbService {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: (db) async {
+        await _ensureOrderItemColumns(db);
+        await db.execute(
+            'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)');
         if (!kIsWeb &&
             (Platform.isWindows ||
                 Platform.isLinux ||
@@ -104,6 +162,24 @@ class LocalDbService {
         }
       },
     );
+  }
+
+  Future<void> _ensureOrderItemColumns(Database db) async {
+    final cols = (await db.rawQuery('PRAGMA table_info(order_items)'))
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (!cols.contains('round')) {
+      await db.execute(
+          'ALTER TABLE order_items ADD COLUMN round INTEGER NOT NULL DEFAULT 1');
+    }
+    if (!cols.contains('discount_amount')) {
+      await db.execute(
+          'ALTER TABLE order_items ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0');
+    }
+    if (!cols.contains('discount_type')) {
+      await db.execute(
+          "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'");
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -167,7 +243,7 @@ class LocalDbService {
       CREATE TABLE order_items (
         id TEXT PRIMARY KEY,
         order_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
+        product_id TEXT,
         product_name TEXT NOT NULL,
         unit_price REAL NOT NULL,
         cost_at_sale REAL NOT NULL DEFAULT 0,
@@ -177,6 +253,7 @@ class LocalDbService {
         variant_id TEXT,
         promo_id TEXT,
         promo_group_id TEXT,
+        send_to_kitchen INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     ''');
@@ -726,7 +803,16 @@ class LocalDbService {
       );
       debugPrint('[LocalDb] v21: order_payments table created');
     }
-
+    
+    if (oldVersion < 22) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN send_to_kitchen INTEGER NOT NULL DEFAULT 1',
+        );
+      } catch (e) {
+        debugPrint('[LocalDb] v22: send_to_kitchen already exists ($e)');
+      }
+    }
     if (oldVersion < 20) {
       // SQLite has no ALTER COLUMN to drop a NOT NULL constraint, so
       // product_id's constraint change requires a recreate-copy-swap —
@@ -769,6 +855,47 @@ class LocalDbService {
         debugPrint('[LocalDb] v20: void_order_items rebuilt with promo columns');
       } catch (e) {
         debugPrint('[LocalDb] v20: void_order_items migration error ($e)');
+      }
+    }
+        if (oldVersion < 23) {
+      // product_id must be nullable so a promo header row can be stored.
+      try {
+        await db.execute('DROP TABLE IF EXISTS order_items_v23tmp');
+        await db.execute('''
+          CREATE TABLE order_items_v23tmp (
+            id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL,
+            product_id TEXT,
+            product_name TEXT NOT NULL,
+            unit_price REAL NOT NULL,
+            cost_at_sale REAL NOT NULL DEFAULT 0,
+            quantity INTEGER NOT NULL,
+            subtotal REAL NOT NULL,
+            notes TEXT,
+            variant_id TEXT,
+            promo_id TEXT,
+            promo_group_id TEXT,
+            send_to_kitchen INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+          )
+        ''');
+        await db.execute('''
+          INSERT INTO order_items_v23tmp
+            (id, order_id, product_id, product_name, unit_price, cost_at_sale,
+             quantity, subtotal, notes, variant_id, promo_id, promo_group_id,
+             send_to_kitchen)
+          SELECT
+            id, order_id, product_id, product_name, unit_price, cost_at_sale,
+            quantity, subtotal, notes, variant_id, promo_id, promo_group_id,
+            send_to_kitchen
+          FROM order_items
+        ''');
+        await db.execute('DROP TABLE order_items');
+        await db.execute(
+            'ALTER TABLE order_items_v23tmp RENAME TO order_items');
+        debugPrint('[LocalDb] v23: order_items.product_id now nullable');
+      } catch (e) {
+        debugPrint('[LocalDb] v23: order_items migration error ($e)');
       }
     }
   }
@@ -1155,7 +1282,146 @@ class LocalDbService {
   // ─────────────────────────────────────────────────────────────────────────────
   // ORDERS
   // ─────────────────────────────────────────────────────────────────────────────
+  /// Writes all order_items rows for [order], including promo header +
+  /// component rows. Shared by insertOfflineOrder and upsertOrders.
+    Future<void> _writeOrderItems(Transaction txn, Order order,
+      {int startIndex = 0}) async {
+    for (int n = 0; n < order.items.length; n++) {
+      final i = n + startIndex;
+      final item = order.items[n];
+      if (!item.isPromo) {
+        await txn.insert(
+          'order_items',
+          {
+            'id': '${order.id}_${item.product.id}_$i',
+            'order_id': order.id,
+            'product_id': item.product.id,
+            'product_name': item.product.name,
+            'unit_price': item.effectivePrice,
+            'cost_at_sale': item.costAtSale,
+            'quantity': item.quantity,
+            'subtotal': item.total,
+            'notes': item.notes,
+            'variant_id': item.selectedVariant?.id,
+            'send_to_kitchen': item.product.sendToKitchen ? 1 : 0,
+            'round': item.round,
+            'discount_amount': item.discountAmount,
+            'discount_type': item.discountType.name,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        continue;
+      }
 
+      final groupId = '${order.id}_promo_$i';
+      await txn.insert(
+        'order_items',
+        {
+          'id': '${order.id}_${item.product.id}_${i}_hdr',
+          'order_id': order.id,
+          'product_id': null,
+          'product_name': item.product.name,
+          'unit_price': item.product.price,
+          'cost_at_sale': item.costAtSale,
+          'quantity': item.quantity,
+          'subtotal': item.total,
+          'notes': item.notes,
+          'variant_id': null,
+          'promo_id': item.promoId,
+          'promo_group_id': groupId,
+          'send_to_kitchen': 1,
+          'round': item.round,
+          'discount_amount': item.discountAmount,
+          'discount_type': item.discountType.name,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      for (int j = 0; j < item.promoComponents!.length; j++) {
+        final c = item.promoComponents![j];
+        await txn.insert(
+          'order_items',
+          {
+            'id': '${order.id}_${item.product.id}_${i}_c$j',
+            'order_id': order.id,
+            'product_id': c.productId,
+            'product_name': c.productName,
+            'unit_price': 0,
+            'cost_at_sale': 0,
+            'quantity': c.quantity * item.quantity,
+            'subtotal': 0,
+            'notes': null,
+            'variant_id': c.variantId,
+            'promo_id': item.promoId,
+            'promo_group_id': groupId,
+            'send_to_kitchen': c.sendToKitchen ? 1 : 0,
+            'round': item.round,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    }
+  }
+
+  // ── Add-to-tab support ──────────────────────────────────────────────────────
+
+  Future<({bool paid, bool cancelled, int maxRound})?> getOrderAppendInfo(
+      String orderId) async {
+    final d = await db;
+    final o = await d.query('orders',
+        columns: ['status', 'paid_at'],
+        where: 'id = ?',
+        whereArgs: [orderId],
+        limit: 1);
+    if (o.isEmpty) return null;
+    final r = await d.rawQuery(
+        'SELECT MAX(round) AS m FROM order_items WHERE order_id = ?',
+        [orderId]);
+    return (
+      paid: o.first['paid_at'] != null,
+      cancelled: o.first['status'] == 'cancelled',
+      maxRound: (r.first['m'] as int?) ?? 1,
+    );
+  }
+
+  /// Appends [items] (already stamped with their round) to a local order and
+  /// bumps its totals. Mirrors what the server replay does.
+  Future<void> appendOrderItems({
+    required String orderId,
+    required List<CartItem> items,
+    required double addSubtotal,
+    required double addTax,
+    required bool reopen,
+  }) =>
+      _write((d) async {
+        await d.transaction((txn) async {
+          final count = Sqflite.firstIntValue(await txn.rawQuery(
+                  'SELECT COUNT(*) FROM order_items WHERE order_id = ?',
+                  [orderId])) ??
+              0;
+          await _writeOrderItems(
+            txn,
+            Order(
+              id: orderId,
+              businessId: '',
+              orderNumber: 0,
+              subtotal: 0,
+              totalAmount: 0,
+              createdAt: DateTime.now(),
+              items: items,
+            ),
+            startIndex: count,
+          );
+          await txn.rawUpdate('''
+            UPDATE orders SET
+              subtotal = subtotal + ?,
+              tax_amount = tax_amount + ?,
+              total_amount = total_amount + ?,
+              status = CASE WHEN ? = 1 AND paid_at IS NULL AND status != 'cancelled'
+                            THEN 'pending' ELSE status END
+            WHERE id = ?
+          ''', [addSubtotal, addTax, addSubtotal + addTax, reopen ? 1 : 0, orderId]);
+        });
+      });
   Future<void> insertOfflineOrder(Order order) async {
     final d = await db;
     await d.transaction((txn) async {
@@ -1187,69 +1453,7 @@ class LocalDbService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      for (int i = 0; i < order.items.length; i++) {
-        final item = order.items[i];
-        if (!item.isPromo) {
-          await txn.insert(
-            'order_items',
-            {
-              'id': '${order.id}_${item.product.id}_$i',
-              'order_id': order.id,
-              'product_id': item.product.id,
-              'product_name': item.product.name,
-              'unit_price': item.product.price,
-              'cost_at_sale': item.costAtSale,
-              'quantity': item.quantity,
-              'subtotal': item.total,
-              'notes': item.notes,
-              'variant_id': item.selectedVariant?.id,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-          continue;
-        }
-
-        final groupId = '${order.id}_promo_$i';
-        await txn.insert(
-          'order_items',
-          {
-            'id': '${order.id}_${item.product.id}_${i}_hdr',
-            'order_id': order.id,
-            'product_id': null,
-            'product_name': item.product.name,
-            'unit_price': item.product.price,
-            'cost_at_sale': item.costAtSale,
-            'quantity': item.quantity,
-            'subtotal': item.total,
-            'notes': item.notes,
-            'variant_id': null,
-            'promo_id': item.promoId,
-            'promo_group_id': groupId,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-        for (int j = 0; j < item.promoComponents!.length; j++) {
-          final c = item.promoComponents![j];
-          await txn.insert(
-            'order_items',
-            {
-              'id': '${order.id}_${item.product.id}_${i}_c$j',
-              'order_id': order.id,
-              'product_id': c.productId,
-              'product_name': c.productName,
-              'unit_price': 0,
-              'cost_at_sale': 0,
-              'quantity': c.quantity * item.quantity,
-              'subtotal': 0,
-              'notes': null,
-              'variant_id': c.variantId,
-              'promo_id': item.promoId,
-              'promo_group_id': groupId,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-        }
-      }
+            await _writeOrderItems(txn, order);
     });
   }
 
@@ -1258,8 +1462,13 @@ class LocalDbService {
 
   Future<void> upsertOrders(List<Order> orders) => _write((d) async {
         final now = DateTime.now().toIso8601String();
+        final pending = (await d.rawQuery(
+                "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'"))
+            .map((r) => r['record_id'] as String)
+            .toSet();
         await d.transaction((txn) async {
           for (final order in orders) {
+            if (pending.contains(order.id)) continue; // local copy is newer
             await txn.insert(
               'orders',
               {
@@ -1293,25 +1502,7 @@ class LocalDbService {
               where: 'order_id = ?',
               whereArgs: [order.id],
             );
-            for (int i = 0; i < order.items.length; i++) {
-              final item = order.items[i];
-              await txn.insert(
-                'order_items',
-                {
-                  'id': '${order.id}_${item.product.id}_$i',
-                  'order_id': order.id,
-                  'product_id': item.product.id,
-                  'product_name': item.product.name,
-                  'unit_price': item.product.price,
-                  'cost_at_sale': item.costAtSale,
-                  'quantity': item.quantity,
-                  'subtotal': item.total,
-                  'notes': item.notes,
-                  'variant_id': item.selectedVariant?.id,
-                },
-                conflictAlgorithm: ConflictAlgorithm.replace,
-              );
-            }
+            await _writeOrderItems(txn, order);
           }
         });
       });
@@ -1437,7 +1628,41 @@ class LocalDbService {
       return _orderFromRow(row, items);
     }));
   }
+  Future<List<Order>> getActiveKitchenOrders(String businessId) async {
+    final d = await db;
+    final rows = await d.query(
+      'orders',
+      where: "business_id = ? AND status IN ('pending','preparing','ready')",
+      whereArgs: [businessId],
+      orderBy: 'created_at ASC',
+    );
+    return Future.wait(rows.map((row) async {
+      final all = await _getOrderItems(d, row['id'] as String);
+      final kitchen = all
+          .where((i) => i.isPromo
+              ? i.promoComponents!.any((c) => c.sendToKitchen)
+              : i.product.sendToKitchen)
+          .toList();
+      return _orderFromRow(row, kitchen);
+    }));
+  }
 
+  Future<Set<String>> getUnsyncedOrderIds() async {
+    final d = await db;
+    final rows = await d.query('orders',
+        columns: ['id'], where: 'is_offline = 1 AND synced_at IS NULL');
+    return rows.map((r) => r['id'] as String).toSet();
+  }
+
+  Future<bool> isOrderPendingSync(String orderId) async {
+    final d = await db;
+    final rows = await d.query('orders',
+        columns: ['id'],
+        where: 'id = ? AND is_offline = 1 AND synced_at IS NULL',
+        whereArgs: [orderId],
+        limit: 1);
+    return rows.isNotEmpty;
+  }
   Future<void> markOrderSynced(String orderId) async {
     final d = await db;
     await d.update(
@@ -1449,11 +1674,12 @@ class LocalDbService {
   }
 
   Future<List<CartItem>> _getOrderItems(Database d, String orderId) async {
-    final rows = await d.query(
-      'order_items',
-      where: 'order_id = ?',
-      whereArgs: [orderId],
-    );
+    final rows = await d.rawQuery('''
+      SELECT oi.*, pv.name AS variant_name
+      FROM order_items oi
+      LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+      WHERE oi.order_id = ?
+    ''', [orderId]);
     return CartItem.groupOrderItemRows<Map<String, dynamic>>(
       rows,
       promoGroupId: (r) => r['promo_group_id'] as String?,
@@ -1470,6 +1696,10 @@ class LocalDbService {
             costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
             notes: r['notes'] as String?,
             promoId: r['promo_id'] as String?,
+            round: (r['round'] as int?) ?? 1,
+            discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
+            discountType:
+                CartItem.discountTypeFromString(r['discount_type'] as String?),
           );
         }
         final product = Product(
@@ -1477,13 +1707,14 @@ class LocalDbService {
           businessId: '',
           name: r['product_name'] as String,
           price: (r['unit_price'] as num).toDouble(),
+          sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
         );
         final variantId = r['variant_id'] as String?;
         final selectedVariant = variantId != null
             ? ProductVariant(
                 id: variantId,
                 productId: r['product_id'] as String,
-                name: '',
+                name: (r['variant_name'] as String?) ?? '',
               )
             : null;
         return CartItem(
@@ -1492,6 +1723,10 @@ class LocalDbService {
           costAtSale: (r['cost_at_sale'] as num?)?.toDouble() ?? 0,
           notes: r['notes'] as String?,
           selectedVariant: selectedVariant,
+          round: (r['round'] as int?) ?? 1,
+          discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
+          discountType:
+              CartItem.discountTypeFromString(r['discount_type'] as String?),
         );
       },
       buildComponent: (r) => PromoComponent(
@@ -1501,7 +1736,7 @@ class LocalDbService {
         productName: r['product_name'] as String,
         quantity: r['quantity'] as int,
         trackInventory: false, // historical row — not needed for local display
-        sendToKitchen: true,
+        sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
       ),
     );
   }
@@ -1574,13 +1809,13 @@ class LocalDbService {
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
 
-          await txn.delete(
-            'order_items',
-            where: variantId != null
-                ? 'order_id = ? AND product_id = ? AND variant_id = ?'
-                : 'order_id = ? AND product_id = ?',
-            whereArgs: [orderId, productId, if (variantId != null) variantId],
-          );
+          await txn.rawDelete('''
+            DELETE FROM order_items WHERE id = (
+              SELECT id FROM order_items
+              WHERE order_id = ? AND product_id = ?
+                ${variantId != null ? 'AND variant_id = ?' : ''}
+              LIMIT 1)
+          ''', [orderId, productId, if (variantId != null) variantId]);
 
           final remaining = await txn.query(
             'order_items',

@@ -8,13 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/auth_provider.dart';
 
 final activeBusinessIdProvider = Provider<String?>((ref) {
-  // Watch the future — returns null while loading, then re-notifies all
-  // dependents once the profile resolves. Using .asData?.value here would
-  // permanently return null if any dependent reads before the future settles.
-  final profile = ref.watch(profileProvider);
-  return profile.when(
-    data: (p) => p?.businessId,
-    loading: () => null,
-    error: (_, _) => null,
-  );
-}); 
+  // .value keeps the previous profile while a refresh is in flight.
+  return ref.watch(profileProvider).value?.businessId;
+});

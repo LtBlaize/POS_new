@@ -26,6 +26,27 @@ import '../../auth/manager_override_dialog.dart';
 import '../../../core/services/audit_service.dart';
 import '../../../core/providers/role_permissions_provider.dart';
 import '../../../core/services/credit_service.dart';
+import '../../../core/providers/order_provider.dart';
+
+/// Frees the table after a CONFIRMED payment, unless another unpaid order is
+/// still open on it. Returns the table name so the receipt can keep showing it
+/// (freeTable clears the table selection).
+String? releaseTableAfterPayment(WidgetRef ref, Order paid,
+    {required bool isRestaurant}) {
+  final ts = ref.read(tableProvider);
+  final name = ts.selectedTableName;
+  if (!isRestaurant || name == null) return name;
+  final uuid = ts.uuidForTable(name);
+  final orders = ref.read(ordersStreamProvider).asData?.value ?? const <Order>[];
+  final otherOpen = uuid != null &&
+      orders.any((o) =>
+          o.id != paid.id &&
+          o.tableId == uuid &&
+          o.paidAt == null &&
+          o.status != OrderStatus.cancelled);
+  if (!otherOpen) ref.read(tableProvider.notifier).freeTable(name);
+  return name;
+}
 
 // ── Payment method selector ───────────────────────────────────────────────────
 
@@ -126,6 +147,8 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   List<PaymentSplitInput>? _paymentBreakdown;
 
   bool _splitMode = false;
+  String? _receiptTable;
+  bool _tableReleased = false;
   final List<_SplitLeg> _splitLegs = [];
 
   bool get _isRestaurant =>
@@ -334,6 +357,11 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             _paymentBreakdown = splitPayments;
             _placing = false;
           });
+          if (!_tableReleased && result.order != null) {
+            _tableReleased = true;
+            _receiptTable = releaseTableAfterPayment(ref, result.order!,
+                isRestaurant: _isRestaurant);
+          }
       }
     } catch (e) {
       if (mounted) {
@@ -385,7 +413,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
               change: _savedChange,
               onDone: () => Navigator.of(context).pop(_completedOrder),
               showKitchenBanner: widget.existingOrderId == null,
-              tableNumber: tableState.selectedTableName,
+              tableNumber: _receiptTable ?? tableState.selectedTableName,
               roomName: null,
               paymentBreakdown: _paymentBreakdown,
             )

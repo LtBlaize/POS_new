@@ -1,6 +1,8 @@
 // lib/config/app_router.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../core/providers/role_permissions_provider.dart';
 import '../core/providers/staff_provider.dart';
 import '../core/providers/admin_provider.dart';               // ADD (Phase 3)
@@ -215,6 +217,25 @@ class _PendingPosScreen extends ConsumerStatefulWidget {
 class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
   bool _navigated = false;
   int _nullCount = 0;
+  Timer? _retryTimer;
+  Timer? _adminWaitTimer;
+  bool _adminWaitExpired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Don't let a slow admin check block a normal user's boot.
+    _adminWaitTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _adminWaitExpired = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _adminWaitTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +252,7 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
     // an issue.
     final adminAsync = ref.watch(isPlatformAdminProvider);
 
-    if (adminAsync.isLoading) {
+    if (adminAsync.isLoading && !_adminWaitExpired) {
       return _pendingScaffold;
     }
 
@@ -276,13 +297,61 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
       },
       error: (e, _) {
         if (_navigated) return;
-        _navigated = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+
+        // No local session at all → genuinely unauthenticated → /login.
+        if (Supabase.instance.client.auth.currentSession == null) {
+          _navigated = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+          });
+          return;
+        }
+
+        // Session still exists: this is a timeout/network failure, not an
+        // auth failure. Keep the session, stay on /pending, retry.
+        // (A truly revoked token makes the SDK emit signedOut, which
+        // MyApp's listener already routes to /login.)
+        debugPrint('[Pending] profile error with live session — retrying in 5s: $e');
+        _retryTimer ??= Timer(const Duration(seconds: 5), () {
+          _retryTimer = null;
+          if (!mounted || _navigated) return;
+          ref.invalidate(profileProvider);
         });
       },
       loading: () {},
     );
+
+    if (profile.hasError &&
+        Supabase.instance.client.auth.currentSession != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F1117),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off, color: Colors.white54, size: 40),
+              const SizedBox(height: 16),
+              const Text("Can't reach the server",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text(
+                  'First-time setup on this device needs internet.\nRetrying automatically…',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(profileProvider),
+                child: const Text('Retry now'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return _pendingScaffold;
   }

@@ -22,6 +22,11 @@ import '../../core/services/lan_client_service.dart';
 import '../../core/services/lan_status_queue.dart';
 import '../../../main.dart' show deviceRoleProvider, DeviceRole;
 import '../../config/business_config.dart';
+import '../../core/providers/order_provider.dart';
+import '../../core/services/connectivity_service.dart';
+import '../../core/services/local_db_service.dart';
+import '../../core/services/sync_queue_service.dart';
+import '../../core/models/product_variant.dart';
 
 // ── Supabase kitchen orders provider ──────────────────────────────────────────
 //
@@ -33,67 +38,67 @@ final _kitchenOrdersFromDbProvider =
         _KitchenDbNotifier.new);
 
 class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
-  Timer? _pollTimer;
-
   @override
   Future<List<Order>> build() async {
-    // Cancel any previous timer when provider rebuilds
-    _pollTimer?.cancel();
-    // Start polling every 10 seconds.
-    // AsyncNotifier does not have a `mounted` getter — we use onDispose
-    // to cancel the timer instead, which is the correct Riverpod pattern.
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      ref.invalidateSelf();
+    final online = ref.watch(isOnlineProvider);
+    ref.watch(syncCompleteProvider);
+    ref.watch(localOrdersRevisionProvider);
+
+    final timer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (ref.read(isOnlineProvider)) ref.invalidateSelf();
     });
-    ref.onDispose(() {
-      _pollTimer?.cancel();
-      _pollTimer = null;
-    });
-    return _fetch();
+    ref.onDispose(timer.cancel);
+
+    return _fetch(online);
   }
 
-  Future<List<Order>> _fetch() async {
+  Future<List<Order>> _fetch(bool online) async {
     final businessId = ref.read(businessProvider)?.id;
     if (businessId == null || businessId.isEmpty) return [];
+    final local = ref.read(localDbServiceProvider);
 
-    final client = Supabase.instance.client;
-    try {
-      // Supabase returns PostgrestList (a List<dynamic> subtype).
-      // Cast each element individually to avoid the List<dynamic> → List<Order> error.
-      final rows = await client
-          .from('orders')
-          .select('*, order_items(*, products(id, name, price, business_id, send_to_kitchen))') 
-          .eq('business_id', businessId)
-          .inFilter('status', ['pending', 'preparing', 'ready'])
-          .order('created_at', ascending: true);
+    if (online) {
+      try {
+        final rows = await Supabase.instance.client
+            .from('orders')
+            .select(
+                '*, order_items(*, products(id, name, price, business_id, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active))')
+            .eq('business_id', businessId)
+            .inFilter('status', ['pending', 'preparing', 'ready'])
+            .order('created_at', ascending: true);
 
-      return rows
-          .map((row) => _parseDbOrder(row))
-          .toList();
-    } catch (e) {
-      debugPrint('[Kitchen] Supabase fetch error: $e');
-      return state.value ?? [];
+        final remote = rows.map((row) => _parseDbOrder(row)).toList();
+
+        final remoteIds = remote.map((o) => o.id).toSet();
+        final unsynced = await local.getUnsyncedOrderIds();
+        final localOnly = (await local.getActiveKitchenOrders(businessId))
+            .where((o) => unsynced.contains(o.id) && !remoteIds.contains(o.id))
+            .toList();
+
+        final merged = <String, Order>{};
+        for (final o in [...localOnly, ...remote]) {
+          if (merged.containsKey(o.id)) {
+            debugPrint('[Kitchen] DUPLICATE id ${o.id} #${o.orderNumber}');
+          }
+          merged[o.id] = o; // remote wins
+        }
+        return merged.values.toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      } catch (e) {
+        debugPrint('[Kitchen] Supabase fetch error, using local DB: $e');
+      }
     }
+    return local.getActiveKitchenOrders(businessId);
   }
 
   Future<void> advanceStatus(String orderId, OrderStatus next) async {
-    // Optimistic update
-    final updated = (state.value ?? []).map((o) {
-      return o.id == orderId ? o.copyWith(status: next) : o;
-    }).toList();
-    state = AsyncData(updated);
-
+    state = AsyncData((state.value ?? [])
+        .map((o) => o.id == orderId ? o.copyWith(status: next) : o)
+        .toList());
     try {
-      await Supabase.instance.client
-          .from('orders')
-          .update({
-            'status': next.value,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', orderId);
+      await ref.read(orderServiceProvider).updateStatus(orderId, next);
     } catch (e) {
       debugPrint('[Kitchen] Status update error: $e');
-      // Revert on failure
       ref.invalidateSelf();
     }
   }
@@ -117,6 +122,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
             costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
             notes: map['notes'] as String?,
             promoId: map['promo_id'] as String?,
+            round: map['round'] as int? ?? 1,
           );
         }
         final product = map['products'] as Map<String, dynamic>? ?? {};
@@ -128,9 +134,14 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
             price: (product['price'] as num?)?.toDouble() ?? 0.0,
             sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
           ),
+          selectedVariant: map['product_variants'] != null
+              ? ProductVariant.fromMap(
+                  map['product_variants'] as Map<String, dynamic>)
+              : null,          
           quantity: map['quantity'] as int? ?? 1,
           costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
           notes: map['notes'] as String?,
+          round: map['round'] as int? ?? 1,
         );
       },
       buildComponent: (map) {
@@ -266,6 +277,7 @@ class _DbKitchenView extends ConsumerWidget {
     final ordersAsync = ref.watch(_kitchenOrdersFromDbProvider);
 
     return ordersAsync.when(
+      skipLoadingOnReload: true,
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
@@ -330,17 +342,21 @@ class _KitchenBody extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                // Show DB mode indicator for owner
-                if (isDbMode)
-                  _DbModeIndicator()
-                else
-                  _LanIndicator(state: connection),
-                const SizedBox(width: 16),
-                _KitchenStat(label: 'Pending',   count: pending.length,   color: AppColors.warning),
-                const SizedBox(width: 12),
-                _KitchenStat(label: 'Preparing', count: preparing.length, color: AppColors.info),
-                const SizedBox(width: 12),
-                _KitchenStat(label: 'Ready',     count: ready.length,     color: AppColors.success),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isDbMode)
+                      _DbModeIndicator()
+                    else
+                      _LanIndicator(state: connection),
+                    const SizedBox(width: 12),
+                    _KitchenStat(label: 'Pending',   count: pending.length,   color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    _KitchenStat(label: 'Preparing', count: preparing.length, color: AppColors.info),
+                    const SizedBox(width: 8),
+                    _KitchenStat(label: 'Ready',     count: ready.length,     color: AppColors.success),
+                  ],
+                ),
               ],
             ),
           ),
@@ -349,29 +365,38 @@ class _KitchenBody extends StatelessWidget {
           Expanded(
             child: orders.isEmpty
                 ? _EmptyKitchen(isDbMode: isDbMode)
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _KitchenColumn(
-                        title: 'Pending',
-                        color: AppColors.warning,
-                        orders: pending,
-                        onAdvanceStatus: onAdvanceStatus,
-                      ),
-                      _KitchenColumn(
-                        title: 'Preparing',
-                        color: AppColors.info,
-                        orders: preparing,
-                        onAdvanceStatus: onAdvanceStatus,
-                      ),
-                      _KitchenColumn(
-                        title: 'Ready',
-                        color: AppColors.success,
-                        orders: ready,
-                        onAdvanceStatus: onAdvanceStatus,
-                      ),
-                    ],
-                  ),
+                                : LayoutBuilder(builder: (context, c) {
+                    final row = Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _KitchenColumn(
+                          title: 'Pending',
+                          color: AppColors.warning,
+                          orders: pending,
+                          onAdvanceStatus: onAdvanceStatus,
+                        ),
+                        _KitchenColumn(
+                          title: 'Preparing',
+                          color: AppColors.info,
+                          orders: preparing,
+                          onAdvanceStatus: onAdvanceStatus,
+                        ),
+                        _KitchenColumn(
+                          title: 'Ready',
+                          color: AppColors.success,
+                          orders: ready,
+                          onAdvanceStatus: onAdvanceStatus,
+                        ),
+                      ],
+                    );
+                    if (c.maxWidth >= 720) return row;
+                    // Narrow window: scroll sideways instead of overflowing.
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                          width: 900, height: c.maxHeight, child: row),
+                    );
+                  }),
           ),
         ],
       ),
@@ -675,6 +700,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     final age = DateTime.now().difference(order.createdAt);
     final isOld = age.inMinutes >= 10;
     final tableLabel = _resolveTableLabel();
+    final maxRound =
+        order.items.fold<int>(1, (m, i) => i.round > m ? i.round : m);
+    final currentItems = order.items.where((i) => i.round == maxRound).toList();
+    final earlierItems = order.items.where((i) => i.round < maxRound).toList();
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -729,33 +758,42 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
 
           const SizedBox(height: 8),
 
-          if (order.items.isNotEmpty)
-            ...order.items.expand((item) {
-              if (item.isPromo) {
-                return item.promoComponents!
-                    .where((c) => c.sendToKitchen)
-                    .map((c) => _kitchenLine(
-                          quantity: c.quantity * item.quantity,
-                          name: c.variantName != null
-                              ? '${c.productName} (${c.variantName})'
-                              : c.productName,
-                          subtitle: item.product.name, // which promo this belongs to
-                        ));
-              }
-              return [
-                _kitchenLine(
-                  quantity: item.quantity,
-                  name: item.product.name,
-                  subtitle: item.selectedVariant?.name,
-                  subtitleColor: AppColors.info,
-                  notes: item.notes,
+                    if (order.items.isNotEmpty) ...[
+            if (maxRound > 1)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              ];
-            })
-          else
+                child: Text('ROUND $maxRound · NEW',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.warning)),
+              ),
+            ..._linesFor(currentItems),
+            if (earlierItems.isNotEmpty)
+              Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                      'Earlier rounds (${earlierItems.length} lines)',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                  children: _linesFor(earlierItems),
+                ),
+              ),
+          ] else
             const Text('Loading items...',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-
+                style:
+                    TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 10),
 
           if (buttonLabel.isNotEmpty)
@@ -786,6 +824,29 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
       ),
     );
   }
+
+  List<Widget> _linesFor(List<CartItem> items) => items.expand<Widget>((item) {
+        if (item.isPromo) {
+          return item.promoComponents!
+              .where((c) => c.sendToKitchen)
+              .map((c) => _kitchenLine(
+                    quantity: c.quantity * item.quantity,
+                    name: c.variantName != null
+                        ? '${c.productName} (${c.variantName})'
+                        : c.productName,
+                    subtitle: item.product.name,
+                  ));
+        }
+        return [
+          _kitchenLine(
+            quantity: item.quantity,
+            name: item.product.name,
+            subtitle: item.selectedVariant?.name,
+            subtitleColor: AppColors.info,
+            notes: item.notes,
+          ),
+        ];
+      }).toList();
 
   String _formatAge(Duration d) {
     if (d.inMinutes < 1) return '< 1 min';

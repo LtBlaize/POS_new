@@ -1,7 +1,9 @@
 // lib/core/services/sync_queue_service.dart
 //
-// Change from original: process_payment replay now includes reference_number
-// so offline GCash/Maya/Card payments sync correctly to Supabase.
+// Stock adjustments (adjust_stock / adjust_variant_stock) now replay through
+// the Postgres function apply_stock_change(), which checks the idempotency
+// key, updates stock and writes the inventory log in ONE transaction. A failed
+// log insert can no longer leave a stock change behind, so retries are safe.
 
 import 'dart:async';
 import 'dart:convert';
@@ -9,17 +11,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:uuid/uuid.dart';
+
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
 import 'image_storage_service.dart';
 import '../../features/auth/auth_provider.dart';
-import '../models/order.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 final syncCompleteProvider = StateProvider<DateTime?>((ref) => null);
+final shiftsReconciledProvider = StateProvider<DateTime?>((ref) => null);
 
 final syncQueueServiceProvider = Provider<SyncQueueService>((ref) {
   final service = SyncQueueService(ref);
@@ -31,7 +33,19 @@ final syncQueueServiceProvider = Provider<SyncQueueService>((ref) {
 final pendingQueueCountProvider = StateProvider<int>((ref) => 0);
 final failedQueueCountProvider = StateProvider<int>((ref) => 0);
 final isSyncingProvider = StateProvider<bool>((ref) => false);
-// ── Constants ─────────────────────────────────────────────────────────────────
+
+// ── Constants / helpers ───────────────────────────────────────────────────────
+
+/// True for connectivity failures (not business-rule failures).
+bool isNetworkError(Object e) {
+  final s = e.toString();
+  return s.contains('SocketException') ||
+      s.contains('ClientException') ||
+      s.contains('Failed host lookup') ||
+      s.contains('TimeoutException') ||
+      s.contains('Connection closed') ||
+      s.contains('Connection reset');
+}
 
 const int kMaxRetries = 5;
 
@@ -41,6 +55,7 @@ class SyncQueueService {
   final Ref _ref;
   ProviderSubscription<bool>? _onlineSub;
   bool _syncInProgress = false;
+  Timer? _retryTimer;
 
   SyncQueueService(this._ref);
 
@@ -51,9 +66,15 @@ class SyncQueueService {
         await flushQueue();
       }
     });
+    _retryTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+      if (_ref.read(isOnlineProvider) &&
+          _ref.read(pendingQueueCountProvider) > 0) {
+        await flushQueue();
+      }
+    });
     _refreshCount();
     _refreshFailedCount();
-    // Flush any queued entries that survived the last session
+    // Flush any queued entries that survived the last session.
     Future.microtask(() async {
       final isOnline = _ref.read(isOnlineProvider);
       if (isOnline) {
@@ -65,6 +86,7 @@ class SyncQueueService {
 
   void dispose() {
     _onlineSub?.close();
+    _retryTimer?.cancel();
   }
 
   SupabaseClient get _client => _ref.read(supabaseClientProvider);
@@ -88,6 +110,7 @@ class SyncQueueService {
     );
     await _refreshCount();
   }
+
   Future<void> flushQueue() async {
     if (_syncInProgress) return;
     _syncInProgress = true;
@@ -97,12 +120,8 @@ class SyncQueueService {
       final pending = await _local.getPendingQueue();
       debugPrint('[SyncQueue] Flushing ${pending.length} item(s)');
 
-      // Group entries that must not run concurrently with each other under
-      // one conflict key (same order, same product/variant stock, same
-      // credit customer). Groups run in parallel; entries *within* a group
-      // stay sequential in original queue order, so e.g. insert_order always
-      // lands before that order's update_order_status/process_payment, and
-      // two stock adjustments on the same product never interleave.
+      // Entries sharing a conflict key stay sequential in queue order;
+      // different keys run in parallel.
       final groups = <String, List<Map<String, dynamic>>>{};
       for (final entry in pending) {
         if ((entry['retries'] as int) >= kMaxRetries) continue;
@@ -112,8 +131,6 @@ class SyncQueueService {
       final results = await Future.wait(groups.values.map(_flushGroup));
       final synced = results.fold<int>(0, (a, b) => a + b);
 
-      // Dead-letter entries that have exhausted all retries — kept, not
-      // deleted, so they can be inspected/retried from Settings.
       await _markDeadEntries();
       await _refreshFailedCount();
 
@@ -128,9 +145,6 @@ class SyncQueueService {
     }
   }
 
-  /// Key used to decide which entries must stay sequential. Entries sharing
-  /// a key preserve original queue order; entries with different keys may
-  /// run concurrently.
   String _conflictKey(Map<String, dynamic> entry) {
     final op = entry['operation'] as String;
     final recordId = entry['record_id'] as String;
@@ -140,7 +154,8 @@ class SyncQueueService {
       case 'update_order_status':
       case 'process_payment':
       case 'process_split_payment':
-        // recordId is the order id for all five of these.
+      case 'append_order_items':
+        // recordId is the order id for all of these.
         return 'order:$recordId';
       case 'insert_receipt':
       case 'void_order_item':
@@ -150,6 +165,8 @@ class SyncQueueService {
             jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
         final orderId = payload['order_id'] as String?;
         return orderId != null ? 'order:$orderId' : 'misc:$recordId';
+      case 'upsert_shift':
+        return 'shift:$recordId';
       case 'adjust_stock':
         return 'product:$recordId';
       case 'adjust_variant_stock':
@@ -167,9 +184,6 @@ class SyncQueueService {
     }
   }
 
-  /// Runs one conflict group's entries sequentially, in queue order.
-  /// Backoff delay applies only within this group — it no longer blocks
-  /// unrelated entries elsewhere in the queue. Returns count synced.
   Future<int> _flushGroup(List<Map<String, dynamic>> entries) async {
     int synced = 0;
     for (final entry in entries) {
@@ -183,14 +197,10 @@ class SyncQueueService {
         await _replay(entry);
         await _local.dequeue(id);
         synced++;
-       } catch (e) {
+      } catch (e) {
         debugPrint('[SyncQueue] Entry $id failed: $e');
 
-        // Plan-limit rejections (e.g. add_staff hitting the Starter cap via
-        // the DB trigger) are business-rule failures, not transient network
-        // errors — retrying with backoff will never succeed since the limit
-        // doesn't change on its own. Dead-letter immediately with a
-        // friendly message instead of burning kMaxRetries attempts.
+        // Plan-limit rejections never succeed on retry: dead-letter now.
         final limitMessage = _planLimitMessage(e);
         if (limitMessage != null) {
           await _local.incrementRetry(id, limitMessage);
@@ -199,11 +209,21 @@ class SyncQueueService {
           continue;
         }
 
+        // Network down is not the entry's fault: don't burn a retry.
+        if (isNetworkError(e)) break;
+
+        // Expired token after a long offline spell: refresh, don't burn a
+        // retry. The next flush (60s timer) picks the entry up again.
+        final s = e.toString();
+        if (s.contains('JWT expired') || s.contains('PGRST301')) {
+          try {
+            await _client.auth.refreshSession();
+          } catch (_) {}
+          break;
+        }
+
         await _local.incrementRetry(id, e.toString());
-        // Stop this group here: later entries for the same order/product
-        // (e.g. a status update after its insert_order just failed) would
-        // almost certainly fail for the same reason — no point burning a
-        // retry attempt on each of them this cycle.
+        // Later entries in this group would likely fail for the same reason.
         break;
       }
     }
@@ -217,12 +237,12 @@ class SyncQueueService {
       await _local.markQueueDead(entry['id'] as int);
     }
     if (dead.isNotEmpty) {
-      debugPrint('[SyncQueue] Dead-lettered ${dead.length} entr${dead.length == 1 ? 'y' : 'ies'}');
+      debugPrint(
+          '[SyncQueue] Dead-lettered ${dead.length} entr${dead.length == 1 ? 'y' : 'ies'}');
     }
   }
 
   /// Re-queues a dead-lettered entry and immediately attempts a flush.
-  /// Call from a Settings "Retry" button.
   Future<void> retryFailedEntry(int queueId) async {
     await _local.retryQueueEntry(queueId);
     await _refreshFailedCount();
@@ -233,8 +253,7 @@ class SyncQueueService {
   Future<List<Map<String, dynamic>>> getFailedEntries() =>
       _local.getFailedQueue();
 
-  /// Permanently removes a dead-lettered entry — for genuinely bad data
-  /// (not just a network blip) that shouldn't keep occupying the list.
+  /// Permanently removes a dead-lettered entry.
   Future<void> discardFailedEntry(int queueId) async {
     await _local.dequeue(queueId);
     await _refreshFailedCount();
@@ -246,6 +265,8 @@ class SyncQueueService {
     final op = entry['operation'] as String;
     final payload =
         jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
+    // Internal bookkeeping only. Never send to Supabase as a column.
+    final idemKey = payload.remove('_idempotency_key') as String?;
     final recordId = entry['record_id'] as String;
 
     switch (op) {
@@ -255,14 +276,15 @@ class SyncQueueService {
       case 'insert_order_items':
         await _replayInsertOrderItems(payload);
 
+      case 'append_order_items':
+        await replayAppendOrderItems(payload);
+
       case 'update_order_status':
         await _client.from('orders').update({
           'status': payload['status'],
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
 
-      // FIX: was missing reference_number — offline GCash/Maya/Card payments
-      // would sync without it, leaving the column NULL in Supabase.
       case 'process_payment':
         await _client.from('orders').update({
           'payment_method': payload['payment_method'],
@@ -293,6 +315,7 @@ class SyncQueueService {
           'amount_tendered': payload['amount_tendered'],
           'change_amount': payload['change_amount'],
           'is_split_payment': true,
+          'paid_at': payload['paid_at'] ?? DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', recordId);
 
@@ -304,52 +327,25 @@ class SyncQueueService {
               .select('id')
               .eq('receipt_number', recordId)
               .single();
-          debugPrint(
-              '[SyncQueue] Receipt $recordId already exists, skipping');
+          debugPrint('[SyncQueue] Receipt $recordId already exists, skipping');
         } catch (_) {
           await _client.from('receipts').insert(payload);
         }
 
+      // Atomic: idempotency check + stock update + log insert in one
+      // transaction inside apply_stock_change().
       case 'adjust_stock':
-        // Check if this adjustment was already logged (idempotency)
-        final adjustKey = payload['_idempotency_key'] as String?;
-        final existingLog = adjustKey == null
-            ? null
-            : await _client
-                .from('inventory_logs')
-                .select('id')
-                .eq('idempotency_key', adjustKey)
-                .maybeSingle();
-
-        if (existingLog != null) {
-          debugPrint('[SyncQueue] adjust_stock already applied, skipping');
-          break;
-        }
-
-        final row = await _client
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', recordId)
-            .single();
-        final currentStock = row['stock_quantity'] as int;
-        final delta = payload['quantity_change'] as int;
-        final newStock = currentStock + delta;
-
-        await _client.from('products').update({
-          'stock_quantity': newStock,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', recordId);
-
-        await _client.from('inventory_logs').insert({
-          'business_id': payload['business_id'],
-          'product_id': recordId,
-          'action': payload['action'],
-          'quantity_change': delta,
-          'quantity_before': currentStock,
-          'quantity_after': newStock,
-          'performed_by': payload['performed_by'],
-          'notes': payload['notes'],
-          'idempotency_key': adjustKey,
+      case 'adjust_variant_stock':
+        final isVariant = op == 'adjust_variant_stock';
+        await _client.rpc('apply_stock_change', params: {
+          'p_business_id': payload['business_id'],
+          'p_product_id': isVariant ? payload['product_id'] : recordId,
+          'p_variant_id': isVariant ? recordId : null,
+          'p_delta': payload['quantity_change'],
+          'p_action': payload['action'],
+          'p_performed_by': payload['performed_by'],
+          'p_notes': payload['notes'],
+          'p_idempotency_key': idemKey,
         });
 
       case 'upload_product_image':
@@ -366,13 +362,15 @@ class SyncQueueService {
         await _local.updateProductImageUrl(productId, url);
 
       case 'insert_kitchen_ticket':
-        // Idempotency: skip if ticket already exists for this order
-        final existing = await _client
+        // Idempotency: one ticket per (order, round)
+        final ticketRound = (payload['round'] as int?) ?? 1;
+        final existingTicket = await _client
             .from('kitchen_tickets')
             .select('id')
             .eq('order_id', payload['order_id'] as String)
-            .maybeSingle();
-        if (existing == null) {
+            .eq('round', ticketRound)
+            .limit(1);
+        if ((existingTicket as List).isEmpty) {
           await _client.from('kitchen_tickets').insert(payload);
         }
 
@@ -390,56 +388,23 @@ class SyncQueueService {
             ..remove('business_id');
           await _client.from('void_order_items').insert(voidPayload);
 
-          var del = _client
+          var find = _client
               .from('order_items')
-              .delete()
+              .select('id')
               .eq('order_id', payload['order_id'] as String)
               .eq('product_id', payload['product_id'] as String);
           if (payload['variant_id'] != null) {
-            del = del.eq('variant_id', payload['variant_id'] as String);
+            find = find.eq('variant_id', payload['variant_id'] as String);
           }
-          await del;
+          final target = await find.limit(1).maybeSingle();
+          if (target != null) {
+            await _client
+                .from('order_items')
+                .delete()
+                .eq('id', target['id'] as String);
+          }
+          await _recomputeOrderTotals(payload['order_id'] as String);
         }
-
-      case 'adjust_variant_stock':
-        final variantKey = payload['_idempotency_key'] as String?;
-        final existingVariantLog = variantKey == null
-            ? null
-            : await _client
-                .from('inventory_logs')
-                .select('id')
-                .eq('idempotency_key', variantKey)
-                .maybeSingle();
-        if (existingVariantLog != null) {
-          debugPrint('[SyncQueue] adjust_variant_stock already applied, skipping');
-          break;
-        }
-        final variantRow = await _client
-            .from('product_variants')
-            .select('stock_quantity')
-            .eq('id', recordId)
-            .single();
-        final currentVariantStock = variantRow['stock_quantity'] as int;
-        final variantDelta = payload['quantity_change'] as int;
-        final newVariantStock = currentVariantStock + variantDelta;
-
-        await _client.from('product_variants').update({
-          'stock_quantity': newVariantStock,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', recordId);
-
-        await _client.from('inventory_logs').insert({
-          'business_id': payload['business_id'],
-          'product_id': payload['product_id'],
-          'variant_id': recordId,
-          'idempotency_key': variantKey,
-          'action': payload['action'],
-          'quantity_change': variantDelta,
-          'quantity_before': currentVariantStock,
-          'quantity_after': newVariantStock,
-          'performed_by': payload['performed_by'],
-          'notes': payload['notes'],
-        });
 
       case 'record_credit_payment':
         // Idempotency: skip if payment transaction already exists
@@ -449,7 +414,8 @@ class SyncQueueService {
             .eq('id', payload['payment_tx_id'] as String)
             .maybeSingle();
         if (existingPayment != null) {
-          debugPrint('[SyncQueue] record_credit_payment already synced, skipping');
+          debugPrint(
+              '[SyncQueue] record_credit_payment already synced, skipping');
           break;
         }
 
@@ -457,7 +423,6 @@ class SyncQueueService {
         final amount = (payload['amount'] as num).toDouble();
         final paymentTxId = payload['payment_tx_id'] as String;
 
-        // Insert payment transaction
         await _client.from('credit_transactions').insert({
           'id': paymentTxId,
           'customer_id': customerId,
@@ -491,9 +456,8 @@ class SyncQueueService {
           await _client.from('credit_transactions').update({
             'amount_remaining': newRemaining,
             'is_settled': newRemaining == 0,
-            'settled_at': newRemaining == 0
-                ? DateTime.now().toIso8601String()
-                : null,
+            'settled_at':
+                newRemaining == 0 ? DateTime.now().toIso8601String() : null,
           }).eq('id', creditTxId);
 
           await _client.from('credit_settlements').insert({
@@ -503,23 +467,18 @@ class SyncQueueService {
           });
         }
 
-        // Update customer total_owed
         await _client.rpc('decrement_credit_owed', params: {
           'p_customer_id': customerId,
           'p_amount': amount,
         });
 
       case 'void_order':
-        // Idempotency: skip if already cancelled
         final orderRow = await _client
             .from('orders')
             .select('status')
             .eq('id', payload['order_id'] as String)
             .maybeSingle();
-        if (orderRow == null ||
-            orderRow['status'] == OrderStatus.cancelled.value) {
-          break;
-        }
+        if (orderRow == null) break;
 
         final voidedAt = payload['voided_at'] as String;
         final voidedById = payload['voided_by_staff_id'] as String;
@@ -531,22 +490,25 @@ class SyncQueueService {
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', payload['order_id'] as String);
 
-        final items =
-            (payload['items'] as List).cast<Map<String, dynamic>>();
+        // Upsert by id: safe to re-run after a partial failure.
+        final items = (payload['items'] as List).cast<Map<String, dynamic>>();
         for (final item in items) {
-          await _client.from('void_order_items').insert({
-            'id': const Uuid().v4(),
+          await _client.from('void_order_items').upsert({
+            'id': item['id'],
             'order_id': payload['order_id'],
             'product_id': item['product_id'],
             'product_name': item['product_name'],
             'unit_price': item['unit_price'],
             'quantity': item['quantity'],
             'subtotal': item['subtotal'],
+            'promo_id': item['promo_id'],
+            'promo_group_id': item['promo_group_id'],
             'reason': reason,
             'voided_by_staff_id': voidedById,
             'voided_by_staff_name': payload['voided_by_staff_name'],
             'voided_at': voidedAt,
-          });
+          }, onConflict: 'id');
+          await _local.markVoidSynced(item['id'] as String);
         }
 
         await _client
@@ -561,14 +523,37 @@ class SyncQueueService {
             .eq('order_id', payload['order_id'] as String)
             .eq('is_voided', false);
 
+      case 'upsert_shift':
+        try {
+          await _client
+              .from('cashier_shifts')
+              .upsert(payload, onConflict: 'id');
+        } on PostgrestException catch (e) {
+          final dupOpen = e.code == '23505' &&
+              e.message.contains('idx_one_open_shift_per_staff');
+          if (!dupOpen) rethrow;
+          // Staff already has an open shift on the server: adopt it.
+          final server = await _client
+              .from('cashier_shifts')
+              .select()
+              .eq('staff_id', payload['staff_id'] as String)
+              .eq('status', 'open')
+              .limit(1)
+              .maybeSingle();
+          if (server == null) rethrow;
+          await _local.adoptServerShift(
+              localId: recordId, server: Map<String, dynamic>.from(server));
+          _ref.read(shiftsReconciledProvider.notifier).state = DateTime.now();
+        }
+
+      case 'insert_audit_log':
+        await _client.from('audit_logs').upsert(payload, onConflict: 'id');
+
       case 'add_staff':
         await _client.from('staff_members').insert(payload);
 
       case 'update_staff':
-        await _client
-            .from('staff_members')
-            .update(payload)
-            .eq('id', recordId);
+        await _client.from('staff_members').update(payload).eq('id', recordId);
 
       case 'delete_staff':
         await _client
@@ -580,33 +565,114 @@ class SyncQueueService {
     }
   }
 
-  Future<void> _replayInsertOrder(Map<String, dynamic> payload) async {
-    try {
-      await _client
-          .from('orders')
-          .select('id')
-          .eq('id', payload['id'])
-          .single();
-      await _local.markOrderSynced(payload['id'] as String);
-      return;
-    } catch (_) {}
+  // ── Order helpers ───────────────────────────────────────────────────────────
 
-    final items =
-        (payload['items'] as List).cast<Map<String, dynamic>>();
-    final orderPayload = Map<String, dynamic>.from(payload)
-      ..remove('items');
+  /// Single implementation used by both the live online path and queue replay.
+  /// Idempotent: rows are keyed by client-generated ids, and totals are
+  /// recomputed from the rows rather than incremented.
+  Future<void> replayAppendOrderItems(Map<String, dynamic> payload) async {
+    final orderId = payload['order_id'] as String;
+    final rows = (payload['items'] as List).cast<Map<String, dynamic>>();
+    final ids = rows.map((r) => r['id'] as String).toList();
 
-    await _client.from('orders').insert(orderPayload);
-    if (items.isNotEmpty) {
-      await _client.from('order_items').insert(items);
-    }
-    await _local.markOrderSynced(payload['id'] as String);
+    final existing =
+        await _client.from('order_items').select('id').inFilter('id', ids);
+    final have = (existing as List).map((r) => r['id'] as String).toSet();
+    final fresh = <Map<String, dynamic>>[
+      for (final r in rows)
+        if (!have.contains(r['id'])) {...r, 'order_id': orderId},
+    ];
+    if (fresh.isNotEmpty) await _client.from('order_items').insert(fresh);
+
+    final all = await _client
+        .from('order_items')
+        .select('subtotal')
+        .eq('order_id', orderId);
+    final subtotal = (all as List)
+        .fold<double>(0, (s, r) => s + (r['subtotal'] as num).toDouble());
+
+    final order = await _client
+        .from('orders')
+        .select('discount_amount, tip_amount, status, paid_at')
+        .eq('id', orderId)
+        .single();
+    final taxRate = (payload['tax_rate'] as num?)?.toDouble() ?? 0.0;
+    final tax = subtotal * taxRate;
+    final discount = (order['discount_amount'] as num).toDouble();
+    final tip = (order['tip_amount'] as num?)?.toDouble() ?? 0.0;
+    final reopen = payload['reopen_for_kitchen'] == true &&
+        order['paid_at'] == null &&
+        order['status'] != 'cancelled';
+
+    await _client.from('orders').update({
+      'subtotal': subtotal,
+      'tax_amount': tax,
+      'total_amount': subtotal + tax - discount + tip,
+      if (reopen) 'status': 'pending',
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', orderId);
   }
 
-  Future<void> _replayInsertOrderItems(
-      Map<String, dynamic> payload) async {
-    final items =
-        (payload['items'] as List).cast<Map<String, dynamic>>();
+  Future<void> _recomputeOrderTotals(String orderId) async {
+    final remaining = await _client
+        .from('order_items')
+        .select('subtotal')
+        .eq('order_id', orderId) as List;
+    final now = DateTime.now().toIso8601String();
+    if (remaining.isEmpty) {
+      await _client
+          .from('orders')
+          .update({'status': 'cancelled', 'updated_at': now}).eq('id', orderId);
+      return;
+    }
+    final newSubtotal = remaining.fold<double>(
+        0, (s, r) => s + (r['subtotal'] as num).toDouble());
+    final o = await _client
+        .from('orders')
+        .select('tax_amount, discount_amount, subtotal, tip_amount')
+        .eq('id', orderId)
+        .single();
+    final oldSub = (o['subtotal'] as num).toDouble();
+    final taxRate =
+        oldSub > 0 ? (o['tax_amount'] as num).toDouble() / oldSub : 0.0;
+    final newTax = newSubtotal * taxRate;
+    final newDiscount =
+        (o['discount_amount'] as num).toDouble().clamp(0.0, newSubtotal);
+    final tip = (o['tip_amount'] as num?)?.toDouble() ?? 0.0;
+    await _client.from('orders').update({
+      'subtotal': newSubtotal,
+      'tax_amount': newTax,
+      'discount_amount': newDiscount,
+      'total_amount': newSubtotal + newTax - newDiscount + tip,
+      'updated_at': now,
+    }).eq('id', orderId);
+  }
+
+  Future<void> _replayInsertOrder(Map<String, dynamic> payload) async {
+    final orderId = payload['id'] as String;
+    final items = (payload['items'] as List).cast<Map<String, dynamic>>();
+    final orderPayload = Map<String, dynamic>.from(payload)..remove('items');
+
+    await _client
+        .from('orders')
+        .upsert(orderPayload, onConflict: 'id', ignoreDuplicates: true);
+
+    final existing = await _client
+        .from('order_items')
+        .select('id')
+        .eq('order_id', orderId)
+        .limit(1);
+    if ((existing as List).isEmpty && items.isNotEmpty) {
+      await _client.from('order_items').insert([
+        for (final i in items) {...i, 'order_id': orderId},
+      ]);
+    }
+
+    await _local.markOrderSynced(orderId);
+  }
+
+  Future<void> _replayInsertOrderItems(Map<String, dynamic> payload) async {
+    final items = (payload['items'] as List).cast<Map<String, dynamic>>();
     if (items.isNotEmpty) {
       await _client.from('order_items').upsert(items);
     }
@@ -614,9 +680,8 @@ class SyncQueueService {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  /// Maps a known DB-level plan-limit trigger rejection to a friendly,
-  /// non-technical message. Returns null for any other error, so the
-  /// normal retry/backoff path is unaffected.
+  /// Maps a known DB-level plan-limit trigger rejection to a friendly message.
+  /// Returns null for any other error, so normal retry/backoff applies.
   String? _planLimitMessage(Object error) {
     final msg = error.toString();
     if (msg.contains('staff_limit_exceeded')) {

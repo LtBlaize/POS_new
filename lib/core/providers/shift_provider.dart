@@ -6,6 +6,8 @@ import '../models/shift.dart';
 import '../services/shift_service.dart';
 import '../providers/staff_provider.dart';          // ← activeStaffProvider lives here
 import '../providers/app_context_provider.dart';
+import '../services/sync_queue_service.dart';
+
 // ── Current open shift for the active staff member ────────────────────────────
 
 final currentShiftProvider =
@@ -15,6 +17,7 @@ final currentShiftProvider =
 class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   @override
   Future<CashierShift?> build() async {
+    ref.watch(shiftsReconciledProvider); // reload after a conflict is resolved
     final businessId = ref.watch(activeBusinessIdProvider);
     if (businessId == null) return null;
 

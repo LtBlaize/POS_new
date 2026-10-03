@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/models/product.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/sync_queue_service.dart';
 import '../../features/auth/auth_provider.dart';
-import '../../core/providers/product_provider.dart'; // ✅ REQUIRED IMPORT
+import '../../core/providers/product_provider.dart';
 import '../../config/business_config.dart';
 import '../../core/providers/app_context_provider.dart';
 import '../../core/models/product_variant.dart';
@@ -112,14 +113,12 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
   bool get _isOnline => _ref.read(isOnlineProvider);
 
-  // ✅ Forces productListProvider to re-fetch from Supabase
+  // Forces productListProvider to re-fetch.
   void _refreshProductList() {
     try {
-      debugPrint('🔄 [Inventory] Invalidating productListProvider...');
       _ref.invalidate(productListProvider);
-      debugPrint('✅ [Inventory] productListProvider invalidated');
     } catch (e) {
-      debugPrint('❌ [Inventory] Failed to invalidate productListProvider: $e');
+      debugPrint('[Inventory] Failed to invalidate productListProvider: $e');
     }
   }
 
@@ -198,7 +197,8 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           .eq('is_active', true)
           .order('name');
 
-      final threshold = _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
+      final threshold =
+          _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
 
       final products = (rows as List)
           .map((row) => Product.fromMap(row as Map<String, dynamic>))
@@ -218,8 +218,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         if (variants.isNotEmpty) await _local.upsertAllVariants(variants);
       }
 
-      // Re-read from local cache so local_image_path (preserved through the
-      // upsert) shows up immediately, not just the bare Supabase row.
+      // Re-read from local cache so local_image_path shows up immediately.
       final mergedProducts = await _local.getProducts(_businessId);
       final entries = mergedProducts
           .map((p) => InventoryEntry(product: p, lowStockThreshold: threshold))
@@ -231,9 +230,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         isOffline: false,
       );
 
-      // Fire low stock alerts if enabled
       await _checkLowStockAlerts(entries, threshold);
-
     } catch (e, stack) {
       debugPrint('[Inventory] Supabase load failed: $e\n$stack');
       state = state.copyWith(
@@ -247,6 +244,61 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
   Future<void> refresh() => _load();
 
   void dismissAlert() => state = state.copyWith(lowStockAlert: null);
+
+  // ── Atomic stock write (shared by product + variant paths) ────────────────
+  //
+  // One idempotency key per adjustment. Online: call apply_stock_change(),
+  // which checks the key, updates stock and writes the log in one transaction.
+  // If the call fails (or we're offline) the SAME key is queued, so a retry
+  // after a half-finished attempt is skipped by the server instead of being
+  // applied twice.
+
+  Future<void> _applyStock({
+    required String productId,
+    String? variantId,
+    required String businessId,
+    required int delta,
+    required String action,
+    String? notes,
+  }) async {
+    if (delta == 0) return;
+    final key = const Uuid().v4();
+    final performedBy = _client.auth.currentUser?.id;
+
+    if (_isOnline) {
+      try {
+        await _client.rpc('apply_stock_change', params: {
+          'p_business_id': businessId,
+          'p_product_id': productId,
+          'p_variant_id': variantId,
+          'p_delta': delta,
+          'p_action': action,
+          'p_performed_by': performedBy,
+          'p_notes': notes,
+          'p_idempotency_key': key,
+        });
+        return;
+      } catch (e) {
+        debugPrint('[Inventory] Stock RPC failed, queuing with same key: $e');
+      }
+    }
+
+    await _syncQueue.enqueue(
+      operation: variantId == null ? 'adjust_stock' : 'adjust_variant_stock',
+      tableName: variantId == null ? 'products' : 'product_variants',
+      recordId: variantId ?? productId,
+      idempotencyKey: key,
+      payload: {
+        'business_id': businessId,
+        'product_id': productId,
+        if (variantId != null) 'variant_id': variantId,
+        'quantity_change': delta,
+        'action': action,
+        'performed_by': performedBy,
+        'notes': notes,
+      },
+    );
+  }
 
   // ── Adjust stock ──────────────────────────────────────────────────────────
 
@@ -263,46 +315,23 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final before = entry.stock;
     final after = (before + delta).clamp(0, 9999);
 
-    // Optimistic UI update
-    _updateEntry(index, entry.copyWith(
-      product: entry.product.copyWith(stockQuantity: after),
-    ));
-
-    // Update SQLite immediately
+    // Optimistic UI + local SQLite first.
+    _updateEntry(
+        index,
+        entry.copyWith(
+          product: entry.product.copyWith(stockQuantity: after),
+        ));
     await _local.updateProductStock(productId, after);
-
-    // ✅ Immediately refresh POS from updated SQLite
     _refreshProductList();
 
-    if (_isOnline) {
-      try {
-        await _writeStockUpdate(
-          productId: productId,
-          newQty: after,
-          before: before,
-          after: after,
-          action: action,
-          notes: notes,
-        );
-        // ✅ Refresh again after Supabase write confirms
-        _refreshProductList();
-      } catch (e) {
-        debugPrint('[Inventory] Online write failed, queuing: $e');
-        await _queueStockUpdate(
-          productId: productId,
-          delta: delta,
-          action: action,
-          notes: notes,
-        );
-      }
-    } else {
-      await _queueStockUpdate(
-        productId: productId,
-        delta: delta,
-        action: action,
-        notes: notes,
-      );
-    }
+    await _applyStock(
+      productId: productId,
+      businessId: _businessId,
+      delta: after - before,
+      action: action,
+      notes: notes,
+    );
+    _refreshProductList();
   }
 
   // ── Set stock ─────────────────────────────────────────────────────────────
@@ -314,46 +343,23 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final entry = state.entries[index];
     final before = entry.stock;
     final after = value.clamp(0, 9999);
-    final delta = after - before;
 
-    _updateEntry(index, entry.copyWith(
-      product: entry.product.copyWith(stockQuantity: after),
-    ));
-
+    _updateEntry(
+        index,
+        entry.copyWith(
+          product: entry.product.copyWith(stockQuantity: after),
+        ));
     await _local.updateProductStock(productId, after);
-
-    // ✅ Immediately refresh POS from updated SQLite
     _refreshProductList();
 
-    if (_isOnline) {
-      try {
-        await _writeStockUpdate(
-          productId: productId,
-          newQty: after,
-          before: before,
-          after: after,
-          action: 'adjustment',
-          notes: notes ?? 'Manual stock set',
-        );
-        // ✅ Refresh again after Supabase write confirms
-        _refreshProductList();
-      } catch (e) {
-        debugPrint('[Inventory] Online set failed, queuing: $e');
-        await _queueStockUpdate(
-          productId: productId,
-          delta: delta,
-          action: 'adjustment',
-          notes: notes ?? 'Manual stock set',
-        );
-      }
-    } else {
-      await _queueStockUpdate(
-        productId: productId,
-        delta: delta,
-        action: 'adjustment',
-        notes: notes ?? 'Manual stock set',
-      );
-    }
+    await _applyStock(
+      productId: productId,
+      businessId: _businessId,
+      delta: after - before,
+      action: 'adjustment',
+      notes: notes ?? 'Manual stock set',
+    );
+    _refreshProductList();
   }
 
   // ── Toggle availability ───────────────────────────────────────────────────
@@ -365,12 +371,14 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final entry = state.entries[index];
     final newVal = !entry.product.isAvailable;
 
-    _updateEntry(index, entry.copyWith(
-      product: entry.product.copyWith(isAvailable: newVal),
-    ));
+    _updateEntry(
+        index,
+        entry.copyWith(
+          product: entry.product.copyWith(isAvailable: newVal),
+        ));
 
     await _local.updateProductAvailability(productId, newVal);
-    _refreshProductList(); // ✅ reflect in POS immediately
+    _refreshProductList();
 
     if (_isOnline) {
       try {
@@ -378,7 +386,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
           'is_available': newVal,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', productId);
-        _refreshProductList(); // ✅ refresh after Supabase confirms
+        _refreshProductList();
       } catch (e) {
         _updateEntry(index, entry);
         await _local.updateProductAvailability(
@@ -393,29 +401,28 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       adjustStock(productId, quantity,
           action: 'restock', notes: notes ?? 'Restock');
 
-  // ── Private helpers ───────────────────────────────────────────────────────
+  // ── Low stock alerts ──────────────────────────────────────────────────────
 
   Future<void> _checkLowStockAlerts(
     List<InventoryEntry> entries,
     int threshold,
   ) async {
     try {
-      // Check if alerts are enabled in business config
       final config = _ref.read(businessConfigProvider);
       if (config == null || !config.enableInventoryAlerts) return;
 
       final lowItems = entries.where((e) => e.isLowStock).toList();
       if (lowItems.isEmpty) return;
 
-      // Get products already alerted in the last 24h to avoid spamming
       final alreadyAlerted =
           await _local.getRecentlyAlertedProductIds(_businessId);
 
-      final toAlert =
-          lowItems.where((e) => !alreadyAlerted.contains(e.product.id)).toList();
+      final toAlert = lowItems
+          .where((e) => !alreadyAlerted.contains(e.product.id))
+          .toList();
       if (toAlert.isEmpty) return;
 
-      // Mark all as alerted first so concurrent loads don't double-fire
+      // Mark first so concurrent loads don't double-fire.
       for (final entry in toAlert) {
         await _local.markLowStockAlerted(
           productId: entry.product.id,
@@ -425,14 +432,12 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
         );
       }
 
-      // Build the alert message
       final names = toAlert.take(3).map((e) => e.product.name).join(', ');
       final extra = toAlert.length > 3 ? ' +${toAlert.length - 3} more' : '';
-      final message = '${toAlert.length} item${toAlert.length > 1 ? 's' : ''} low: $names$extra';
+      final message =
+          '${toAlert.length} item${toAlert.length > 1 ? 's' : ''} low: $names$extra';
 
       debugPrint('[Inventory] Low stock alert: $message');
-
-      // Update state with a dismissible alert message
       state = state.copyWith(lowStockAlert: message);
     } catch (e) {
       debugPrint('[Inventory] Alert check failed: $e');
@@ -443,53 +448,6 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final list = List<InventoryEntry>.from(state.entries);
     list[index] = updated;
     state = state.copyWith(entries: list);
-  }
-
-  Future<void> _writeStockUpdate({
-    required String productId,
-    required int newQty,
-    required int before,
-    required int after,
-    required String action,
-    String? notes,
-  }) async {
-    await Future.wait([
-      _client.from('products').update({
-        'stock_quantity': newQty,
-        'is_available': newQty > 0, // ✅ auto-flip availability
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', productId),
-      _client.from('inventory_logs').insert({
-        'business_id': _businessId,
-        'product_id': productId,
-        'action': action,
-        'quantity_change': after - before,
-        'quantity_before': before,
-        'quantity_after': after,
-        'performed_by': _client.auth.currentUser?.id,
-        'notes': notes,
-      }),
-    ]);
-  }
-
-  Future<void> _queueStockUpdate({
-    required String productId,
-    required int delta,
-    required String action,
-    String? notes,
-  }) async {
-    await _syncQueue.enqueue(
-      operation: 'adjust_stock',
-      tableName: 'products',
-      recordId: productId,
-      payload: {
-        'business_id': _businessId,
-        'quantity_change': delta,
-        'action': action,
-        'performed_by': _client.auth.currentUser?.id,
-        'notes': notes,
-      },
-    );
   }
 
   // ── Variant stock (used by the inventory list) ────────────────────────────
@@ -558,62 +516,20 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     await _local.updateVariantStock(variantId, after);
 
-    if (_isOnline) {
-      try {
-        await Future.wait([
-          _client.from('product_variants').update({
-            'stock_quantity': after,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', variantId),
-          _client.from('inventory_logs').insert({
-            'business_id': businessId,
-            'product_id': productId,
-            'action': action,
-            'quantity_change': quantityChange,
-            'quantity_before': quantityBefore,
-            'quantity_after': after,
-            'performed_by': _client.auth.currentUser?.id,
-            'variant_id': variantId,
-            'notes': notes,
-          }),
-        ]);
-      } catch (e) {
-        debugPrint('[Inventory] Variant stock online write failed, queuing: $e');
-        await _syncQueue.enqueue(
-          operation: 'adjust_variant_stock',
-          tableName: 'product_variants',
-          recordId: variantId,
-          payload: {
-            'business_id': businessId,
-            'product_id': productId,
-            'variant_id': variantId,        
-            'quantity_change': quantityChange,
-            'action': action,
-            'performed_by': _client.auth.currentUser?.id,
-            'notes': notes,
-          },
-        );
-      }
-    } else {
-      await _syncQueue.enqueue(
-        operation: 'adjust_variant_stock',
-        tableName: 'product_variants',
-        recordId: variantId,
-        payload: {
-          'business_id': businessId,
-          'product_id': productId,
-          'variant_id': variantId,
-          'quantity_change': quantityChange,
-          'action': action,
-          'performed_by': _client.auth.currentUser?.id,
-          'notes': notes,
-        },
-      );
-    }
+    // after - quantityBefore (not quantityChange) so a clamp at 0 is logged
+    // accurately.
+    await _applyStock(
+      productId: productId,
+      variantId: variantId,
+      businessId: businessId,
+      delta: after - quantityBefore,
+      action: action,
+      notes: notes,
+    );
   }
 }
 
-// ── Provider ──────────────────────────────────────────────────────────────────
+// ── Providers ─────────────────────────────────────────────────────────────────
 
 final inventoryProvider =
     StateNotifierProvider<InventoryNotifier, InventoryState>((ref) {

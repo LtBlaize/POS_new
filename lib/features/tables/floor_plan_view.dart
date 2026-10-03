@@ -3,6 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
+import '../../core/models/cart_item.dart';
+import '../../core/models/order.dart';
+import '../../core/providers/cart_provider.dart';
+import '../../core/providers/order_provider.dart';
+import '../auth/auth_provider.dart';
+import '../pos/dialogs/checkout_dialog.dart';
+import 'open_tab_provider.dart';
+import '../../core/providers/app_context_provider.dart';
+import '../../core/services/connectivity_service.dart';
+import '../../core/services/local_db_service.dart';
 
 class FloorPlanView extends ConsumerStatefulWidget {
   /// Called when user taps a free table to select it
@@ -61,7 +71,9 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
                   child: Text('No tables set up yet',
                       style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 13)))
-              : InteractiveViewer(
+              : !widget.editMode
+                  ? _buildFitted(tables, selected)
+                  : InteractiveViewer(
                   boundaryMargin: const EdgeInsets.all(200),
                   minScale: 0.5,
                   maxScale: 2.5,
@@ -84,7 +96,7 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
                             onTap: () {
                               if (widget.editMode) return;
                               if (table.status == TableStatus.occupied) {
-                                _confirmFree(context, table.name);
+                                _showOccupiedSheet(table);
                               } else {
                                 ref
                                     .read(tableProvider.notifier)
@@ -109,12 +121,221 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
     );
   }
 
+  void _handleTap(TableEntry table) {
+    if (widget.editMode) return;
+    if (table.status == TableStatus.occupied) {
+      _confirmFree(context, table.name);
+    } else {
+      ref.read(tableProvider.notifier).selectTable(table.name);
+      widget.onSelectTable?.call(table.name);
+    }
+  }
+
+  /// View mode: crop to the tables' bounding box and scale down to fit.
+  Widget _buildFitted(List<TableEntry> tables, String? selected) {
+    const pad = 8.0;
+    var minX = double.infinity, minY = double.infinity;
+    var maxX = -double.infinity, maxY = -double.infinity;
+    for (final t in tables) {
+      if (t.x < minX) minX = t.x;
+      if (t.y < minY) minY = t.y;
+      if (t.x + t.w > maxX) maxX = t.x + t.w;
+      if (t.y + t.h > maxY) maxY = t.y + t.h;
+    }
+    final width = maxX - minX + pad * 2;
+    final height = maxY - minY + pad * 2;
+
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
+            children: [
+              for (final table in tables)
+                _TableWidget(
+                  key: ValueKey(table.uuid ?? table.name),
+                  table: table.copyWith(
+                    x: table.x - minX + pad,
+                    y: table.y - minY + pad,
+                  ),
+                  isSelected: selected == table.name,
+                  editMode: false,
+                  onTap: () => _handleTap(table),
+                  onDragEnd: (_, _) {},
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showOccupiedSheet(TableEntry table) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text('Table ${table.name}',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w700)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_shopping_cart),
+              title: const Text('Add items to tab'),
+              onTap: () => Navigator.pop(ctx, 'add'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: const Text('Pay'),
+              onTap: () => Navigator.pop(ctx, 'pay'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_available_outlined),
+              title: const Text('Free table'),
+              onTap: () => Navigator.pop(ctx, 'free'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'add':
+        await _startAddToTab(table);
+      case 'pay':
+        await _startPay(table);
+      case 'free':
+        _confirmFree(context, table.name);
+    }
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// Latest unpaid, non-cancelled order for this table (online lookup).
+    /// Latest unpaid, non-cancelled order for this table. Online lookup first,
+  /// local cache when offline or on a network failure.
+  Future<Map<String, dynamic>?> _findOpenOrder(TableEntry table) async {
+    final uuid = table.uuid;
+    if (uuid == null) return null;
+    if (ref.read(isOnlineProvider)) {
+      try {
+        return await ref
+            .read(supabaseClientProvider)
+            .from('orders')
+            .select('id, order_number, total_amount')
+            .eq('table_id', uuid)
+            .isFilter('paid_at', null)
+            .neq('status', 'cancelled')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      } catch (_) {/* fall through to local */}
+    }
+    final businessId = ref.read(activeBusinessIdProvider);
+    if (businessId == null) return null;
+    final local = await ref.read(localDbServiceProvider).getOrders(businessId);
+    final open = local
+        .where((o) =>
+            o.tableId == uuid &&
+            o.paidAt == null &&
+            o.status != OrderStatus.cancelled)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (open.isEmpty) return null;
+    final o = open.first;
+    return {
+      'id': o.id,
+      'order_number': o.orderNumber,
+      'total_amount': o.totalAmount,
+    };
+  }
+
+  Future<void> _startAddToTab(TableEntry table) async {
+    if (ref.read(cartProvider).isNotEmpty) {
+      _toast('Send or hold the current cart first.');
+      return;
+    }
+    final row = await _findOpenOrder(table);
+    if (!mounted) return;
+    if (row == null) {
+      _toast('No open order found for Table ${table.name} (needs a connection).');
+      return;
+    }
+    ref.read(openTabProvider.notifier).state = OpenTab(
+      orderId: row['id'] as String,
+      orderNumber: row['order_number'] as int,
+      tableName: table.name,
+      existingTotal: (row['total_amount'] as num).toDouble(),
+    );
+    if (ref.read(tableProvider).selectedTableName != table.name) {
+      ref.read(tableProvider.notifier).selectTable(table.name);
+    }
+    widget.onSelectTable?.call(table.name); // closes sheet / collapses panel
+  }
+
+  Future<void> _startPay(TableEntry table) async {
+    final row = await _findOpenOrder(table);
+    if (!mounted) return;
+    if (row == null) {
+      _toast('No open order found for Table ${table.name} (needs a connection).');
+      return;
+    }
+    final orderId = row['id'] as String;
+    try {
+      // Prefer the stream's copy: promo lines are already grouped there.
+      Order? order = ref
+          .read(ordersStreamProvider)
+          .asData
+          ?.value
+          .where((o) => o.id == orderId)
+          .firstOrNull;
+      if (order == null || order.items.isEmpty) {
+        order = await ref.read(orderServiceProvider).fetchOrderWithItems(orderId);
+      }
+      final cart = ref.read(cartProvider.notifier);
+      cart.clear();
+      cart.loadItems(
+        order.items,
+        orderDiscountAmount: order.discountAmount,
+        orderDiscountType: DiscountType.fixed,
+        tipAmount: order.tipAmount,
+      );
+      if (ref.read(tableProvider).selectedTableName != table.name) {
+        ref.read(tableProvider.notifier).selectTable(table.name);
+      }
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => CheckoutDialog(
+          featureManager: ref.read(featureManagerProvider),
+          existingOrderId: orderId,
+        ),
+      );
+    } catch (e) {
+      _toast('Could not open payment: $e');
+    }
+  }
+
   void _confirmFree(BuildContext context, String name) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Free table?'),
-        content: Text('Mark "$name" as available?'),
+        content: Text(
+          'Table "$name" may still have an unpaid order. '
+          'Freeing it will not cancel or pay that order — it stays open in '
+          'Orders → Active. Mark as available anyway?',
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),

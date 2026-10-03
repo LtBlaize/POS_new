@@ -1,5 +1,5 @@
 // lib/core/providers/product_provider.dart
-
+import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,6 +86,7 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
   }
 
   void reload() async {
+    if (!ref.read(isOnlineProvider) || controller.isClosed) return;
     try {
       controller.add(await fetchAll());
     } catch (e) {
@@ -94,7 +95,17 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
   }
 
   // ── Initial fetch from Supabase ──────────────────────────────────────────
-  yield await fetchAll();
+  try {
+    yield await fetchAll();
+  } catch (e) {
+    debugPrint('[productListProvider] initial fetch failed, using cache: $e');
+    yield await local.getProducts(businessId);
+  }
+
+  // Refresh once whenever connectivity returns.
+  ref.listen<bool>(isOnlineProvider, (prev, next) {
+    if (next && prev == false) reload();
+  });
 
   // ── App lifecycle: re-fetch when app comes back to foreground ────────────
   final lifecycleObserver = _AppLifecycleObserver(onResume: reload);
@@ -275,51 +286,16 @@ class InventoryService {
     required String action,
     String? notes,
   }) async {
-    final quantityAfter = quantityBefore + quantityChange;
-    await _local.updateProductStock(productId, quantityAfter);
-
-    final isOnline = _ref.read(isOnlineProvider);
-
-    if (isOnline) {
-      try {
-        await _client.from('products').update({
-          'stock_quantity': quantityAfter,
-          'is_available': quantityAfter > 0,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', productId);
-
-        await _client.from('inventory_logs').insert({
-          'business_id': businessId,
-          'product_id': productId,
-          'action': action,
-          'quantity_change': quantityChange,
-          'quantity_before': quantityBefore,
-          'quantity_after': quantityAfter,
-          'performed_by': _client.auth.currentUser?.id,
-          'notes': notes,
-        });
-      } catch (e) {
-        debugPrint('[InventoryService] Online adjust failed, queuing: $e');
-        await _queueAdjust(
-          businessId: businessId,
-          productId: productId,
-          quantityChange: quantityChange,
-          action: action,
-          notes: notes,
-        );
-      }
-    } else {
-      await _queueAdjust(
-        businessId: businessId,
-        productId: productId,
-        quantityChange: quantityChange,
-        action: action,
-        notes: notes,
-      );
-    }
+    final after = (quantityBefore + quantityChange).clamp(0, 9999);
+    await _local.updateProductStock(productId, after);
+    await _apply(
+      businessId: businessId,
+      productId: productId,
+      delta: after - quantityBefore,
+      action: action,
+      notes: notes,
+    );
   }
-
-  // ── Variant-level stock adjust ────────────────────────────────────────────
 
   Future<void> adjustVariantStock({
     required String businessId,
@@ -330,77 +306,64 @@ class InventoryService {
     String action = 'sale',
     String? notes,
   }) async {
-    final quantityAfter =
-        (quantityBefore + quantityChange).clamp(0, 9999);
-    await _local.updateVariantStock(variantId, quantityAfter);
-
-    final isOnline = _ref.read(isOnlineProvider);
-
-    if (isOnline) {
-      try {
-        await _client.from('product_variants').update({
-          'stock_quantity': quantityAfter,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', variantId);
-
-        // Still log to inventory_logs at product level for reporting
-        await _client.from('inventory_logs').insert({
-          'business_id': businessId,
-          'product_id': productId,
-          'action': action,
-          'quantity_change': quantityChange,
-          'quantity_before': quantityBefore,
-          'quantity_after': quantityAfter,
-          'performed_by': _client.auth.currentUser?.id,
-          'variant_id': variantId,
-          'notes': notes,
-        });
-      } catch (e) {
-        debugPrint(
-            '[InventoryService] Variant adjust failed, queuing: $e');
-        await _queueAdjust(
-          businessId: businessId,
-          productId: variantId, // record_id = variantId so sync knows
-          quantityChange: quantityChange,
-          action: action,
-          notes: notes,
-          isVariant: true,
-          parentProductId: productId,
-        );
-      }
-    } else {
-      await _queueAdjust(
-        businessId: businessId,
-        productId: variantId,
-        quantityChange: quantityChange,
-        action: action,
-        notes: notes,
-        isVariant: true,
-        parentProductId: productId,
-      );
-    }
+    final after = (quantityBefore + quantityChange).clamp(0, 9999);
+    await _local.updateVariantStock(variantId, after);
+    await _apply(
+      businessId: businessId,
+      productId: productId,
+      variantId: variantId,
+      delta: after - quantityBefore,
+      action: action,
+      notes: notes,
+    );
   }
 
-  Future<void> _queueAdjust({
+  /// One idempotency key per adjustment. Online: apply_stock_change() checks
+  /// the key, updates stock and writes the log in one transaction. If that
+  /// fails (or we're offline) the SAME key is queued, so a retry after a
+  /// half-finished attempt is skipped instead of applied twice.
+  Future<void> _apply({
     required String businessId,
     required String productId,
-    required int quantityChange,
+    String? variantId,
+    required int delta,
     required String action,
     String? notes,
-    bool isVariant = false,
-    String? parentProductId,
   }) async {
+    if (delta == 0) return;
+    final key = const Uuid().v4();
+    final performedBy = _client.auth.currentUser?.id;
+
+    if (_ref.read(isOnlineProvider)) {
+      try {
+        await _client.rpc('apply_stock_change', params: {
+          'p_business_id': businessId,
+          'p_product_id': productId,
+          'p_variant_id': variantId,
+          'p_delta': delta,
+          'p_action': action,
+          'p_performed_by': performedBy,
+          'p_notes': notes,
+          'p_idempotency_key': key,
+        });
+        return;
+      } catch (e) {
+        debugPrint('[InventoryService] RPC failed, queuing with same key: $e');
+      }
+    }
+
     await _syncQueue.enqueue(
-      operation: isVariant ? 'adjust_variant_stock' : 'adjust_stock',
-      tableName: isVariant ? 'product_variants' : 'products',
-      recordId: productId,
+      operation: variantId == null ? 'adjust_stock' : 'adjust_variant_stock',
+      tableName: variantId == null ? 'products' : 'product_variants',
+      recordId: variantId ?? productId,
+      idempotencyKey: key,
       payload: {
         'business_id': businessId,
-        if (parentProductId != null) 'product_id': parentProductId,
-        if (isVariant) 'variant_id': productId,
-        'quantity_change': quantityChange,
+        'product_id': productId,
+        if (variantId != null) 'variant_id': variantId,
+        'quantity_change': delta,
         'action': action,
-        'performed_by': _client.auth.currentUser?.id,
+        'performed_by': performedBy,
         'notes': notes,
       },
     );

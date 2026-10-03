@@ -75,6 +75,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         ),
       ),
       body: ordersAsync.when(
+        skipLoadingOnReload: true,
         loading: () =>
             const Center(child: CircularProgressIndicator()),
         error: (e, _) {

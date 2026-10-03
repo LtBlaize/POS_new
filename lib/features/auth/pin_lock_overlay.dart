@@ -12,6 +12,7 @@ import '../../features/shifts/open_shift_screen.dart';
 import '../../core/providers/role_permissions_provider.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../core/services/audit_service.dart';
+import '../../core/services/connectivity_service.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -85,14 +86,25 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   Future<void> _handleUnlock() async {
     final staff = _selectedStaff;
     setState(() => _selectedStaff = null);
+      if (staff?.role == StaffRole.kitchen) {
+    ref.read(appLockedProvider.notifier).state = false;
+    _resetTimer();
+    return;
+  }
 
     // Claim session — kicks any other device watching this staff
     final businessId = ref.read(businessProvider)?.id ?? '';
     if (staff != null && businessId.isNotEmpty) {
-      await ref.read(staffSessionServiceProvider).claimSession(
-            businessId: businessId,
-            staffId: staff.id,
-          );
+      if (ref.read(isOnlineProvider)) {
+        try {
+          await ref
+              .read(staffSessionServiceProvider)
+              .claimSession(businessId: businessId, staffId: staff.id)
+              .timeout(const Duration(seconds: 3));
+        } catch (e) {
+          debugPrint('[PIN] claimSession skipped: $e');
+        }
+      }
       // Start watching — if another device claims later, lock this device
       ref.read(staffSessionServiceProvider).startWatching(
         staffId: staff.id,
@@ -113,14 +125,25 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
       );
     }
 
-    final shift = await ref.read(currentShiftProvider.future);
-    debugPrint('[ShiftGate] shift after unlock: ${shift?.id} status: ${shift?.status}');
-    if (!mounted) return;
-    if (shift == null) {
-      setState(() => _showShiftGate = true);
-    } else {
-      ref.read(appLockedProvider.notifier).state = false;
-      _resetTimer();
+    try {
+      final shift = await ref
+          .read(currentShiftProvider.future)
+          .timeout(const Duration(seconds: 10));
+      debugPrint(
+          '[ShiftGate] shift after unlock: ${shift?.id} status: ${shift?.status}');
+      if (!mounted) return;
+      if (shift == null) {
+        setState(() => _showShiftGate = true);
+      } else {
+        ref.read(appLockedProvider.notifier).state = false;
+        _resetTimer();
+      }
+    } catch (e) {
+      debugPrint('[ShiftGate] shift load failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Couldn't load your shift. Check the connection and try again."),
+      ));
     }
   }
 
@@ -233,7 +256,9 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
     if (staff.checkPin(_pin)) {
       HapticFeedback.lightImpact();
       ref.read(activeStaffProvider.notifier).login(staff);
-      ref.read(rolePermissionsProvider.notifier).refresh();
+      if (ref.read(isOnlineProvider)) {
+        ref.read(rolePermissionsProvider.notifier).refresh();
+      }
       ref.read(auditServiceProvider).log(
         actionType:  AuditAction.staffLogin,
         description: '${staff.name} logged in (${staff.role.label})',
@@ -244,7 +269,6 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
         _upgradePinHash(staff, _pin);
       }
       ref.invalidate(currentShiftProvider);
-      await ref.read(currentShiftProvider.future);
       widget.onUnlocked();
     } else {
       HapticFeedback.heavyImpact();
@@ -256,6 +280,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
   }
 
   Future<void> _upgradePinHash(StaffMember staff, String pin) async {
+    if (!ref.read(isOnlineProvider)) return; // retried at next online login
     try {
       final salt = StaffMember.generateSalt();
       final newHash = StaffMember.hashPin(pin, salt);
@@ -367,16 +392,26 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await Supabase.instance.client.auth.resetPasswordForEmail(
-                Supabase.instance.client.auth.currentUser?.email ?? '',
-              );
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Reset email sent.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+              try {
+                await Supabase.instance.client.auth.resetPasswordForEmail(
+                  Supabase.instance.client.auth.currentUser?.email ?? '',
+                );
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reset email sent.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Resetting a PIN needs an internet connection.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _PinScreenState._accent,

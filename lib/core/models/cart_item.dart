@@ -19,6 +19,8 @@ class CartItem {
   // receipt/kitchen reconstruction. Null for every ordinary cart item.
   final List<PromoComponent>? promoComponents;
   final String? promoId;
+  /// Which ordering round this line belongs to (persisted lines only; 1 for old data).
+  final int round;
 
   CartItem({
     required this.product,
@@ -30,12 +32,30 @@ class CartItem {
     this.notes,
     this.promoComponents,
     this.promoId,
+    this.round = 1,
   }) : costAtSale = costAtSale ??
             (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
                 ? selectedVariant.costPrice
                 : product.costPrice);
 
   bool get isPromo => promoComponents != null;
+
+  CartItem withRound(int r) => CartItem(
+        product: product,
+        selectedVariant: selectedVariant,
+        quantity: quantity,
+        discountAmount: discountAmount,
+        discountType: discountType,
+        costAtSale: costAtSale,
+        notes: notes,
+        promoComponents: promoComponents,
+        promoId: promoId,
+        round: r,
+      );
+
+  static DiscountType discountTypeFromString(String? s) =>
+      DiscountType.values.firstWhere((e) => e.name == s,
+          orElse: () => DiscountType.fixed);
 
   /// Groups raw order_item-like rows [T] into CartItems. Rows sharing a
   /// non-null promo-group id become one promo CartItem (header + its
@@ -78,6 +98,7 @@ class CartItem {
         costAtSale: header.costAtSale,
         notes: header.notes,
         promoId: header.promoId,
+        round: header.round,
         promoComponents: componentRows.map(buildComponent).toList(),
       ));
     }

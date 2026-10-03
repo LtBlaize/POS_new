@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/staff.dart';
 import '../providers/staff_provider.dart';
 import '../../features/auth/auth_provider.dart';
+import '../services/local_db_service.dart';
+import '../services/connectivity_service.dart';
 
 // All tabs in the app
 const kAllTabs = [
@@ -44,44 +46,50 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     state = const AsyncLoading();
     state = AsyncData(await build());
   }
- @override
+  @override
   Future<RolePermMap> build() async {
     final profile = await ref.watch(profileProvider.future);
     debugPrint('[Perms] businessId: ${profile?.businessId}');
     if (profile?.businessId == null) return _defaults();
 
     final client = ref.watch(supabaseClientProvider);
+    final local = ref.read(localDbServiceProvider);
+    final cacheKey = 'role_perms:${profile!.businessId}';
+
+    Map<String, dynamic>? raw;
     try {
       final row = await client
           .from('business_configs')
           .select('role_permissions')
-          .eq('business_id', profile!.businessId!)
-          .maybeSingle();
-
-      debugPrint('[Perms] raw from supabase: ${row?['role_permissions']}');
-
-      final raw = row?['role_permissions'] as Map<String, dynamic>?;
-      if (raw == null) return _defaults();
-      _cachedRaw = raw;
-
-      final businessType = ref.read(businessTypeProvider);
-      final isRestaurant = businessType?.isRestaurant ?? false;
-      final validTabs = tabsForBusinessType(isRestaurant).toSet();
-
-      // Handle both old format (List) and new format (Map with 'screens' key)
-      final result = raw.map((role, value) {
-        final List<dynamic> tabList = value is Map
-            ? (value['screens'] as List? ?? [])
-            : (value as List);
-        return MapEntry(role, Set<String>.from(tabList).intersection(validTabs));
-      });
-
-      debugPrint('[Perms] resolved: $result');
-      return result;
+          .eq('business_id', profile.businessId!)
+          .maybeSingle()
+          .timeout(Duration(seconds: ref.read(isOnlineProvider) ? 5 : 1));
+      raw = row?['role_permissions'] as Map<String, dynamic>?;
+      if (raw != null) await local.setKv(cacheKey, raw);
     } catch (e) {
-      debugPrint('[RolePermissions] load failed: $e');
-      return _defaults();
+      debugPrint('[RolePermissions] load failed, trying cache: $e');
+      final cached = await local.getKv(cacheKey);
+      if (cached is Map) raw = Map<String, dynamic>.from(cached);
+      ref.listen<bool>(isOnlineProvider, (prev, next) {
+        if (next && prev == false) ref.invalidateSelf();
+      });
     }
+
+    if (raw == null) return _defaults();
+    _cachedRaw = raw;
+
+    final businessType = ref.read(businessTypeProvider);
+    final isRestaurant = businessType?.isRestaurant ?? false;
+    final validTabs = tabsForBusinessType(isRestaurant).toSet();
+
+    final result = raw.map((role, value) {
+      final List<dynamic> tabList = value is Map
+          ? (value['screens'] as List? ?? [])
+          : (value as List);
+      return MapEntry(role, Set<String>.from(tabList).intersection(validTabs));
+    });
+    debugPrint('[Perms] resolved: $result');
+    return result;
   }
 
   RolePermMap _defaults() {

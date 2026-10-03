@@ -9,6 +9,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/auth_provider.dart';
 import '../models/staff.dart';
 import '../providers/staff_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'connectivity_service.dart';
+import 'sync_queue_service.dart';
 
 // ── Action type constants ─────────────────────────────────────────────────────
 
@@ -58,19 +61,37 @@ class AuditService {
       final actor = _ref.read(activeStaffProvider);
       if (actor == null) return;
 
-      await Supabase.instance.client.from('audit_logs').insert({
-        'business_id':             businessId,
-        'performed_by_staff_id':   actor.id,
+      final row = {
+        'id': const Uuid().v4(),
+        'business_id': businessId,
+        'performed_by_staff_id': actor.id,
         'performed_by_staff_name': actor.name,
-        'performed_by_role':       actor.role.value,
-        'authorised_by_staff_id':   authorisedBy?.id,
+        'performed_by_role': actor.role.value,
+        'authorised_by_staff_id': authorisedBy?.id,
         'authorised_by_staff_name': authorisedBy?.name,
-        'action_type':  actionType,
-        'entity_type':  entityType,
-        'entity_id':    entityId,
-        'description':  description,
-        'metadata':     metadata,
-      });
+        'action_type': actionType,
+        'entity_type': entityType,
+        'entity_id': entityId,
+        'description': description,
+        'metadata': metadata,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      if (_ref.read(isOnlineProvider)) {
+        try {
+          await Supabase.instance.client
+              .from('audit_logs')
+              .insert(row)
+              .timeout(const Duration(seconds: 4));
+          return;
+        } catch (_) {}
+      }
+      await _ref.read(syncQueueServiceProvider).enqueue(
+            operation: 'insert_audit_log',
+            tableName: 'audit_logs',
+            recordId: row['id'] as String,
+            payload: row,
+          );
     } catch (e) {
       // Intentionally silent — audit must never block user actions
     }

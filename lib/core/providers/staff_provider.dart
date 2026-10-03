@@ -52,6 +52,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
         super(const AsyncValue.loading()) {
     debugPrint('[Staff] StaffListNotifier constructed, businessId=$businessId');
     load();
+    _ref.listen<bool>(isOnlineProvider, (prev, next) {
+      if (next && prev == false) load();
+    });
   }
 
   // Read connectivity fresh at call time — never cache it
@@ -72,9 +75,14 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
       }
     } catch (_) {}
 
-    if (!_isOnline) return;
+    if (!_isOnline) {
+      // Offline with nothing cached: show an empty list, not a spinner.
+      if (!state.hasValue) state = const AsyncValue.data([]);
+      return;
+    }
 
-        state = const AsyncValue.loading();
+    // Keep showing the cached staff while refreshing; only spin if none.
+    if (!state.hasValue) state = const AsyncValue.loading();
     try {
       debugPrint('[Staff] Querying Supabase for business_id=$_businessId, isOnline=$_isOnline');
       final rows = await _client
@@ -82,7 +90,8 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           .select()
           .eq('business_id', _businessId)
           .eq('is_active', true)
-          .order('created_at');
+          .order('created_at')
+          .timeout(const Duration(seconds: 6));
 
       debugPrint('[Staff] Supabase returned ${(rows as List).length} raw rows');
 
@@ -284,16 +293,20 @@ class ActiveStaffNotifier extends StateNotifier<StaffMember?> {
 final staffSessionServiceProvider = Provider<StaffSessionService>((ref) {
   return StaffSessionService(
     client: ref.watch(supabaseClientProvider),
+    isOnline: () => ref.read(isOnlineProvider),
   );
 });
 
 class StaffSessionService {
   final SupabaseClient _client;
+  final bool Function() _isOnline;
   Timer? _pollTimer;
 
   StaffSessionService({
     required SupabaseClient client,
-  })  : _client = client;
+    required bool Function() isOnline,
+  })  : _client = client,
+        _isOnline = isOnline;
   
 
   /// Call this immediately after a successful PIN unlock.
@@ -340,6 +353,7 @@ class StaffSessionService {
     required String staffId,
     required VoidCallback onKicked,
   }) async {
+    if (!_isOnline()) return; // offline: nothing to poll
     final deviceId = await _getDeviceId();
     try {
       final rows = await _client

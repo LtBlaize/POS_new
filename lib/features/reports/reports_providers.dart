@@ -211,6 +211,16 @@ class DateRange {
       start.day == end.day;
 
   int get dayCount => end.difference(start).inDays + 1;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DateRange &&
+      other.start == start &&
+      other.end == end &&
+      other.preset == preset;
+
+  @override
+  int get hashCode => Object.hash(start, end, preset);
 }
 
 final dateRangeProvider = StateProvider<DateRange>((ref) {
@@ -308,7 +318,8 @@ final slowMoversProvider =
         .select('id, name, category_name, cost_price, price')
         .eq('business_id', businessId)
         .eq('is_active', true)
-        .order('name');
+        .order('name')
+        .timeout(const Duration(seconds: 10));
 
     // Fetch sales in range
     final orders = await client
@@ -317,7 +328,8 @@ final slowMoversProvider =
         .eq('business_id', businessId)
         .eq('status', 'completed')
         .gte('created_at', start)
-        .lte('created_at', end);
+        .lte('created_at', end)
+        .timeout(const Duration(seconds: 10));
 
     // Aggregate sold qty by product id
     final Map<String, _ProductAccum> soldMap = {};

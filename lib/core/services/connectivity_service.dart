@@ -108,6 +108,8 @@ class ConnectivityService {
     _sub = Connectivity().onConnectivityChanged.listen((_) async {
       await _probeInternet();
       await _probeLan();
+    }, onError: (Object e) {
+      debugPrint('[Connectivity] listener error (ignored): $e');
     });
 
     // Periodic polls — catches captive portals and flaky connections

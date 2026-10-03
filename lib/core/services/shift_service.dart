@@ -8,19 +8,86 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/shift.dart';
 import 'local_db_service.dart';
+import 'connectivity_service.dart';
+import 'sync_queue_service.dart';
 
 final shiftServiceProvider = Provider<ShiftService>((ref) {
   return ShiftService(
     ref.watch(localDbServiceProvider),
     Supabase.instance.client,
+    syncQueue: ref.read(syncQueueServiceProvider),
+    isOnline: () => ref.read(isOnlineProvider),
   );
 });
+
+class _OfflineSkip implements Exception {
+  const _OfflineSkip();
+}
 
 class ShiftService {
   final LocalDbService _db;
   final SupabaseClient _supabase;
+  final SyncQueueService? _syncQueue;
+  final bool Function() _isOnline;
+  static const _net = Duration(seconds: 4);
 
-  const ShiftService(this._db, this._supabase);
+  ShiftService(this._db, this._supabase,
+      {SyncQueueService? syncQueue, bool Function()? isOnline})
+      : _syncQueue = syncQueue,
+        _isOnline = isOnline ?? (() => true);
+
+  // ── Shift sync (upsert by id, so replays are safe) ─────────────────────────
+
+  Future<bool> _hasPendingSync(String shiftId) async {
+    final d = await _db.db;
+    final r = await d.rawQuery(
+        "SELECT 1 FROM sync_queue WHERE record_id = ? AND operation = 'upsert_shift' AND status = 'pending' LIMIT 1",
+        [shiftId]);
+    return r.isNotEmpty;
+  }
+
+  /// A shift opened offline that hasn't reached the server yet.
+  Future<CashierShift?> _pendingLocalOpenShift(
+      String businessId, String staffId) async {
+    final d = await _db.db;
+    final rows = await d.rawQuery('''
+      SELECT * FROM cashier_shifts
+      WHERE business_id = ? AND staff_id = ? AND status = 'open'
+        AND id IN (SELECT record_id FROM sync_queue
+                   WHERE operation = 'upsert_shift' AND status = 'pending')
+      ORDER BY opened_at DESC LIMIT 1
+    ''', [businessId, staffId]);
+    return rows.isEmpty ? null : _shiftFromMap(rows.first);
+  }
+
+  /// Push the local row now if online and nothing older is queued for it;
+  /// otherwise queue it. (Pushing directly past a queued entry could let the
+  /// older queued state overwrite the newer one.)
+  Future<void> _pushShift(String shiftId) async {
+    final d = await _db.db;
+    final rows = await d.query('cashier_shifts',
+        where: 'id = ?', whereArgs: [shiftId], limit: 1);
+    if (rows.isEmpty) return;
+    final row = Map<String, dynamic>.from(rows.first);
+
+    if (_isOnline() && !await _hasPendingSync(shiftId)) {
+      try {
+        await _supabase
+            .from('cashier_shifts')
+            .upsert(row, onConflict: 'id')
+            .timeout(_net);
+        return;
+      } catch (e) {
+        debugPrint('[Shift] sync failed, queuing: $e');
+      }
+    }
+    await _syncQueue?.enqueue(
+      operation: 'upsert_shift',
+      tableName: 'cashier_shifts',
+      recordId: shiftId,
+      payload: row,
+    );
+  }
 
   // ── Device ID ──────────────────────────────────────────────────────────────
 
@@ -72,13 +139,10 @@ class ShiftService {
       'expenses': 0.0,
     };
 
-    try {
-      await _supabase.from('cashier_shifts').insert(payload);
-    } catch (_) {}
-
     final d = await _db.db;
     await d.insert('cashier_shifts', payload,
         conflictAlgorithm: ConflictAlgorithm.replace);
+    await _pushShift(id);
 
     final shift = CashierShift(
       id: id,
@@ -102,29 +166,32 @@ class ShiftService {
   }) async {
     final resolvedDeviceId = deviceId ?? await _getDeviceId();
 
-    try {
-      var query = _supabase
-          .from('cashier_shifts')
-          .select()
-          .eq('business_id', businessId)
-          .eq('staff_id', staffId)
-          .eq('status', 'open');
-
-      // Search any device — so Device B joins Device A's open shift
-      // instead of prompting to open a new one.
-      final rows = await query
-          .order('opened_at', ascending: false)
-          .limit(1);
-      if (rows.isNotEmpty) {
-        final shift = _shiftFromMap(rows.first);
-        final d = await _db.db;
-        await d.insert('cashier_shifts', _shiftToRow(shift),
-            conflictAlgorithm: ConflictAlgorithm.replace);
-        return shift;
-      }
-      return null;
-      
-    } catch (_) {}
+    if (_isOnline()) {
+      try {
+        final rows = await _supabase
+            .from('cashier_shifts')
+            .select()
+            .eq('business_id', businessId)
+            .eq('staff_id', staffId)
+            .eq('status', 'open')
+            .order('opened_at', ascending: false)
+            .limit(1)
+            .timeout(_net);
+        if (rows.isNotEmpty) {
+          final shift = _shiftFromMap(rows.first);
+          // Unsynced local change (e.g. closed offline) is newer than the server.
+          if (await _hasPendingSync(shift.id)) {
+            return _pendingLocalOpenShift(businessId, staffId);
+          }
+          final d = await _db.db;
+          await d.insert('cashier_shifts', _shiftToRow(shift),
+              conflictAlgorithm: ConflictAlgorithm.replace);
+          return shift;
+        }
+        // Server has none: keep a shift opened offline that hasn't synced yet.
+        return await _pendingLocalOpenShift(businessId, staffId);
+      } catch (_) {}
+    }
 
     // Offline fallback
     final d = await _db.db;
@@ -193,20 +260,14 @@ class ShiftService {
       'expenses': expenses,
     };
 
-    try {
-      await _supabase
-          .from('cashier_shifts')
-          .update(updates)
-          .eq('id', shiftId);
-      debugPrint('[ShiftClose] Supabase update OK for $shiftId');
-    } catch (e) {
-      debugPrint('[ShiftClose] Supabase update FAILED: $e');
-    }
-
     final d = await _db.db;
     final rowsAffected = await d.update('cashier_shifts', updates,
         where: 'id = ?', whereArgs: [shiftId]);
-    debugPrint('[ShiftClose] SQLite rows affected: $rowsAffected for $shiftId');
+    if (rowsAffected == 0) {
+      await d.insert('cashier_shifts', {..._shiftToRow(shift), ...updates},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await _pushShift(shiftId); // syncs now, or queues for later
 
 
     final closed = shift.copyWith(
@@ -271,7 +332,8 @@ class ShiftService {
       if (!isPaid) return;
 
       final amount = (o['total_amount'] as num).toDouble();
-      final isSplit = (o['is_split_payment'] as bool?) ?? false;
+      final isSplit =
+          o['is_split_payment'] == true || o['is_split_payment'] == 1;
 
       if (isSplit) {
         // Defer — real per-method breakdown comes from order_payments,
@@ -302,6 +364,7 @@ class ShiftService {
     Future<void> tallySplitOrders() async {
       if (splitOrderIds.isEmpty) return;
       try {
+        if (!_isOnline()) throw const _OfflineSkip();
         final legs = await _supabase
             .from('order_payments')
             .select('order_id, method, amount')
@@ -346,6 +409,11 @@ class ShiftService {
     }
 
     try {
+      // Offline, or sales/payments still waiting to sync: the server doesn't
+      // have them yet, so compute from this device's local data instead.
+      if (!_isOnline() || await _db.pendingQueueCount() > 0) {
+        throw const _OfflineSkip();
+      }
       // ── Tally paid orders ──────────────────────────────────────────────────
       // Fetch orders assigned to this staff member
       final assignedOrders = await _supabase
@@ -410,7 +478,7 @@ class ShiftService {
       final d = await _db.db;
 
       final rows = await d.rawQuery('''
-        SELECT total_amount, payment_method, status, paid_at FROM orders
+        SELECT id, total_amount, payment_method, status, paid_at, is_split_payment FROM orders
         WHERE business_id = ?
           AND (cashier_id = ? OR cashier_id IS NULL)
           AND created_at >= ? AND created_at <= ?
@@ -423,6 +491,7 @@ class ShiftService {
       for (final o in rows) {
         tally(o);
       }
+      await tallySplitOrders();
 
       // Credit given — offline
       try {
@@ -466,19 +535,22 @@ class ShiftService {
   }
 
   Future<CashierShift?> _getShiftById(String shiftId) async {
-    try {
-      final rows = await _supabase
-          .from('cashier_shifts')
-          .select()
-          .eq('id', shiftId)
-          .limit(1);
-      if (rows.isNotEmpty) return _shiftFromMap(rows.first);
-    } catch (_) {}
     final d = await _db.db;
-    final rows = await d.query('cashier_shifts',
+    final local = await d.query('cashier_shifts',
         where: 'id = ?', whereArgs: [shiftId], limit: 1);
-    if (rows.isEmpty) return null;
-    return _shiftFromMap(rows.first);
+    if (local.isNotEmpty) return _shiftFromMap(local.first);
+    if (_isOnline()) {
+      try {
+        final rows = await _supabase
+            .from('cashier_shifts')
+            .select()
+            .eq('id', shiftId)
+            .limit(1)
+            .timeout(_net);
+        if (rows.isNotEmpty) return _shiftFromMap(rows.first);
+      } catch (_) {}
+    }
+    return null;
   }
 
   // ── Log expense ────────────────────────────────────────────────────────────

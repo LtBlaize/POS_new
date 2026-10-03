@@ -8,10 +8,15 @@ import '../dialogs/split_bill_dialog.dart';
 import '../../../core/models/product.dart';
 import '../../../core/services/parked_order_service.dart';
 import '../../../features/auth/auth_provider.dart';
+import '../../tables/open_tab_provider.dart';
+import '../../tables/table_provider.dart';
+import '../../../core/services/checkout_service.dart';
 
 class CartPanel extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
-  const CartPanel({super.key, required this.featureManager});
+  final VoidCallback? onTabAdded;
+  const CartPanel(
+      {super.key, required this.featureManager, this.onTabAdded});
 
   @override
   ConsumerState<CartPanel> createState() => _CartPanelState();
@@ -25,6 +30,11 @@ class _CartPanelState extends ConsumerState<CartPanel> {
     final cartNotifier = ref.read(cartProvider.notifier);
     final hasKitchen = widget.featureManager.hasFeature('kitchen');
     final total = ref.watch(cartProvider.notifier).grandTotal;
+    final tabRaw = ref.watch(openTabProvider);
+    final selectedTable = ref.watch(selectedTableProvider);
+    // Tab mode ends automatically if the cashier deselects or switches tables.
+    final tab =
+        tabRaw != null && tabRaw.tableName == selectedTable ? tabRaw : null;
 
     return Container(
       width: 340,
@@ -270,7 +280,11 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                                           ),
                                         ],
                                         Flexible(
-                                          child: Text(item.product.name,
+                                          child: Text(
+                                              (item.selectedVariant != null &&
+                                                      item.selectedVariant!.name.isNotEmpty)
+                                                  ? '${item.product.name} · ${item.selectedVariant!.name}'
+                                                  : item.product.name,
                                               style: const TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
@@ -301,7 +315,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                                           overflow: TextOverflow.ellipsis)
                                     else
                                       Text(
-                                          '₱${item.product.price.toStringAsFixed(0)} each',
+                                          '₱${item.effectivePrice.toStringAsFixed(0)} each',
                                           style: const TextStyle(
                                               fontSize: 11,
                                               color: AppColors.textSecondary)),
@@ -329,7 +343,44 @@ class _CartPanelState extends ConsumerState<CartPanel> {
             ),
             child: Column(
               children: [
-                // REPLACE
+                if (tab != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.add_shopping_cart,
+                            size: 14, color: AppColors.warning),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Adding to Table ${tab.tableName} · Order #${tab.orderNumber} '
+                            '(₱${tab.existingTotal.toStringAsFixed(2)} so far)',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.warning),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            ref.read(openTabProvider.notifier).state = null;
+                            cartNotifier.clear();
+                          },
+                          child: const Icon(Icons.close,
+                              size: 16, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   children: [
                     const Text('Subtotal',
@@ -368,7 +419,9 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   child: ElevatedButton.icon(
                     onPressed: items.isEmpty
                         ? null
-                        : () => showDialog(
+                        : tab != null
+                            ? () => _addToTab(context, tab)
+                            : () => showDialog(
                               context: context,
                               barrierDismissible: false,
                               builder: (_) => CheckoutDialog(
@@ -382,7 +435,9 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                       size: 18,
                     ),
                     label: Text(
-                      hasKitchen ? 'Send to Kitchen' : 'Pay',
+                      tab != null
+                          ? 'Add to Tab'
+                          : (hasKitchen ? 'Send to Kitchen' : 'Pay'),
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15),
                     ),
@@ -471,6 +526,31 @@ class _StepBtn extends StatelessWidget {
 // ── Custom item dialog (lives on _CartPanelState) ─────────────────────────────
 
 extension _CartPanelDialogs on _CartPanelState {
+    Future<void> _addToTab(BuildContext context, OpenTab tab) async {
+    final result = await ref.read(checkoutServiceProvider).addToTab(
+          orderId: tab.orderId,
+          hasKitchen: widget.featureManager.hasFeature('kitchen'),
+          items: ref.read(cartProvider),
+        );
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (result.status == CheckoutStatus.error) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(result.errorMessage ?? 'Could not add items.'),
+        backgroundColor: AppColors.danger,
+      ));
+      return; // sheet stays open on failure
+    }
+    ref.read(openTabProvider.notifier).state = null;
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.pendingSync
+          ? 'Saved offline — Round ${result.round} will sync when you\'re back online'
+          : 'Added Round ${result.round} to Table ${tab.tableName} · Order #${tab.orderNumber}'),
+      backgroundColor:
+          result.pendingSync ? AppColors.warning : AppColors.success,
+    ));
+    widget.onTabAdded?.call(); // closes the phone sheet, only on success
+  }
   void _showParkDialog(BuildContext context) {
     final labelController = TextEditingController();
     final items = ref.read(cartProvider);

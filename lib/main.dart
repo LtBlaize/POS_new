@@ -119,7 +119,7 @@ if (existingSession != null) {
   }
 
   await container.read(connectivityServiceProvider).init();
-  container.read(syncQueueServiceProvider).init();
+  container.read(syncQueueServiceProvider); // provider factory already calls init()
   container.read(profileRefreshServiceProvider).init();
 
   if (isPos) {

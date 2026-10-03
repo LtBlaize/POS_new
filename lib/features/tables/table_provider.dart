@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/auth_provider.dart';
+import 'package:flutter/foundation.dart';
+import '../../core/models/order.dart';
+import '../../core/services/local_db_service.dart';
 
 enum TableStatus { available, occupied, reserved }
 
@@ -110,22 +113,13 @@ class TableNotifier extends StateNotifier<TableState> {
     } catch (_) {}
   }
 
-  Future<void> _loadTables() async {
-    if (_businessId == null) return;
-    state = state.copyWith(isLoading: true);
-    try {
-      final rows = await _client
-          .from('restaurant_tables')
-          .select('id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status)')
-          .eq('business_id', _businessId)
-          .eq('is_active', true)
-          .order('table_number');
-
-      final tables = (rows as List).map((row) {
-        final meta = row['metadata'] as Map<String, dynamic>? ?? {};
+    List<TableEntry> _parseRows(List rows) => rows.map((r) {
+        final row = Map<String, dynamic>.from(r as Map);
+        final meta = (row['metadata'] as Map?)?.cast<String, dynamic>() ?? {};
         final openOrder = (row['orders'] as List?)
             ?.cast<Map<String, dynamic>>()
-            .where((o) => o['status'] != 'completed' && o['status'] != 'cancelled')
+            .where((o) =>
+                o['status'] != 'completed' && o['status'] != 'cancelled')
             .firstOrNull;
         return TableEntry(
           name: row['table_number'].toString(),
@@ -141,9 +135,56 @@ class TableNotifier extends StateNotifier<TableState> {
         );
       }).toList();
 
-      state = state.copyWith(tables: tables, isLoading: false);
+  Future<void> _loadTables() async {
+    if (_businessId == null) return;
+    final local = LocalDbService();
+    final key = 'tables:$_businessId';
+    state = state.copyWith(isLoading: true);
+    try {
+      final rows = await _client
+          .from('restaurant_tables')
+          .select(
+              'id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status)')
+          .eq('business_id', _businessId)
+          .eq('is_active', true)
+          .order('table_number')
+          .timeout(const Duration(seconds: 6));
+      await local.setKv(key, rows);
+      state = state.copyWith(tables: _parseRows(rows as List), isLoading: false);
     } catch (e) {
-      state = state.copyWith(tables: [], isLoading: false);
+      debugPrint('[Tables] load failed, using cache: $e');
+      final cached = await local.getKv(key);
+      var tables = cached is List ? _parseRows(cached) : <TableEntry>[];
+      tables = await _overlayLocalOccupancy(tables, local);
+      state = state.copyWith(tables: tables, isLoading: false);
+    }
+  }
+
+  /// Offline: work out which tables are occupied from local unpaid orders.
+  Future<List<TableEntry>> _overlayLocalOccupancy(
+      List<TableEntry> tables, LocalDbService local) async {
+    try {
+      final orders = await local.getOrders(_businessId!);
+      final byId = {for (final o in orders) o.id: o};
+      final open = <String, Order>{};
+      for (final o in orders) {
+        if (o.tableId == null || o.paidAt != null) continue;
+        if (o.status == OrderStatus.cancelled ||
+            o.status == OrderStatus.completed) continue;
+        open.putIfAbsent(o.tableId!, () => o); // newest first
+      }
+      return [
+        for (final t in tables)
+          if (t.uuid != null && open.containsKey(t.uuid))
+            t.copyWith(
+                status: TableStatus.occupied, orderId: open[t.uuid]!.id)
+          else if (t.orderId != null && byId[t.orderId] != null)
+            t.copyWith(status: TableStatus.available, clearOrder: true)
+          else
+            t,
+      ];
+    } catch (_) {
+      return tables;
     }
   }
 
@@ -226,7 +267,8 @@ class TableNotifier extends StateNotifier<TableState> {
 final tableProvider =
     StateNotifierProvider<TableNotifier, TableState>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  final businessId = ref.watch(profileProvider).asData?.value?.businessId;
+  final businessId = ref.watch(
+      profileProvider.select((p) => p.value?.businessId));
   return TableNotifier(client: client, businessId: businessId);
 });
 

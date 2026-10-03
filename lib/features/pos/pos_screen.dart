@@ -212,7 +212,7 @@ class _PortraitShell extends ConsumerWidget {
               onTap: () => _showCartSheet(context),
             )
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _BottomNav(
         screens: screens,
         activeIndex: activeIndex,
@@ -289,7 +289,12 @@ class _PortraitShell extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Expanded(child: CartPanel(featureManager: featureManager)),
+              Expanded(
+                child: CartPanel(
+                  featureManager: featureManager,
+                  onTabAdded: () => Navigator.of(ctx).pop(),
+                ),
+              ),
             ],
           ),
         ),
@@ -670,7 +675,7 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
 
 // ── Bottom nav ────────────────────────────────────────────────────────────────
 
-class _BottomNav extends ConsumerWidget {
+class _BottomNav extends ConsumerStatefulWidget {
   final List<_ScreenEntry> screens;
   final int activeIndex;
   final ValueChanged<int> onSelect;
@@ -684,9 +689,102 @@ class _BottomNav extends ConsumerWidget {
     required this.onLock,
     required this.onLogout,
   });
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    const accent = Color(0xFFE94560);
+  ConsumerState<_BottomNav> createState() => _BottomNavState();
+}
+
+class _BottomNavState extends ConsumerState<_BottomNav> {
+  static const _minItemWidth = 72.0;
+  static const _accent = Color(0xFFE94560);
+
+  final _scroll = ScrollController();
+  double _itemW = _minItemWidth;
+  double _viewport = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _reveal(animate: false));
+  }
+
+  @override
+  void didUpdateWidget(covariant _BottomNav old) {
+    super.didUpdateWidget(old);
+    if (old.activeIndex != widget.activeIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _reveal({bool animate = true}) {
+    if (!mounted || !_scroll.hasClients) return;
+    final max = _scroll.position.maxScrollExtent;
+    final target = (widget.activeIndex * _itemW - (_viewport - _itemW) / 2)
+        .clamp(0.0, max)
+        .toDouble();
+    if (animate) {
+      _scroll.animateTo(target,
+          duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    } else {
+      _scroll.jumpTo(target);
+    }
+  }
+
+  Widget _navItem(int i) {
+    final screen = widget.screens[i];
+    final isActive = widget.activeIndex == i;
+    return GestureDetector(
+      onTap: () => widget.onSelect(i),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: _itemW,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? _accent.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(screen.icon,
+                  size: 22,
+                  color: isActive ? _accent : Colors.grey.shade400),
+            ),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                screen.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  color: isActive ? _accent : Colors.grey.shade400,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showLogout = ref.watch(activeStaffTabsProvider).contains('settings');
 
     return Container(
       decoration: BoxDecoration(
@@ -694,7 +792,7 @@ class _BottomNav extends ConsumerWidget {
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
@@ -706,62 +804,34 @@ class _BottomNav extends ConsumerWidget {
           height: 60,
           child: Row(
             children: [
-              ...screens.asMap().entries.map((entry) {
-                final i = entry.key;
-                final screen = entry.value;
-                final isActive = activeIndex == i;
-
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onSelect(i),
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              // Scrolling nav items
+              Expanded(
+                child: LayoutBuilder(builder: (context, c) {
+                  _viewport = c.maxWidth;
+                  final n = widget.screens.length;
+                  final even = n == 0 ? _minItemWidth : c.maxWidth / n;
+                  _itemW = even < _minItemWidth ? _minItemWidth : even;
+                  return SingleChildScrollView(
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? accent.withValues(alpha:0.1)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(
-                            screen.icon,
-                            size: 22,
-                            color: isActive ? accent : Colors.grey.shade400,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          screen.label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: isActive
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: isActive ? accent : Colors.grey.shade400,
-                          ),
-                        ),
+                        for (var i = 0; i < n; i++) _navItem(i),
                       ],
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
 
-              // ── Divider ───────────────────────────────────────────────
+              // Pinned: divider, Lock, Logout
               Container(
                 width: 1,
                 height: 32,
                 color: Colors.grey.shade200,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
               ),
-
-              // ── Lock ──────────────────────────────────────────────────
               GestureDetector(
-                onTap: onLock,
+                onTap: widget.onLock,
                 behavior: HitTestBehavior.opaque,
                 child: SizedBox(
                   width: 48,
@@ -772,34 +842,33 @@ class _BottomNav extends ConsumerWidget {
                           size: 20, color: Colors.grey.shade400),
                       const SizedBox(height: 2),
                       Text('Lock',
+                          maxLines: 1,
                           style: TextStyle(
                               fontSize: 10, color: Colors.grey.shade400)),
                     ],
                   ),
                 ),
               ),
-
-              // ── Logout ────────────────────────────────────────────────
-              if (ref.watch(activeStaffTabsProvider).contains('settings'))
-              GestureDetector(
-                onTap: onLogout,
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 52,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.logout_rounded,
-                          size: 20, color: Colors.grey.shade400),
-                      const SizedBox(height: 2),
-                      Text('Logout',
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey.shade400)),
-                    ],
+              if (showLogout)
+                GestureDetector(
+                  onTap: widget.onLogout,
+                  behavior: HitTestBehavior.opaque,
+                  child: SizedBox(
+                    width: 52,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.logout_rounded,
+                            size: 20, color: Colors.grey.shade400),
+                        const SizedBox(height: 2),
+                        Text('Logout',
+                            maxLines: 1,
+                            style: TextStyle(
+                                fontSize: 10, color: Colors.grey.shade400)),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-
               const SizedBox(width: 4),
             ],
           ),
@@ -950,7 +1019,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final compact = _compact;
+    final compact = _compact || MediaQuery.sizeOf(context).height < 680;
     final activeStaff = ref.watch(activeStaffProvider);
     const accent = Color(0xFFE94560);
 

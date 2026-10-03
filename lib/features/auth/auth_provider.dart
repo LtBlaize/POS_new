@@ -9,7 +9,8 @@ import '../../core/models/business.dart';
 import '../../core/services/feature_manager.dart';
 import '../../core/services/lan_server_service.dart';
 import '../../core/models/staff.dart';
-
+import '../../core/services/local_db_service.dart';
+import '../../core/services/connectivity_service.dart';
 
 // Simple static flag — set BEFORE signUp(), cleared after completeRegistration()
 // Used to prevent the auth listener from navigating during the 2-step registration flow.
@@ -46,6 +47,14 @@ final authStateProvider = StreamProvider<User?>((ref) {
   final client = ref.watch(supabaseClientProvider);
 
   return client.auth.onAuthStateChange
+      // Transient failures (AuthRetryableFetchException, SocketException, ...)
+      // arrive as stream ERRORS, not signedOut events. A genuinely invalid
+      // refresh token makes the SDK clear the session and emit a real
+      // signedOut event, which still passes the filter below. So dropping
+      // errors here never hides a real sign-out.
+      .handleError((Object error, StackTrace stack) {
+        debugPrint('[Auth] Ignoring auth stream error (not a sign-out): $error');
+      })
       .where((event) =>
           // Only react to these four meaningful transitions.
           // tokenRefreshed, userUpdated, passwordRecovery etc. are filtered out.
@@ -60,6 +69,27 @@ final authStateProvider = StreamProvider<User?>((ref) {
       // a second signedIn event (e.g. after token refresh at startup).
       .distinct((a, b) => a?.id == b?.id);
 });
+const _offlineGrace = Duration(days: 7);
+
+/// Offline only: if the cached dates say "expired" but we verified online
+/// recently, keep access until the grace window ends.
+Map<String, dynamic> _applyOfflineGrace(Map<String, dynamic> m) {
+  final verified = DateTime.tryParse(m['_verified_at'] as String? ?? '');
+  final biz = m['businesses'];
+  if (verified == null || biz is! Map) return m;
+  final b = Map<String, dynamic>.from(biz);
+  final now = DateTime.now();
+  final graceEnd = verified.add(_offlineGrace);
+  DateTime? d(String k) => DateTime.tryParse(b[k] as String? ?? '');
+  final sub = d('subscription_expires_at');
+  final trial = d('trial_ends_at');
+  final active = (sub != null && sub.isAfter(now)) ||
+      (trial != null && trial.isAfter(now));
+  if (!active && now.isBefore(graceEnd)) {
+    b['subscription_expires_at'] = graceEnd.toIso8601String();
+  }
+  return {...m, 'businesses': b};
+}
 
 final profileProvider = FutureProvider<Profile?>((ref) async {
   // Use currentUser directly as fallback — authStateProvider.future may
@@ -80,6 +110,8 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
   debugPrint('[Profile] fetching from Supabase for ${user.id}');
 
   final client = ref.watch(supabaseClientProvider);
+  final local = ref.read(localDbServiceProvider);
+  final cacheKey = 'profile:${user.id}';
   Map<String, dynamic>? map;
   try {
     map = await client
@@ -87,37 +119,65 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
         .select('*, businesses(*)')
         .eq('id', user.id)
         .maybeSingle()
-        .timeout(const Duration(seconds: 8));
+        .timeout(Duration(seconds: ref.read(isOnlineProvider) ? 6 : 1));
   } catch (e) {
     debugPrint('[Profile] query failed or timed out: $e');
-    rethrow;
+    final cached = await local.getKv(cacheKey);
+    if (cached is Map) {
+      debugPrint('[Profile] offline, using cached profile');
+      // Refresh from the server as soon as we're back online.
+      ref.listen<bool>(isOnlineProvider, (prev, next) {
+        if (next && prev == false) ref.invalidateSelf();
+      });
+      return Profile.fromMap(
+          _applyOfflineGrace(Map<String, dynamic>.from(cached)));
+    }
+    rethrow; // no cache = first run on this device
   }
 
+  if (map != null) {
+    await local.setKv(
+        cacheKey, {...map, '_verified_at': DateTime.now().toIso8601String()});
+  }
   return map != null ? Profile.fromMap(map) : null;
 });
 
 final businessTypeProvider = Provider<BusinessType?>((ref) {
-  return ref.watch(profileProvider).asData?.value?.businessType;
+  return ref.watch(profileProvider).value?.businessType;
 });
 
 final businessProvider = Provider<Business?>((ref) {
-  return ref.watch(profileProvider).asData?.value?.business;
+  return ref.watch(profileProvider).value?.business;
 });
 
 final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  final business = ref.watch(businessProvider);
-  if (business == null) return null;
+  final businessId = ref.watch(businessProvider.select((b) => b?.id));
+  if (businessId == null) return null;
   final client = ref.watch(supabaseClientProvider);
-  return await client
-      .from('business_configs')
-      .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management')
-      .eq('business_id', business.id)
-      .maybeSingle();
+  final local = ref.read(localDbServiceProvider);
+  final key = 'feature_cfg:$businessId';
+  try {
+    final row = await client
+        .from('business_configs')
+        .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management')
+        .eq('business_id', businessId)
+        .maybeSingle()
+        .timeout(Duration(seconds: ref.read(isOnlineProvider) ? 5 : 1));
+    if (row != null) await local.setKv(key, row);
+    return row;
+  } catch (e) {
+    debugPrint('[FeatureConfig] load failed, using cache: $e');
+    ref.listen<bool>(isOnlineProvider, (prev, next) {
+      if (next && prev == false) ref.invalidateSelf();
+    });
+    final cached = await local.getKv(key);
+    return cached is Map ? Map<String, dynamic>.from(cached) : null;
+  }
 });
 
 final featureManagerProvider = Provider<FeatureManager>((ref) {
   final business = ref.watch(businessProvider);
-  final config   = ref.watch(featureConfigProvider).asData?.value;
+  final config   = ref.watch(featureConfigProvider).value;
   debugPrint('[FM] business=${business?.id} type=${business?.businessType.value} '
       'plan=${business?.subscriptionPlan.value} trialEndsAt=${business?.trialEndsAt} '
       'isOnActiveTrial=${business?.isOnActiveTrial}');

@@ -33,20 +33,80 @@ void invalidateOrderCache(Ref ref, String orderId) {
   notifier.state = {...notifier.state, orderId};
 }
 
+ List<CartItem> _rowsToCartItems(List<Map<String, dynamic>> rows) {
+  return CartItem.groupOrderItemRows<Map<String, dynamic>>(
+    rows,
+    promoGroupId: (row) => row['promo_group_id'] as String?,
+    isHeaderRow: (row) => row['product_id'] == null,
+    buildItem: (row) {
+      if (row['product_id'] == null) {
+        return CartItem(
+          product: Product.promo(
+            id: 'promo_${row['promo_id']}',
+            name: row['product_name'] as String,
+            price: (row['unit_price'] as num).toDouble(),
+          ),
+          quantity: row['quantity'] as int,
+          costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+          notes: row['notes'] as String?,
+          promoId: row['promo_id'] as String?,
+          round: row['round'] as int? ?? 1,
+          discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
+          discountType: CartItem.discountTypeFromString(
+              row['discount_type'] as String?),
+        );
+      }
+      final pMap = row['products'] as Map<String, dynamic>? ?? {};
+      final product = Product.fromMap({
+        ...pMap,
+        'category': '',
+        'business_id': pMap['business_id'] ?? '',
+      });
+      final vMap = row['product_variants'] as Map<String, dynamic>?;
+      return CartItem(
+        product: product,
+        selectedVariant: vMap != null ? ProductVariant.fromMap(vMap) : null,
+        quantity: row['quantity'] as int,
+        costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+        notes: row['notes'] as String?,
+        round: row['round'] as int? ?? 1,
+        discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
+        discountType:
+            CartItem.discountTypeFromString(row['discount_type'] as String?),
+      );
+    },
+    buildComponent: (row) {
+      final pMap = row['products'] as Map<String, dynamic>? ?? {};
+      return PromoComponent(
+        promoId: row['promo_id'] as String? ?? '',
+        productId: row['product_id'] as String,
+        productName: row['product_name'] as String,
+        quantity: row['quantity'] as int,
+        variantId: row['variant_id'] as String?,
+        trackInventory: pMap['track_inventory'] as bool? ?? false,
+        sendToKitchen: pMap['send_to_kitchen'] as bool? ?? true,
+      );
+    },
+  );
+}
+
 // ── Live / cached order stream ────────────────────────────────────────────────
 
+final localOrdersRevisionProvider = StateProvider<int>((ref) => 0);
 final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) {
     yield [];
     return;
   }
+  ref.watch(localOrdersRevisionProvider);
   final local = ref.read(localDbServiceProvider);
   // Item cache: avoid re-fetching items for orders that haven't changed.
   final itemCache = <String, List<CartItem>>{};
 
   // Watch invalidation signals — evict specific orders when voided/updated.
   ref.listen<Set<String>>(_invalidatedOrderIdsProvider, (_, invalidated) {
+    if (invalidated.isEmpty) return; // clearing the signal re-fires this listener
     for (final id in invalidated) {
       itemCache.remove(id);
     }
@@ -129,6 +189,11 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                     costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
                     notes: row['notes'] as String?,
                     promoId: row['promo_id'] as String?,
+                    round: row['round'] as int? ?? 1,
+                    discountAmount:
+                        (row['discount_amount'] as num?)?.toDouble() ?? 0,
+                    discountType: CartItem.discountTypeFromString(
+                        row['discount_type'] as String?),
                   );
                 }
                 final pMap = row['products'] as Map<String, dynamic>? ?? {};
@@ -145,6 +210,11 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                   quantity: row['quantity'] as int,
                   costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
                   notes: row['notes'] as String?,
+                  round: row['round'] as int? ?? 1,
+                  discountAmount:
+                      (row['discount_amount'] as num?)?.toDouble() ?? 0,
+                  discountType: CartItem.discountTypeFromString(
+                      row['discount_type'] as String?),
                 );
               },
               buildComponent: (row) {
@@ -173,7 +243,21 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
         }).toList();
 
         await local.upsertOrders(orders);
-        return orders;
+
+        // Orders with queued changes show their local copy until they sync.
+        final pendingIds = await local.getOrderIdsWithPendingQueue();
+        final unsyncedIds = await local.getUnsyncedOrderIds();
+        if (pendingIds.isEmpty && unsyncedIds.isEmpty) return orders;
+        final localAll = await local.getOrders(businessId);
+        final localById = {for (final o in localAll) o.id: o};
+        final remoteIds = orders.map((o) => o.id).toSet();
+        final merged = [
+          for (final o in orders)
+            pendingIds.contains(o.id) ? (localById[o.id] ?? o) : o,
+        ];
+        final localOnly = localAll.where(
+            (o) => unsyncedIds.contains(o.id) && !remoteIds.contains(o.id));
+        return [...localOnly, ...merged];
       });
 });
 
@@ -206,6 +290,12 @@ final orderServiceProvider = Provider<OrderService>((ref) {
   );
 });
 
+class AppendResult {
+  final int round;
+  final bool queued; // true = saved locally, waiting to sync
+  const AppendResult({required this.round, required this.queued});
+}
+
 class OrderService {
   final SupabaseClient _client;
   final LocalDbService _local;
@@ -237,34 +327,46 @@ class OrderService {
     String? cashierId,
     OrderType orderType = OrderType.walkIn,
   }) async {
+    // One id for the whole attempt, so an online try that fails halfway
+    // and the offline fallback refer to the same order (replay is idempotent).
+    final orderId = const Uuid().v4();
+
     if (_isOnline) {
-      return _placeOnline(
-        businessId: businessId,
-        items: items,
-        tableId: tableId,
-        notes: notes,
-        taxRate: taxRate,
-        discountAmount: discountAmount,
-        tipAmount: tipAmount,
-        cashierId: cashierId,
-        orderType: orderType,
-      );
-    } else {
-      return _placeOffline(
-        businessId: businessId,
-        items: items,
-        tableId: tableId,
-        notes: notes,
-        taxRate: taxRate,
-        discountAmount: discountAmount,
-        tipAmount: tipAmount,
-        cashierId: cashierId,
-        orderType: orderType,
-      );
+      try {
+        return await _placeOnline(
+          orderId: orderId,
+          businessId: businessId,
+          items: items,
+          tableId: tableId,
+          notes: notes,
+          taxRate: taxRate,
+          discountAmount: discountAmount,
+          tipAmount: tipAmount,
+          cashierId: cashierId,
+          orderType: orderType,
+        );
+      } catch (e) {
+        if (!isNetworkError(e)) rethrow;
+        debugPrint('[OrderService] placeOnline hit network error, falling back offline: $e');
+        _ref.read(isOnlineProvider.notifier).state = false;
+      }
     }
+    return _placeOffline(
+      orderId: orderId,
+      businessId: businessId,
+      items: items,
+      tableId: tableId,
+      notes: notes,
+      taxRate: taxRate,
+      discountAmount: discountAmount,
+      tipAmount: tipAmount,
+      cashierId: cashierId,
+      orderType: orderType,
+    );
   }
 
   Future<Order> _placeOnline({
+    required String orderId,
     required String businessId,
     required List<CartItem> items,
     String? tableId,
@@ -282,6 +384,7 @@ class OrderService {
     final orderRow = await _client
         .from('orders')
         .insert({
+          'id': orderId,
           'business_id': businessId,
           'table_id': tableId,
           'cashier_id': cashierId,
@@ -297,10 +400,9 @@ class OrderService {
         .select()
         .single();
 
-    final orderId = orderRow['id'] as String;
-
     final orderItems = items
-        .expand((item) => _withVariant(_buildOnlineRows(orderId, item), item))
+        .expand((item) => _withMeta(
+            _withVariant(_buildOnlineRows(orderId, item), item), item, 1))
         .toList();
 
     await _client.from('order_items').insert(orderItems);
@@ -321,6 +423,7 @@ class OrderService {
   }
 
   Future<Order> _placeOffline({
+    required String orderId,
     required String businessId,
     required List<CartItem> items,
     String? tableId,
@@ -335,7 +438,7 @@ class OrderService {
     final taxAmount = subtotal * taxRate;
     final totalAmount = subtotal + taxAmount - discountAmount + tipAmount;
 
-    final offlineId = const Uuid().v4();
+    final offlineId = orderId;
     final now = DateTime.now();
     final localOrderNumber = now.millisecondsSinceEpoch;
 
@@ -360,7 +463,7 @@ class OrderService {
     await _local.insertOfflineOrder(order);
 
     final itemPayloads = items
-        .expand((i) => _withVariant(_buildOfflineRows(i), i))
+        .expand((i) => _withMeta(_withVariant(_buildOfflineRows(i), i), i, 1))
         .toList();
 
     await _syncQueue.enqueue(
@@ -386,6 +489,7 @@ class OrderService {
     );
 
     await _deductInventory(businessId, items);
+    _ref.read(localOrdersRevisionProvider.notifier).state++;
 
     EventBus.instance.emit(AppEvents.orderPlaced, {
       'order_id': order.id,
@@ -397,21 +501,121 @@ class OrderService {
 
   // ── Update status ───────────────────────────────────────────────────────────
 
-  Future<void> updateStatus(String orderId, OrderStatus status) async {
-    if (_isOnline) {
+
+  /// Appends [items] as a new round on an existing unpaid order.
+  /// Works offline: writes locally, then syncs now or queues for later.
+  Future<AppendResult> appendItems({
+    required String orderId,
+    required String businessId,
+    required List<CartItem> items,
+    double taxRate = 0.0,
+    bool reopenForKitchen = false,
+  }) async {
+    var paid = false, cancelled = false, maxRound = 1, checked = false;
+
+    final insertPending = await _local.isOrderPendingSync(orderId);
+    if (_isOnline && !insertPending) {
+      try {
+        final cur = await _client
+            .from('orders')
+            .select('status, paid_at')
+            .eq('id', orderId)
+            .single();
+        paid = cur['paid_at'] != null;
+        cancelled = cur['status'] == 'cancelled';
+        final r = await _client
+            .from('order_items')
+            .select('round')
+            .eq('order_id', orderId)
+            .order('round', ascending: false)
+            .limit(1);
+        if ((r as List).isNotEmpty) maxRound = r.first['round'] as int;
+        checked = true;
+      } catch (e) {
+        if (!isNetworkError(e)) rethrow;
+        _ref.read(isOnlineProvider.notifier).state = false;
+      }
+    }
+    final info = await _local.getOrderAppendInfo(orderId);
+    if (!checked) {
+      if (info == null) throw Exception('Order not found on this device.');
+      paid = info.paid;
+      cancelled = info.cancelled;
+    }
+    // Local may hold rounds the server hasn't received yet.
+    if (info != null && info.maxRound > maxRound) maxRound = info.maxRound;
+    if (paid) throw Exception('This order is already paid.');
+    if (cancelled) throw Exception('This order was cancelled.');
+
+    final round = maxRound + 1;
+    final addSubtotal = items.fold<double>(0, (s, i) => s + i.total);
+    final addTax = addSubtotal * taxRate;
+
+    final rows = [
+      for (final item in items)
+        ..._withMeta(
+            _withVariant(_buildOnlineRows(orderId, item), item), item, round),
+    ].map((r) => {...r, 'id': const Uuid().v4()}).toList();
+
+    // 1. Local first, so the app shows it immediately and Pay sees it.
+    await _local.appendOrderItems(
+      orderId: orderId,
+      items: items.map((i) => i.withRound(round)).toList(),
+      addSubtotal: addSubtotal,
+      addTax: addTax,
+      reopen: reopenForKitchen,
+    );
+    await _deductInventory(businessId, items);
+
+    // 2. Server: sync now if possible, otherwise queue (same code path).
+    final payload = {
+      'order_id': orderId,
+      'business_id': businessId,
+      'items': rows,
+      'tax_rate': taxRate,
+      'reopen_for_kitchen': reopenForKitchen,
+    };
+    var queued = true;
+    if (_isOnline && !insertPending) {
+      try {
+        await _syncQueue.replayAppendOrderItems(payload);
+        queued = false;
+      } catch (e) {
+        debugPrint('[OrderService] appendItems online failed, queuing: $e');
+      }
+    }
+    if (queued) {
+      await _syncQueue.enqueue(
+        operation: 'append_order_items',
+        tableName: 'order_items',
+        recordId: orderId,
+        payload: payload,
+      );
+    }
+
+    invalidateOrderCache(_ref, orderId);
+    _ref.invalidate(productListProvider);
+    _ref.read(localOrdersRevisionProvider.notifier).state++;
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {'order_id': orderId});
+    return AppendResult(round: round, queued: queued);
+  }
+
+
+Future<void> updateStatus(String orderId, OrderStatus status) async {
+    await _local.markOrderStatus(orderId, status);
+    final insertPending = await _local.isOrderPendingSync(orderId);
+
+    if (_isOnline && !insertPending) {
       try {
         await _client.from('orders').update({
           'status': status.value,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', orderId);
-        EventBus.instance.emit(AppEvents.orderStatusChanged, {
-          'order_id': orderId,
-          'status': status.value,
-        });
+        EventBus.instance.emit(AppEvents.orderStatusChanged,
+            {'order_id': orderId, 'status': status.value});
         return;
       } catch (e) {
-        debugPrint(
-            '[OrderService] updateStatus online failed, queuing: $e');
+        debugPrint('[OrderService] updateStatus online failed, queuing: $e');
       }
     }
     await _syncQueue.enqueue(
@@ -420,10 +624,9 @@ class OrderService {
       recordId: orderId,
       payload: {'status': status.value},
     );
-    EventBus.instance.emit(AppEvents.orderStatusChanged, {
-      'order_id': orderId,
-      'status': status.value,
-    });
+    _ref.read(localOrdersRevisionProvider.notifier).state++;
+    EventBus.instance.emit(AppEvents.orderStatusChanged,
+        {'order_id': orderId, 'status': status.value});
   }
 
   // ── Process payment ─────────────────────────────────────────────────────────
@@ -443,7 +646,8 @@ class OrderService {
       'paid_at': DateTime.now().toIso8601String(),
     };
 
-    if (_isOnline) {
+    final insertPending = await _local.isOrderPendingSync(orderId);
+    if (_isOnline && !insertPending) {
       try {
         await _client.from('orders').update({
           ...payload,
@@ -527,7 +731,8 @@ class OrderService {
       changeAmount: changeAmount,
     );
 
-    if (_isOnline) {
+    final insertPending = await _local.isOrderPendingSync(orderId);
+    if (_isOnline && !insertPending) {
       try {
         await _client.from('order_payments').insert(rows);
         await _client.from('orders').update({
@@ -626,6 +831,7 @@ class OrderService {
 
     // 1b. Invalidate item cache so the stream re-fetches this order's items.
     invalidateOrderCache(_ref, orderId);
+   
 
     // 2. Reverse inventory if the product tracks stock.
     if (trackInventory) {
@@ -695,13 +901,19 @@ class OrderService {
             });
 
         // Remove item from Supabase order_items
-        var del = _client
+        var find = _client
             .from('order_items')
-            .delete()
+            .select('id')
             .eq('order_id', orderId)
             .eq('product_id', productId);
-        if (variantId != null) del = del.eq('variant_id', variantId);
-        await del.limit(1);
+        if (variantId != null) find = find.eq('variant_id', variantId);
+        final target = await find.limit(1).maybeSingle();
+        if (target != null) {
+          await _client
+              .from('order_items')
+              .delete()
+              .eq('id', target['id'] as String);
+        }
 
         // Fetch remaining items to decide order fate
         final remaining = await _client
@@ -896,7 +1108,8 @@ class OrderService {
         for (final localRow in localVoidRows) {
           final id = localRow['id'] as String;
           await _client.from('void_order_items').insert({
-            ...localRow..remove('synced'),
+            for (final e in localRow.entries)
+              if (e.key != 'synced') e.key: e.value,
           });
           await _local.markVoidSynced(id);
         }
@@ -952,29 +1165,14 @@ class OrderService {
             .eq('id', orderId)
             .single();
 
-        final itemRows = await _client
+                final itemRows = await _client
             .from('order_items')
             .select(
-'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
+'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
             .eq('order_id', orderId);
 
-        final cartItems = (itemRows as List).map((row) {
-            final pMap =
-                row['products'] as Map<String, dynamic>? ?? {};
-            final product = Product.fromMap({
-              ...pMap,
-              'category': '',
-              'business_id': pMap['business_id'] ?? '',
-            });
-            final vMap = row['product_variants'] as Map<String, dynamic>?;
-            return CartItem(
-                product: product,
-                selectedVariant:
-                    vMap != null ? ProductVariant.fromMap(vMap) : null,
-                quantity: row['quantity'] as int,
-                costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
-                notes: row['notes'] as String?);
-          }).toList();
+        final cartItems =
+            _rowsToCartItems((itemRows as List).cast<Map<String, dynamic>>());
 
         return Order.fromMap(orderRow, items: cartItems);
       } catch (e) {
@@ -1143,6 +1341,21 @@ class OrderService {
           'notes': null,
           'promo_id': item.promoId,
           'promo_group_id': groupId,
+        },
+    ];
+  }
+
+  /// Stamps round on every row and the per-item discount on the line's main
+  /// row (index 0: the plain item or the promo header).
+  List<Map<String, dynamic>> _withMeta(
+      List<Map<String, dynamic>> rows, CartItem item, int round) {
+    return [
+      for (var i = 0; i < rows.length; i++)
+        {
+          ...rows[i],
+          'round': round,
+          if (i == 0) 'discount_amount': item.discountAmount,
+          if (i == 0) 'discount_type': item.discountType.name,
         },
     ];
   }

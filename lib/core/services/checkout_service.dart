@@ -66,7 +66,8 @@ class CheckoutService {
     double splitChangeAmount = 0,
   }) async {
     final effectiveSplitPayments = splitPayments ?? const <PaymentSplitInput>[];
-    final isSplit = effectiveSplitPayments.isNotEmpty;    final businessId = _ref.read(activeBusinessIdProvider);
+    final isSplit = effectiveSplitPayments.isNotEmpty;
+    final businessId = _ref.read(activeBusinessIdProvider);
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
@@ -347,6 +348,131 @@ class CheckoutService {
     );
   }
 
+    Future<CheckoutResult> addToTab({
+    required String orderId,
+    required bool hasKitchen,
+    required List<CartItem> items,
+  }) async {
+    final businessId = _ref.read(activeBusinessIdProvider);
+    if (businessId == null) {
+      return CheckoutResult.error('No business profile found.');
+    }
+    if (items.isEmpty) return CheckoutResult.error('Cart is empty.');
+    try {
+      String? stockErr;
+      if (_isOnline) {
+        try {
+          stockErr = await _validateStockOnline(businessId, items);
+        } catch (e) {
+          if (!isNetworkError(e)) rethrow;
+          stockErr = await _validateStockLocal(businessId, items);
+        }
+      } else {
+        stockErr = await _validateStockLocal(businessId, items);
+      }
+      if (stockErr != null) return CheckoutResult.error(stockErr);
+
+      final taxRate = _ref.read(businessConfigProvider)?.taxRate ?? 0.0;
+      final sendToKitchen = hasKitchen && items.any((i) => i.product.sendToKitchen);
+
+      final res = await _ref.read(orderServiceProvider).appendItems(
+            orderId: orderId,
+            businessId: businessId,
+            items: items,
+            taxRate: taxRate,
+            reopenForKitchen: sendToKitchen,
+          );
+
+      if (sendToKitchen) {
+        await _createKitchenTicket(orderId, businessId, res.round);
+      }
+
+      _ref.read(cartProvider.notifier).clear();
+      return CheckoutResult.addedToTab(round: res.round, pendingSync: res.queued);
+    } catch (e) {
+      return CheckoutResult.error('Could not add items: $e');
+    }
+  }
+
+  Future<void> _createKitchenTicket(
+      String orderId, String businessId, int round) async {
+    final payload = {
+      'order_id': orderId,
+      'business_id': businessId,
+      'status': 'queued',
+      'round': round,
+    };
+    if (_isOnline) {
+      try {
+        await _ref.read(supabaseClientProvider).from('kitchen_tickets').insert(payload);
+        return;
+      } catch (e) {
+        debugPrint('[Checkout] Round ticket online failed, queuing: $e');
+      }
+    }
+    await _ref.read(syncQueueServiceProvider).enqueue(
+          operation: 'insert_kitchen_ticket',
+          tableName: 'kitchen_tickets',
+          recordId: orderId,
+          payload: payload,
+        );
+  }
+
+  Future<String?> _validateStockLocal(
+      String businessId, List<CartItem> items) async {
+    final cached =
+        await _ref.read(localDbServiceProvider).getProducts(businessId);
+    for (final item in items) {
+      if (item.isPromo) {
+        final e = await _checkPromoStockLocal(cached, item);
+        if (e != null) return e;
+        continue;
+      }
+      if (item.product.isCustom || !item.product.trackInventory) continue;
+      if (item.selectedVariant != null) {
+        final e = await _checkVariantStock(item);
+        if (e != null) return e;
+        continue;
+      }
+      final p = cached.where((p) => p.id == item.product.id).firstOrNull;
+      if (p != null && item.quantity > p.stockQuantity) {
+        return '${p.name} only has ${p.stockQuantity} in stock '
+            '(you have ${item.quantity} in cart).';
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _validateStockOnline(
+      String businessId, List<CartItem> items) async {
+    final client = _ref.read(supabaseClientProvider);
+    final local = _ref.read(localDbServiceProvider);
+    for (final item in items) {
+      if (item.isPromo) {
+        final e = await _checkPromoStockOnline(client, local, businessId, item);
+        if (e != null) return e;
+        continue;
+      }
+      if (item.product.isCustom || !item.product.trackInventory) continue;
+      if (item.selectedVariant != null) {
+        final e = await _checkVariantStock(item);
+        if (e != null) return e;
+        continue;
+      }
+      final row = await client
+          .from('products')
+          .select('stock_quantity, name')
+          .eq('id', item.product.id)
+          .single();
+      final available = row['stock_quantity'] as int? ?? 0;
+      if (item.quantity > available) {
+        return '${row['name']} only has $available in stock '
+            '(you have ${item.quantity} in cart).';
+      }
+    }
+    return null;
+  }
+
   Future<int?> _variantStockLeft(String productId, String variantId) async {
     if (_isOnline) {
       try {
@@ -476,6 +602,8 @@ class CheckoutResult {
   final double tendered;
   final double change;
   final String? errorMessage;
+  final bool pendingSync;
+  final int? round;
 
   const CheckoutResult._({
     required this.status,
@@ -483,6 +611,8 @@ class CheckoutResult {
     this.tendered = 0,
     this.change = 0,
     this.errorMessage,
+    this.pendingSync = false,
+    this.round,
   });
 
   factory CheckoutResult.paid({
@@ -502,10 +632,18 @@ class CheckoutResult {
         order: order,
       );
 
+  factory CheckoutResult.addedToTab({
+    required int round,
+    required bool pendingSync,
+  }) =>
+      CheckoutResult._(
+        status: CheckoutStatus.sentToKitchen,
+        round: round,
+        pendingSync: pendingSync,
+      );
+
   factory CheckoutResult.error(String message) => CheckoutResult._(
         status: CheckoutStatus.error,
         errorMessage: message,
       );
-
-      
 }

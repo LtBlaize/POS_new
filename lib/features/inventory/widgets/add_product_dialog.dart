@@ -731,7 +731,9 @@ class _CategoryDropdown extends StatelessWidget {
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: selectedId,
+                value: categories.any((c) => c['id'] == selectedId)
+                    ? selectedId
+                    : null,
                 isExpanded: true,
                 hint: const Text('Select category',
                     style: TextStyle(
