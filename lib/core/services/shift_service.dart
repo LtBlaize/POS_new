@@ -326,9 +326,8 @@ class ShiftService {
     final splitOrderIds = <String>[];
 
     void tally(Map<String, dynamic> o) {
-      final status = o['status'] as String? ?? '';
       final paidAt = o['paid_at'];
-      final isPaid = status == 'completed' || paidAt != null;
+      final isPaid = paidAt != null;
       if (!isPaid) return;
 
       final amount = (o['total_amount'] as num).toDouble();

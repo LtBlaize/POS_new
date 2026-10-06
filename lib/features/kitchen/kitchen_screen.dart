@@ -168,6 +168,8 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       businessId: m['business_id'] as String? ?? '',
       orderNumber: m['order_number'] as int? ?? 0,
       tableId: m['table_id'] as String?,
+      orderType: OrderTypeX.fromString(m['order_type'] as String? ?? 'walk_in'),
+      customerName: m['customer_name'] as String?,
       status: OrderStatusX.fromString(m['status'] as String),
       createdAt: DateTime.parse(m['created_at'] as String),
       subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -680,7 +682,15 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
 
   String? _resolveTableLabel() {
     final tableId = widget.order.tableId;
-    if (tableId == null || tableId.isEmpty) return null;
+    if (tableId == null || tableId.isEmpty) {
+      final type = switch (widget.order.orderType) {
+        OrderType.takeOut => 'TAKEOUT',
+        OrderType.delivery => 'DELIVERY',
+        OrderType.walkIn => 'WALK-IN',
+      };
+      final name = widget.order.customerName;
+      return name != null && name.isNotEmpty ? '$type · $name' : type;
+    }
     final tableNumber = ref.read(tableProvider).tableNameForUuid(tableId);
     if (tableNumber != null) return 'Table $tableNumber';
     return 'Table …${tableId.substring(tableId.length - 6)}';

@@ -181,7 +181,11 @@ class FeatureManager {
   // ── Convenience getters ─────────────────────────────────────────────────────
   bool get canAccessReports    => hasFeature(AppFeature.reports);
   bool get canAccessKitchen    => hasFeature(AppFeature.kitchen);
-  bool get canAccessTables     => hasFeature(AppFeature.tables);
+    bool get canAccessTables     => hasFeature(AppFeature.tables);
+  /// Restaurant mode = kitchen or tables enabled. Drives Open Tickets and
+  /// hides Utang.
+  bool get isRestaurantMode =>
+      hasFeature(AppFeature.kitchen) || hasFeature(AppFeature.tables);
   bool get canExportExcel      => hasFeature(AppFeature.excelExport);
   bool get canExportAuditLog   => hasFeature(AppFeature.auditExport);
   bool get canEditCustomRoles  => hasFeature(AppFeature.customRoles);

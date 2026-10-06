@@ -17,6 +17,9 @@ import '../../core/services/receipt_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/thermal_print_service.dart';
 import '../../core/providers/app_context_provider.dart';
+import '../pos/pos_screen.dart' show posActiveIndexProvider;
+import '../tables/open_tab_provider.dart';
+import '../../core/services/audit_service.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
@@ -30,10 +33,22 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
 
+  bool get _restaurant => widget.featureManager.isRestaurantMode;
+  int get _tabCount => _restaurant ? 4 : 3;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: _tabCount, vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(covariant OrdersScreen old) {
+    super.didUpdateWidget(old);
+    if (_tabs.length != _tabCount) {
+      _tabs.dispose();
+      _tabs = TabController(length: _tabCount, vsync: this);
+    }
   }
 
   @override
@@ -67,10 +82,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
             fontSize: isNarrow ? 12 : 14,
             fontWeight: FontWeight.w600,
           ),
-          tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Active'),
-            Tab(text: 'Completed'),
+          tabs: [
+            const Tab(text: 'All'),
+            if (_restaurant) const Tab(text: 'Open Tickets'),
+            const Tab(text: 'Active'),
+            const Tab(text: 'Completed'),
           ],
         ),
       ),
@@ -139,6 +155,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       controller: _tabs,
       children: [
         _OrderList(orders: orders, featureManager: widget.featureManager),
+        if (_restaurant)
+          _OrderList(
+            orders: orders.where((o) => o.isOpenTicket).toList(),
+            featureManager: widget.featureManager,
+            emptyText: 'No open tickets.',
+          ),
         _OrderList(orders: active, featureManager: widget.featureManager),
         _OrderList(orders: completed, featureManager: widget.featureManager),
       ],
@@ -165,14 +187,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
 class _OrderList extends StatelessWidget {
   final List<Order> orders;
   final FeatureManager featureManager;
-  const _OrderList({required this.orders, required this.featureManager});
+  final String emptyText;
+  const _OrderList({
+    required this.orders,
+    required this.featureManager,
+    this.emptyText = 'No orders here.',
+  });
 
   @override
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
-      return const Center(
-        child: Text('No orders here.',
-            style: TextStyle(color: AppColors.textSecondary)),
+      return Center(
+        child: Text(emptyText,
+            style: const TextStyle(color: AppColors.textSecondary)),
       );
     }
 
@@ -315,7 +342,9 @@ class _OrderCard extends ConsumerWidget {
                       runSpacing: 4,
                       children: [
                         Text(
-                          'Order #${order.orderNumber}',
+                          order.customerName?.isNotEmpty == true
+                              ? 'Order #${order.orderNumber} · ${order.customerName}'
+                              : 'Order #${order.orderNumber}',
                           style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: isNarrow ? 13 : 15,
@@ -344,7 +373,9 @@ class _OrderCard extends ConsumerWidget {
 
                     const SizedBox(height: 3),
                     Text(
-                      _formatTime(order.createdAt),
+                     featureManager.isRestaurantMode
+                          ? '${_whereLabel(ref, order)} · ${_formatTime(order.createdAt)}'
+                          : _formatTime(order.createdAt),
                       style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary),
@@ -460,6 +491,10 @@ class _OrderCard extends ConsumerWidget {
                           )
                         else if (order.paidAt == null &&
                             order.status != OrderStatus.cancelled) ...[
+                          if (featureManager.isRestaurantMode) ...[
+                            _AddItemsButton(order: order),
+                            const SizedBox(width: 8),
+                          ],
                           if (order.tableId != null)
                             _PrintBillButton(order: order),
                           const SizedBox(width: 8),
@@ -525,6 +560,18 @@ class _OrderCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _whereLabel(WidgetRef ref, Order o) {
+    if (o.tableId != null) {
+      final n = ref.read(tableProvider).tableNameForUuid(o.tableId!);
+      return n != null ? 'Table $n' : 'Table';
+    }
+    return switch (o.orderType) {
+      OrderType.takeOut => 'Takeout',
+      OrderType.delivery => 'Delivery',
+      OrderType.walkIn => 'Walk-in',
+    };
   }
 
   String _formatTime(DateTime dt) {
@@ -688,6 +735,36 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
             voidedByStaffName: widget.staffName,
             items: widget.order.items,
           );
+        await ref.read(auditServiceProvider).log(
+        actionType: AuditAction.voidOrder,
+        entityType: 'order',
+        entityId: widget.order.id,
+        description:
+            'Voided Order #${widget.order.orderNumber} — reason: $reason',
+        metadata: {
+          'order_id': widget.order.id,
+          'order_number': widget.order.orderNumber,
+          'total': widget.order.totalAmount,
+          'customer_name': widget.order.customerName,
+          'reason': reason,
+        },
+      );  
+
+      // Release the table if nothing else is open on it.
+      final tableId = widget.order.tableId;
+      if (tableId != null) {
+        final name = ref.read(tableProvider).tableNameForUuid(tableId);
+        final others = (ref.read(ordersStreamProvider).asData?.value ??
+                const <Order>[])
+            .any((o) =>
+                o.id != widget.order.id &&
+                o.tableId == tableId &&
+                o.paidAt == null &&
+                o.status != OrderStatus.cancelled);
+        if (name != null && !others) {
+          ref.read(tableProvider.notifier).freeTable(name);
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1248,35 +1325,46 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
             .fetchOrderWithItems(order.id);
       }
 
-      final cartNotifier = ref.read(cartProvider.notifier);
-      cartNotifier.clear();
-      for (final item in order.items) {
-        for (var i = 0; i < item.quantity; i++) {
-          cartNotifier.addProduct(item.product, variant: item.selectedVariant);
-        }
+      if (ref.read(cartProvider).isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Send or hold the current cart first.')));
+        return;
       }
+      final cartNotifier = ref.read(cartProvider.notifier);
+      cartNotifier.loadItems(
+        order.items,
+        orderDiscountAmount: order.discountAmount,
+        orderDiscountType: DiscountType.fixed,
+        tipAmount: order.tipAmount,
+      );
 
-      if (order.tableId != null) {
-        final tables = ref.read(tableProvider).tables;
-        final match =
-            tables.where((t) => t.uuid == order.tableId).toList();
-        if (match.isNotEmpty) {
-          ref
-              .read(tableProvider.notifier)
-              .selectTable(match.first.name);
+      final tableNotifier = ref.read(tableProvider.notifier);
+      final tableName = order.tableId == null
+          ? null
+          : ref.read(tableProvider).tableNameForUuid(order.tableId!);
+      if (tableName != null) {
+        if (ref.read(tableProvider).selectedTableName != tableName) {
+          tableNotifier.selectTable(tableName);
         }
+      } else {
+        // Table-less ticket: don't leave another table selected, or it
+        // could be freed after payment.
+        tableNotifier.clearSelection();
       }
 
       if (!mounted) return;
 
-      await showDialog(
+      final paid = await showDialog<Order>(
         context: context,
         barrierDismissible: false,
         builder: (_) => CheckoutDialog(
           featureManager: widget.featureManager,
           existingOrderId: order.id,
+          existingOrder: order, // enables Print Bill
         ),
       );
+      // Cancelled: don't leave the ticket's lines sitting in the cart.
+      if (paid == null) cartNotifier.clear();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1313,6 +1401,58 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: Colors.white)),
+      ),
+    );
+  }
+}
+// ── Add Items (open ticket) ───────────────────────────────────────────────────
+class _AddItemsButton extends ConsumerWidget {
+  final Order order;
+  const _AddItemsButton({required this.order});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const amber = Color(0xFFF59E0B);
+    return Tooltip(
+      message: 'Add items to this ticket',
+      child: GestureDetector(
+        onTap: () {
+          if (ref.read(cartProvider).isNotEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Send or hold the current cart first.')));
+            return;
+          }
+          final tables = ref.read(tableProvider);
+          final tableName = order.tableId == null
+              ? null
+              : tables.tableNameForUuid(order.tableId!);
+          ref.read(openTabProvider.notifier).state = OpenTab(
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            tableName: tableName,
+            customerName: order.customerName,
+            existingTotal: order.totalAmount,
+          );
+          final notifier = ref.read(tableProvider.notifier);
+          if (tableName != null) {
+            if (tables.selectedTableName != tableName) {
+              notifier.selectTable(tableName);
+            }
+          } else {
+            notifier.clearSelection();
+          }
+          ref.read(posActiveIndexProvider.notifier).state = 0; // POS tab
+        },
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: amber.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: amber.withValues(alpha: 0.4)),
+          ),
+          child: const Icon(Icons.add_shopping_cart, size: 15, color: amber),
+        ),
       ),
     );
   }

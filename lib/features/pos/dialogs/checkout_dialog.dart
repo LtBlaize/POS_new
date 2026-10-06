@@ -138,6 +138,7 @@ class CheckoutDialog extends ConsumerStatefulWidget {
 class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   final _tenderedController = TextEditingController();
   final _refController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _placing = false;
   bool _sendingToKitchen = false;
   Order? _completedOrder;
@@ -171,6 +172,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     _refController.removeListener(_rebuild);
     _tenderedController.dispose();
     _refController.dispose();
+    _nameController.dispose();
     for (final leg in _splitLegs) {
       leg.dispose();
     }
@@ -310,6 +312,9 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
             tableNumber: tableState.selectedTableName,
             splitPayments: splitPayments,
             splitChangeAmount: splitChangeAmount,
+            customerName: _nameController.text.trim().isEmpty
+                ? null
+                : _nameController.text.trim(),
           );
 
       if (!mounted) return;
@@ -433,6 +438,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       existingOrder: widget.existingOrder,
       tenderedController: _tenderedController,
       refController: _refController,
+      nameController: _nameController,
       subtotal: subtotal,
       tendered: tendered,
       change: change,
@@ -461,6 +467,7 @@ class _CheckoutForm extends ConsumerStatefulWidget {
   final Order? existingOrder;
   final TextEditingController tenderedController;
   final TextEditingController refController;
+  final TextEditingController nameController;
   final double subtotal;
   final double tendered;
   final double change;
@@ -484,6 +491,7 @@ class _CheckoutForm extends ConsumerStatefulWidget {
     required this.existingOrder,
     required this.tenderedController,
     required this.refController,
+    required this.nameController,
     required this.subtotal,
     required this.tendered,
     required this.change,
@@ -598,7 +606,9 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                 onCancel: widget.onCancel,
               ),
 
-              if (widget.isRestaurant && selectedTable == null)
+              if (widget.isRestaurant &&
+                  selectedTable == null &&
+                  widget.existingOrderId == null)
                 const _NoTableBanner(),
 
               Flexible(
@@ -624,10 +634,19 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                       ),
                       const SizedBox(height: 16),
 
-                      if (!widget.isRestaurant)
+                      // Retail always; restaurant only for a NEW order with no table.
+                      if (!widget.isRestaurant ||
+                          (selectedTable == null &&
+                              widget.existingOrderId == null)) ...[
                         _OrderTypeSelector(isBusy: isBusy),
-                      if (!widget.isRestaurant)
                         const SizedBox(height: 16),
+                      ],
+                      if (widget.isRestaurant &&
+                          widget.existingOrderId == null) ...[
+                        _CustomerNameField(
+                            controller: widget.nameController, isBusy: isBusy),
+                        const SizedBox(height: 16),
+                      ],
 
                       if (ref.watch(discountsAllowedProvider))
                         _DiscountButton(isBusy: isBusy),
@@ -1240,6 +1259,37 @@ class _CheckoutHeader extends StatelessWidget {
 }
 
 // ── _NoTableBanner ────────────────────────────────────────────────────────────
+
+class _CustomerNameField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isBusy;
+  const _CustomerNameField({required this.controller, required this.isBusy});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      enabled: !isBusy,
+      maxLength: 40,
+      textCapitalization: TextCapitalization.words,
+      style: const TextStyle(fontSize: 13, color: CheckoutTheme.textHigh),
+      decoration: InputDecoration(
+        hintText: 'Customer name (optional), e.g. Juan',
+        hintStyle:
+            const TextStyle(fontSize: 12, color: CheckoutTheme.textLow),
+        prefixIcon: const Icon(Icons.person_outline,
+            size: 16, color: CheckoutTheme.textMid),
+        counterText: '',
+        isDense: true,
+        filled: true,
+        fillColor: CheckoutTheme.elevated,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
+      ),
+    );
+  }
+}
 
 class _NoTableBanner extends StatelessWidget {
   const _NoTableBanner();

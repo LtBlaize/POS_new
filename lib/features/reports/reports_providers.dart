@@ -249,7 +249,7 @@ final heatmapProvider =
         .from('orders')
         .select('created_at, total_amount')
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .not('paid_at', 'is', null)
         .gte('created_at', start)
         .lte('created_at', end);
 
@@ -326,7 +326,7 @@ final slowMoversProvider =
         .from('orders')
         .select('order_items(product_id, product_name, quantity, subtotal, cost_at_sale)')
         .eq('business_id', businessId)
-        .eq('status', 'completed')
+        .not('paid_at', 'is', null)
         .gte('created_at', start)
         .lte('created_at', end)
         .timeout(const Duration(seconds: 10));
@@ -559,7 +559,7 @@ final shiftReportProvider =
             .select('id')
             .eq('business_id', businessId)
             .eq('cashier_id', shift.staffId)
-            .eq('status', 'completed')
+            .not('paid_at', 'is', null)
             .gte('created_at', shift.openedAt.toUtc().toIso8601String())
             .lte('created_at', shiftEnd.toIso8601String());
 
@@ -677,7 +677,7 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
     final amount = (row['total_amount'] as num?)?.toDouble() ?? 0.0;
     final method = row['payment_method'] as String? ?? 'cash';
     final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
-    final isPaid = status == 'completed' || row['paid_at'] != null;
+    final isPaid = row['paid_at'] != null;
 
     if (isPaid) {
       completed++;
@@ -700,7 +700,7 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
       if (isPaid) hourMap[h] = (hourMap[h] ?? 0) + amount;
     }
 
-    final items = row['order_items'] as List? ?? [];
+    final items = isPaid ? (row['order_items'] as List? ?? []) : const [];
       for (final item in items) {
         final name = item['product_name'] as String? ?? 'Unknown';
         final qty = item['quantity'] as int? ?? 0;

@@ -40,6 +40,9 @@ final _activeIndexProvider = StateProvider<int>((ref) {
   return 0;
 });
 
+/// Public handle so other screens (Open Tickets) can jump to the POS tab.
+final posActiveIndexProvider = _activeIndexProvider;
+
 // ── Layout mode ───────────────────────────────────────────────────────────────
 
 enum _Layout {
@@ -155,7 +158,7 @@ class POSScreen extends ConsumerWidget {
           label: 'Inventory',
           widget: const InventoryScreen(),
         ),
-      if (allowed('utang') && fm.hasFeature('credits'))
+      if (allowed('utang') && fm.hasFeature('credits') && !fm.isRestaurantMode)
         _ScreenEntry(
           icon: Icons.account_balance_wallet_outlined,
           label: 'Utang',

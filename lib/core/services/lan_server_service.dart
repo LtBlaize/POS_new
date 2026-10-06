@@ -192,6 +192,8 @@ class LanServerService {
                 'id': o.id,
                 'order_number': o.orderNumber,
                 'table_id': o.tableId,
+                'order_type': o.orderType.value,
+                'customer_name': o.customerName,
                 'status': o.status.value,
                 'created_at': o.createdAt.toIso8601String(),
                 'items': o.items

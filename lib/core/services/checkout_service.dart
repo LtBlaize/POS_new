@@ -64,6 +64,7 @@ class CheckoutService {
     String? tableNumber,
     String? roomName,
     double splitChangeAmount = 0,
+    String? customerName,
   }) async {
     final effectiveSplitPayments = splitPayments ?? const <PaymentSplitInput>[];
     final isSplit = effectiveSplitPayments.isNotEmpty;
@@ -104,6 +105,24 @@ class CheckoutService {
 
     if (existingOrderId != null) {
       order = await service.fetchOrderWithItems(existingOrderId);
+      if (order.paidAt != null) {
+        return CheckoutResult.error('This order is already paid.');
+      }
+      if (order.status == OrderStatus.cancelled) {
+        return CheckoutResult.error('This order was cancelled.');
+      }
+      // Save the discount/tip shown in the dialog onto the order itself.
+      if ((discountAmount - order.discountAmount).abs() > 0.005 ||
+          (tipAmount - order.tipAmount).abs() > 0.005) {
+        await service.applyAdjustments(
+            orderId: order.id, discount: discountAmount, tip: tipAmount);
+        order = order.copyWith(
+          discountAmount: discountAmount,
+          tipAmount: tipAmount,
+          totalAmount:
+              order.subtotal + order.taxAmount - discountAmount + tipAmount,
+        );
+      }
     } else {
       // ── Stock validation ────────────────────────────────────────────────
       if (_isOnline) {
@@ -199,6 +218,7 @@ class CheckoutService {
         discountAmount: discountAmount,
         tipAmount: tipAmount,
         orderType: orderType,
+        customerName: customerName,
       );
       final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
 
@@ -293,6 +313,7 @@ class CheckoutService {
     String? businessEmail = business?.email;
 
     final paidOrder = order.copyWith(
+      items: mergeForReceipt(order.items),
       paymentMethod: paymentMethod,
       amountTendered: actualTendered,
       changeAmount: actualChange,

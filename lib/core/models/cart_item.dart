@@ -176,3 +176,39 @@ class CartItem {
     );
   }
 }
+/// Orders lines by round and merges identical plain lines (same product,
+/// variant and note) so a receipt shows "Coke x3" instead of one line per round.
+/// Promos and discounted lines are left as separate lines.
+List<CartItem> mergeForReceipt(List<CartItem> items) {
+  final sorted = items.asMap().entries.toList()
+    ..sort((a, b) {
+      final c = a.value.round.compareTo(b.value.round);
+      return c != 0 ? c : a.key.compareTo(b.key);
+    });
+  final out = <CartItem>[];
+  final seen = <String, int>{};
+  for (final e in sorted) {
+    final i = e.value;
+    if (i.isPromo || i.discountAmount != 0) {
+      out.add(i);
+      continue;
+    }
+    final key = '${i.product.id}|${i.selectedVariant?.id}|${i.notes}';
+    final idx = seen[key];
+    if (idx == null) {
+      seen[key] = out.length;
+      out.add(i);
+    } else {
+      final o = out[idx];
+      out[idx] = CartItem(
+        product: o.product,
+        selectedVariant: o.selectedVariant,
+        quantity: o.quantity + i.quantity,
+        costAtSale: o.costAtSale,
+        notes: o.notes,
+        round: o.round,
+      );
+    }
+  }
+  return out;
+}

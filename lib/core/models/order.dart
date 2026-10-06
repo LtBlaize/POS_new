@@ -70,6 +70,7 @@ class Order {
   final double? changeAmount;
   final String? referenceNumber;
   final bool isSplitPayment;
+  final String? customerName;
   final String? notes;
   final DateTime? paidAt;
   final DateTime createdAt;
@@ -95,6 +96,7 @@ class Order {
     this.changeAmount,
     this.referenceNumber,
     this.isSplitPayment = false,
+    this.customerName,
     this.notes,
     this.paidAt,
     required this.createdAt,
@@ -102,6 +104,9 @@ class Order {
   });
 
   double get total => totalAmount;
+
+  /// Unpaid and not cancelled = an open ticket.
+  bool get isOpenTicket => paidAt == null && status != OrderStatus.cancelled;
 
   Order copyWith({
     String? id,
@@ -121,6 +126,7 @@ class Order {
     double? changeAmount,
     String? referenceNumber,
     bool? isSplitPayment,
+    String? customerName,
     String? notes,
     DateTime? paidAt,
     DateTime? createdAt,
@@ -144,6 +150,7 @@ class Order {
       changeAmount: changeAmount ?? this.changeAmount,
       referenceNumber: referenceNumber ?? this.referenceNumber,
       isSplitPayment: isSplitPayment ?? this.isSplitPayment,
+      customerName: customerName ?? this.customerName,
       notes: notes ?? this.notes,
       paidAt: paidAt ?? this.paidAt,
       createdAt: createdAt ?? this.createdAt,
@@ -175,6 +182,7 @@ class Order {
       changeAmount: (map['change_amount'] as num?)?.toDouble(),
       referenceNumber: map['reference_number'] as String?,
       isSplitPayment: map['is_split_payment'] as bool? ?? false,
+      customerName: map['customer_name'] as String?,
       notes: map['notes'] as String?,
       paidAt: map['paid_at'] != null
           ? DateTime.parse(map['paid_at'] as String)

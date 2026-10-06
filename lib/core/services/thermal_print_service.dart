@@ -347,6 +347,9 @@ class ThermalPrintService {
           if (order.discountAmount > 0)
             _totalRow('Discount', '-₱${order.discountAmount.toStringAsFixed(2)}',
                 font: font, fontBold: fontBold),
+          if (order.tipAmount > 0)
+            _totalRow('Tip', '+₱${order.tipAmount.toStringAsFixed(2)}',
+                font: font, fontBold: fontBold),
           pw.SizedBox(height: 4),
           _totalRow('TOTAL', '₱${order.totalAmount.toStringAsFixed(2)}',
               font: font, fontBold: fontBold, large: true),

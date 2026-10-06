@@ -290,6 +290,11 @@ final orderServiceProvider = Provider<OrderService>((ref) {
   );
 });
 
+class AlreadyPaidException implements Exception {
+  @override
+  String toString() => 'This order was already paid (possibly on another device).';
+}
+
 class AppendResult {
   final int round;
   final bool queued; // true = saved locally, waiting to sync
@@ -326,6 +331,7 @@ class OrderService {
     double tipAmount = 0.0,
     String? cashierId,
     OrderType orderType = OrderType.walkIn,
+    String? customerName,
   }) async {
     // One id for the whole attempt, so an online try that fails halfway
     // and the offline fallback refer to the same order (replay is idempotent).
@@ -376,6 +382,7 @@ class OrderService {
     double tipAmount = 0.0,
     String? cashierId,
     OrderType orderType = OrderType.walkIn,
+    String? customerName,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -389,6 +396,7 @@ class OrderService {
           'table_id': tableId,
           'cashier_id': cashierId,
           'order_type': tableId != null ? 'walk_in' : orderType.value,
+          'customer_name': customerName,
           'status': 'pending',
           'subtotal': subtotal,
           'tax_amount': taxAmount,
@@ -433,6 +441,7 @@ class OrderService {
     double tipAmount = 0.0,
     String? cashierId,
     OrderType orderType = OrderType.walkIn,
+    String? customerName,
   }) async {
     final subtotal = items.fold<double>(0, (s, i) => s + i.total);
     final taxAmount = subtotal * taxRate;
@@ -449,6 +458,7 @@ class OrderService {
       cashierId: cashierId,
       orderNumber: localOrderNumber,
       orderType: tableId != null ? OrderType.walkIn : orderType,
+      customerName: customerName,
       status: OrderStatus.pending,
       subtotal: subtotal,
       taxAmount: taxAmount,
@@ -476,6 +486,7 @@ class OrderService {
         'table_id': tableId,
         'cashier_id': cashierId,
         'order_type': tableId != null ? 'walk_in' : orderType.value,
+          'customer_name': customerName,
         'status': 'pending',
         'subtotal': subtotal,
         'tax_amount': taxAmount,
@@ -601,6 +612,37 @@ class OrderService {
   }
 
 
+  /// Saves the discount/tip chosen at checkout onto an existing order so the
+  /// order, receipt and reports all show what was actually charged.
+  Future<void> applyAdjustments({
+    required String orderId,
+    required double discount,
+    required double tip,
+  }) async {
+    await _local.updateOrderAdjustments(
+        orderId: orderId, discount: discount, tip: tip);
+    final payload = {'order_id': orderId, 'discount': discount, 'tip': tip};
+    var queued = true;
+    final insertPending = await _local.isOrderPendingSync(orderId);
+    if (_isOnline && !insertPending) {
+      try {
+        await _syncQueue.replayOrderAdjustments(payload);
+        queued = false;
+      } catch (e) {
+        debugPrint('[OrderService] applyAdjustments online failed, queuing: $e');
+      }
+    }
+    if (queued) {
+      await _syncQueue.enqueue(
+        operation: 'update_order_adjustments',
+        tableName: 'orders',
+        recordId: orderId,
+        payload: payload,
+      );
+    }
+    _ref.read(localOrdersRevisionProvider.notifier).state++;
+  }
+
 Future<void> updateStatus(String orderId, OrderStatus status) async {
     await _local.markOrderStatus(orderId, status);
     final insertPending = await _local.isOrderPendingSync(orderId);
@@ -649,10 +691,16 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     final insertPending = await _local.isOrderPendingSync(orderId);
     if (_isOnline && !insertPending) {
       try {
-        await _client.from('orders').update({
-          ...payload,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', orderId);
+        final updated = await _client
+            .from('orders')
+            .update({
+              ...payload,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', orderId)
+            .isFilter('paid_at', null) // only if nobody paid it first
+            .select('id');
+        if ((updated as List).isEmpty) throw AlreadyPaidException();
 
         await _local.updateOrderPayment(
           orderId: orderId,
@@ -663,6 +711,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         );
         return;
       } catch (e) {
+        if (e is AlreadyPaidException) rethrow;
         debugPrint(
             '[OrderService] processPayment online failed, queuing: $e');
       }
@@ -1157,7 +1206,12 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   // ── Fetch single order ──────────────────────────────────────────────────────
 
   Future<Order> fetchOrderWithItems(String orderId) async {
-    if (_isOnline) {
+    // If this order has queued changes (e.g. a round that hasn't synced),
+    // the local copy is newer than the server's.
+    final queued = await _local.getOrderIdsWithPendingQueue();
+    final unsynced = await _local.isOrderPendingSync(orderId);
+    final preferLocal = queued.contains(orderId) || unsynced;
+    if (_isOnline && !preferLocal) {
       try {
         final orderRow = await _client
             .from('orders')

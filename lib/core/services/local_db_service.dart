@@ -151,6 +151,7 @@ class LocalDbService {
       onUpgrade: _onUpgrade,
       onOpen: (db) async {
         await _ensureOrderItemColumns(db);
+        await _ensureOrderColumns(db);
         await db.execute(
             'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)');
         if (!kIsWeb &&
@@ -179,6 +180,15 @@ class LocalDbService {
     if (!cols.contains('discount_type')) {
       await db.execute(
           "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'");
+    }
+  }
+
+  Future<void> _ensureOrderColumns(Database db) async {
+    final cols = (await db.rawQuery('PRAGMA table_info(orders)'))
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (!cols.contains('customer_name')) {
+      await db.execute('ALTER TABLE orders ADD COLUMN customer_name TEXT');
     }
   }
 
@@ -1447,6 +1457,7 @@ class LocalDbService {
           'tip_amount': order.tipAmount,
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
+          'customer_name': order.customerName,
           'is_offline': 1,
           'synced_at': null,
         },
@@ -1491,6 +1502,7 @@ class LocalDbService {
                 'tip_amount': order.tipAmount,
                 'paid_at': order.paidAt?.toIso8601String(),
                 'created_at': order.createdAt.toIso8601String(),
+                'customer_name': order.customerName,
                 'is_offline': 0,
                 'synced_at': now,
               },
@@ -1549,6 +1561,22 @@ class LocalDbService {
     );
     return rows.map(OrderPayment.fromMap).toList();
   }
+
+  /// Saves the discount/tip chosen at checkout on an unpaid order.
+  Future<void> updateOrderAdjustments({
+    required String orderId,
+    required double discount,
+    required double tip,
+  }) =>
+      _write((d) async {
+        await d.rawUpdate('''
+          UPDATE orders SET
+            discount_amount = ?,
+            tip_amount = ?,
+            total_amount = subtotal + tax_amount - ? + ?
+          WHERE id = ? AND paid_at IS NULL
+        ''', [discount, tip, discount, tip, orderId]);
+      });
 
   Future<void> updateOrderPayment({
     required String orderId,
@@ -1762,6 +1790,7 @@ class LocalDbService {
         changeAmount: (row['change_amount'] as num?)?.toDouble(),
         referenceNumber: row['reference_number'] as String?,
         notes: row['notes'] as String?,
+        customerName: row['customer_name'] as String?,
         paidAt: row['paid_at'] != null
             ? DateTime.parse(row['paid_at'] as String)
             : null,

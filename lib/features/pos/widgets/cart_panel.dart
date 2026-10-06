@@ -362,7 +362,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Adding to Table ${tab.tableName} · Order #${tab.orderNumber} '
+                            'Adding to ${tab.label} · Order #${tab.orderNumber} '
                             '(₱${tab.existingTotal.toStringAsFixed(2)} so far)',
                             style: const TextStyle(
                                 fontSize: 11,
@@ -545,7 +545,7 @@ extension _CartPanelDialogs on _CartPanelState {
     messenger.showSnackBar(SnackBar(
       content: Text(result.pendingSync
           ? 'Saved offline — Round ${result.round} will sync when you\'re back online'
-          : 'Added Round ${result.round} to Table ${tab.tableName} · Order #${tab.orderNumber}'),
+          : 'Added Round ${result.round} to ${tab.label} · Order #${tab.orderNumber}'),
       backgroundColor:
           result.pendingSync ? AppColors.warning : AppColors.success,
     ));

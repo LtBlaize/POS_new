@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/models/order.dart';
 import '../../../../core/services/thermal_print_service.dart';
 import 'checkout_theme.dart';
+import '../../../../core/models/cart_item.dart';
 
 // ── Section label (shared) ────────────────────────────────────────────────────
 
@@ -90,12 +91,18 @@ class _ActionBarState extends State<ActionBar> {
     setState(() => _printing = true);
     try {
       await ThermalPrintService.printBill(
-        order: widget.currentOrder!,
+        order: widget.currentOrder!.copyWith(
+            items: mergeForReceipt(widget.currentOrder!.items)),
         businessName: widget.businessName,
         businessAddress: widget.businessAddress,
         tableNumber: widget.tableNumber,
         roomName: widget.roomName,
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Print failed: $e')));
+      }
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -119,7 +126,7 @@ class _ActionBarState extends State<ActionBar> {
               if (widget.isRestaurant && widget.existingOrderId == null) ...[
                 Expanded(
                   child: _GhostButton(
-                    label: widget.sendingToKitchen ? 'Sending...' : 'Kitchen Only',
+                    label: widget.sendingToKitchen ? 'Sending...' : 'Open Ticket',
                     icon: Icons.kitchen_outlined,
                     loading: widget.sendingToKitchen,
                     disabled: widget.isBusy,
@@ -154,7 +161,7 @@ class _ActionBarState extends State<ActionBar> {
           if (widget.isRestaurant && widget.existingOrderId == null) ...[
             const SizedBox(height: 8),
             const Text(
-              '"Kitchen Only" sends to cook — customer pays later',
+              '"Open Ticket" saves the order and sends it to the kitchen — customer pays later',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 11,

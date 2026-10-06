@@ -119,7 +119,9 @@ class TableNotifier extends StateNotifier<TableState> {
         final openOrder = (row['orders'] as List?)
             ?.cast<Map<String, dynamic>>()
             .where((o) =>
-                o['status'] != 'completed' && o['status'] != 'cancelled')
+                o['paid_at'] == null &&
+                o['status'] != 'completed' &&
+                o['status'] != 'cancelled')
             .firstOrNull;
         return TableEntry(
           name: row['table_number'].toString(),
@@ -144,7 +146,7 @@ class TableNotifier extends StateNotifier<TableState> {
       final rows = await _client
           .from('restaurant_tables')
           .select(
-              'id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status)')
+              'id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status, paid_at)')
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number')

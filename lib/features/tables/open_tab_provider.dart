@@ -1,19 +1,24 @@
-//lib/features/tables/open_tab_provider.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class OpenTab {
   final String orderId;
   final int orderNumber;
-  final String tableName;
+  /// Null for a ticket with no table (walk-in / takeout).
+  final String? tableName;
+  final String? customerName;
   final double existingTotal;
 
   const OpenTab({
     required this.orderId,
     required this.orderNumber,
-    required this.tableName,
+    this.tableName,
+    this.customerName,
     required this.existingTotal,
   });
+
+  String get label => tableName != null
+      ? 'Table $tableName'
+      : (customerName?.isNotEmpty == true ? customerName! : 'Walk-in ticket');
 }
 
 /// Non-null while the cashier is adding a new round to an existing order.

@@ -155,6 +155,7 @@ class SyncQueueService {
       case 'process_payment':
       case 'process_split_payment':
       case 'append_order_items':
+      case 'update_order_adjustments':
         // recordId is the order id for all of these.
         return 'order:$recordId';
       case 'insert_receipt':
@@ -278,6 +279,9 @@ class SyncQueueService {
 
       case 'append_order_items':
         await replayAppendOrderItems(payload);
+
+      case 'update_order_adjustments':
+        await replayOrderAdjustments(payload);
 
       case 'update_order_status':
         await _client.from('orders').update({
@@ -609,6 +613,28 @@ class SyncQueueService {
       'tax_amount': tax,
       'total_amount': subtotal + tax - discount + tip,
       if (reopen) 'status': 'pending',
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', orderId);
+  }
+
+  /// Sets discount + tip and recomputes the total from the stored subtotal
+  /// and tax. Idempotent; shared by the live path and queue replay.
+  Future<void> replayOrderAdjustments(Map<String, dynamic> payload) async {
+    final orderId = payload['order_id'] as String;
+    final discount = (payload['discount'] as num).toDouble();
+    final tip = (payload['tip'] as num).toDouble();
+    final o = await _client
+        .from('orders')
+        .select('subtotal, tax_amount, paid_at')
+        .eq('id', orderId)
+        .single();
+    if (o['paid_at'] != null) return; // never rewrite a paid order
+    final subtotal = (o['subtotal'] as num).toDouble();
+    final tax = (o['tax_amount'] as num).toDouble();
+    await _client.from('orders').update({
+      'discount_amount': discount,
+      'tip_amount': tip,
+      'total_amount': subtotal + tax - discount + tip,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', orderId);
   }

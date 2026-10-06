@@ -283,6 +283,10 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
   }
 
   Future<void> _startPay(TableEntry table) async {
+    if (ref.read(cartProvider).isNotEmpty) {
+      _toast('Send or hold the current cart first.');
+      return;
+    }
     final row = await _findOpenOrder(table);
     if (!mounted) return;
     if (row == null) {
@@ -313,14 +317,17 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
         ref.read(tableProvider.notifier).selectTable(table.name);
       }
       if (!mounted) return;
-      await showDialog(
+      final paid = await showDialog<Order>(
         context: context,
         barrierDismissible: false,
         builder: (_) => CheckoutDialog(
           featureManager: ref.read(featureManagerProvider),
           existingOrderId: orderId,
+          existingOrder: order, // enables "Print Bill"
         ),
       );
+      // Cancelled: don't leave the tab's items sitting in the cart.
+      if (paid == null && mounted) ref.read(cartProvider.notifier).clear();
     } catch (e) {
       _toast('Could not open payment: $e');
     }
