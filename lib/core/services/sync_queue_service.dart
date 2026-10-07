@@ -18,6 +18,8 @@ import 'local_db_service.dart';
 import 'image_storage_service.dart';
 import '../../features/auth/auth_provider.dart';
 
+import '../models/order.dart';
+
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 final syncCompleteProvider = StateProvider<DateTime?>((ref) => null);
@@ -38,13 +40,29 @@ final isSyncingProvider = StateProvider<bool>((ref) => false);
 
 /// True for connectivity failures (not business-rule failures).
 bool isNetworkError(Object e) {
+  if (e is PostgrestException) {
+    final c = int.tryParse(e.code ?? '');
+    if (c != null && c >= 500 && c <= 599) return true;
+  }
   final s = e.toString();
   return s.contains('SocketException') ||
       s.contains('ClientException') ||
+      s.contains('HttpException') ||
+      s.contains('HandshakeException') ||
+      s.contains('TlsException') ||
+      s.contains('CERTIFICATE_VERIFY_FAILED') ||
       s.contains('Failed host lookup') ||
       s.contains('TimeoutException') ||
       s.contains('Connection closed') ||
-      s.contains('Connection reset');
+      s.contains('Connection reset') ||
+      s.contains('Connection refused') ||
+      s.contains('Connection terminated') ||
+      s.contains('Network is unreachable') ||
+      s.contains('Software caused connection abort') ||
+      s.contains('Bad Gateway') ||
+      s.contains('Service Unavailable') ||
+      s.contains('Gateway Time-out') ||
+      s.contains('AuthRetryableFetchException');
 }
 
 const int kMaxRetries = 5;
@@ -122,10 +140,20 @@ class SyncQueueService {
 
       // Entries sharing a conflict key stay sequential in queue order;
       // different keys run in parallel.
+      // A dead-lettered (or about-to-be dead) entry blocks everything behind
+      // it for the same conflict key, so a payment can never run without
+      // its insert_order.
+      final blockedKeys = <String>{
+        for (final f in await _local.getFailedQueue()) _conflictKey(f),
+        for (final e in pending)
+          if ((e['retries'] as int) >= kMaxRetries) _conflictKey(e),
+      };
       final groups = <String, List<Map<String, dynamic>>>{};
       for (final entry in pending) {
         if ((entry['retries'] as int) >= kMaxRetries) continue;
-        groups.putIfAbsent(_conflictKey(entry), () => []).add(entry);
+        final key = _conflictKey(entry);
+        if (blockedKeys.contains(key)) continue;
+        groups.putIfAbsent(key, () => []).add(entry);
       }
 
       final results = await Future.wait(groups.values.map(_flushGroup));
@@ -156,6 +184,7 @@ class SyncQueueService {
       case 'process_split_payment':
       case 'append_order_items':
       case 'update_order_adjustments':
+      case 'update_round_status':
         // recordId is the order id for all of these.
         return 'order:$recordId';
       case 'insert_receipt':
@@ -195,7 +224,7 @@ class SyncQueueService {
           final backoffSeconds = 1 << retries; // 2, 4, 8, 16 seconds
           await Future.delayed(Duration(seconds: backoffSeconds));
         }
-        await _replay(entry);
+        await _replay(entry).timeout(const Duration(seconds: 30));
         await _local.dequeue(id);
         synced++;
       } catch (e) {
@@ -283,26 +312,44 @@ class SyncQueueService {
       case 'update_order_adjustments':
         await replayOrderAdjustments(payload);
 
-      case 'update_order_status':
-        await _client.from('orders').update({
-          'status': payload['status'],
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', recordId);
+      case 'update_round_status':
+        await replayRoundStatus(payload);
+
+            case 'update_order_status':
+        final newStatus = payload['status'] as String;
+        final isOpenStatus = const {'pending', 'preparing', 'ready'}
+            .contains(newStatus);
+        // Never move a cancelled order, and never move a completed order
+        // back to an open status.
+        await _updateOrderExpectingRow(
+          recordId,
+          {
+            'status': newStatus,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          notStatuses: [
+            if (newStatus != 'cancelled') 'cancelled',
+            if (isOpenStatus) 'completed',
+          ],
+        );
 
       case 'process_payment':
-        await _client.from('orders').update({
-          'payment_method': payload['payment_method'],
-          'amount_tendered': payload['amount_tendered'],
-          'change_amount': payload['change_amount'],
-          'reference_number': payload['reference_number'],
-          'paid_at': payload['paid_at'],
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', recordId);
+        await _updateOrderExpectingRow(
+          recordId,
+          {
+            'payment_method': payload['payment_method'],
+            'amount_tendered': payload['amount_tendered'],
+            'change_amount': payload['change_amount'],
+            'reference_number': payload['reference_number'],
+            'paid_at': payload['paid_at'],
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          onlyIfUnpaid: true,
+        );
 
       case 'process_split_payment':
         final payments =
             (payload['payments'] as List).cast<Map<String, dynamic>>();
-        // Idempotency: skip legs already present (checked by id).
         final existingIds = await _client
             .from('order_payments')
             .select('id')
@@ -314,14 +361,18 @@ class SyncQueueService {
         if (toInsert.isNotEmpty) {
           await _client.from('order_payments').insert(toInsert);
         }
-        await _client.from('orders').update({
-          'payment_method': payload['primary_method'],
-          'amount_tendered': payload['amount_tendered'],
-          'change_amount': payload['change_amount'],
-          'is_split_payment': true,
-          'paid_at': payload['paid_at'] ?? DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', recordId);
+        await _updateOrderExpectingRow(
+          recordId,
+          {
+            'payment_method': payload['primary_method'],
+            'amount_tendered': payload['amount_tendered'],
+            'change_amount': payload['change_amount'],
+            'is_split_payment': true,
+            'paid_at': payload['paid_at'] ?? DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          onlyIfUnpaid: true,
+        );
 
       case 'insert_receipt':
         // Idempotency: skip if receipt already exists
@@ -511,7 +562,7 @@ class SyncQueueService {
             'voided_by_staff_id': voidedById,
             'voided_by_staff_name': payload['voided_by_staff_name'],
             'voided_at': voidedAt,
-          }, onConflict: 'id');
+          }, onConflict: 'id', ignoreDuplicates: true);
           await _local.markVoidSynced(item['id'] as String);
         }
 
@@ -551,7 +602,9 @@ class SyncQueueService {
         }
 
       case 'insert_audit_log':
-        await _client.from('audit_logs').upsert(payload, onConflict: 'id');
+        await _client
+            .from('audit_logs')
+            .upsert(payload, onConflict: 'id', ignoreDuplicates: true);
 
       case 'add_staff':
         await _client.from('staff_members').insert(payload);
@@ -565,7 +618,7 @@ class SyncQueueService {
             .update({'is_active': false}).eq('id', recordId);
 
       default:
-        debugPrint('[SyncQueue] Unknown operation: $op — skipping');
+        throw UnsupportedError('Unknown sync operation: $op');
     }
   }
 
@@ -619,6 +672,34 @@ class SyncQueueService {
 
   /// Sets discount + tip and recomputes the total from the stored subtotal
   /// and tax. Idempotent; shared by the live path and queue replay.
+  /// Idempotent: advances the round's unserved lines, then recomputes the
+  /// order status from every line.
+  Future<void> replayRoundStatus(Map<String, dynamic> payload) async {
+    final orderId = payload['order_id'] as String;
+    final round = payload['round'] as int;
+    final status = payload['status'] as String;
+    await _client
+        .from('order_items')
+        .update({'kitchen_status': status})
+        .eq('order_id', orderId)
+        .eq('round', round)
+        .neq('kitchen_status', 'served');
+    final rows = await _client
+        .from('order_items')
+        .select('kitchen_status')
+        .eq('order_id', orderId);
+    final derived = deriveOrderStatus(
+        (rows as List).map((r) => r['kitchen_status'] as String));
+    await _client
+        .from('orders')
+        .update({
+          'status': derived,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', orderId)
+        .neq('status', 'cancelled');
+  }
+
   Future<void> replayOrderAdjustments(Map<String, dynamic> payload) async {
     final orderId = payload['order_id'] as String;
     final discount = (payload['discount'] as num).toDouble();
@@ -637,6 +718,34 @@ class SyncQueueService {
       'total_amount': subtotal + tax - discount + tip,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', orderId);
+  }
+
+  /// Updates an order and fails loudly if the order doesn't exist on the
+  /// server. A guarded update that matches nothing because the order is
+  /// already paid/cancelled/completed is a deliberate skip, not a failure.
+  Future<void> _updateOrderExpectingRow(
+    String orderId,
+    Map<String, dynamic> values, {
+    bool onlyIfUnpaid = false,
+    List<String> notStatuses = const [],
+  }) async {
+    var q = _client.from('orders').update(values).eq('id', orderId);
+    if (onlyIfUnpaid) q = q.isFilter('paid_at', null);
+    for (final s in notStatuses) {
+      q = q.neq('status', s);
+    }
+    final rows = await q.select('id');
+    if ((rows as List).isNotEmpty) return;
+
+    final exists = await _client
+        .from('orders')
+        .select('id')
+        .eq('id', orderId)
+        .maybeSingle();
+    if (exists == null) {
+      throw StateError('order_missing_on_server:$orderId');
+    }
+    debugPrint('[SyncQueue] Guarded update skipped for order $orderId');
   }
 
   Future<void> _recomputeOrderTotals(String orderId) async {

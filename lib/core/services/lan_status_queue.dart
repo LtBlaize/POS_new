@@ -33,6 +33,7 @@ const _prefsKey = 'lan_status_queue_v1';
 
 class _PendingPatch {
   final String orderId;
+  final int? round;
   String status;
   int attempts;
   final int queuedAtMs;
@@ -40,6 +41,7 @@ class _PendingPatch {
 
   _PendingPatch({
     required this.orderId,
+    this.round,
     required this.status,
     this.attempts = 0,
     int? queuedAtMs,
@@ -49,6 +51,7 @@ class _PendingPatch {
 
   Map<String, dynamic> toJson() => {
         'orderId': orderId,
+        'round': round,
         'status': status,
         'attempts': attempts,
         'queuedAtMs': queuedAtMs,
@@ -58,6 +61,7 @@ class _PendingPatch {
   // wait out a backoff window it was already partway through.
   factory _PendingPatch.fromJson(Map<String, dynamic> json) => _PendingPatch(
         orderId: json['orderId'] as String,
+        round: json['round'] as int?,
         status: json['status'] as String,
         attempts: json['attempts'] as int? ?? 0,
         queuedAtMs: json['queuedAtMs'] as int?,
@@ -92,9 +96,9 @@ class LanStatusQueue {
 
   /// Enqueue a status update. Immediately attempts to send; retries
   /// indefinitely until the POS acknowledges it — never dropped.
-  void enqueue(String orderId, String status) {
+  void enqueue(String orderId, String status, {int? round}) {
     _withReady(() async {
-      final existing = _queue.where((p) => p.orderId == orderId).firstOrNull;
+      final existing = _queue.where((p) => p.orderId == orderId && p.round == round).firstOrNull;
       if (existing != null) {
         // A newer status supersedes the old one and gets a fresh attempt
         // immediately, instead of waiting out the prior entry's backoff.
@@ -102,7 +106,7 @@ class LanStatusQueue {
         existing.attempts = 0;
         existing.nextAttemptAt = DateTime.now();
       } else {
-        _queue.add(_PendingPatch(orderId: orderId, status: status));
+        _queue.add(_PendingPatch(orderId: orderId, round: round, status: status));
       }
       await _persist();
       _updateCount();
@@ -181,7 +185,7 @@ class LanStatusQueue {
         if (patch.nextAttemptAt.isAfter(now)) continue; // backoff not elapsed yet
 
         patch.attempts++;
-        final ok = await _client.patchStatus(patch.orderId, patch.status);
+        final ok = await _client.patchStatus(patch.orderId, patch.status, round: patch.round);
 
         if (ok) {
           debugPrint('[LanQueue] POS acknowledged ${patch.orderId} → ${patch.status}');

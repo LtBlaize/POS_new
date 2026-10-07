@@ -44,7 +44,8 @@ class LanServerService {
       ..get('/ping', _ping)
       ..get('/ws', _handleWs)         // ← NEW: WebSocket upgrade endpoint
       ..get('/orders/pending', _getPendingOrders)
-      ..patch('/orders/<orderId>/status', _updateOrderStatus);
+      ..patch('/orders/<orderId>/status', _updateOrderStatus)
+      ..patch('/orders/<orderId>/rounds/<round>/status', _updateRoundStatus);
 
     final handler =
         Pipeline().addMiddleware(_corsMiddleware()).addHandler(router.call);
@@ -196,7 +197,7 @@ class LanServerService {
                 'customer_name': o.customerName,
                 'status': o.status.value,
                 'created_at': o.createdAt.toIso8601String(),
-                'items': o.items
+                'items': o.items.where((i) => i.hasKitchenWork)
                     .map((i) => {'product_name': i.product.name, 'quantity': i.quantity})
                     .toList(),
               })
@@ -253,6 +254,43 @@ class LanServerService {
     } catch (e) {
       return Response.internalServerError(
           body: jsonEncode({'error': '$e'}));
+    }
+  }
+
+  Future<Response> _updateRoundStatus(
+      Request req, String orderId, String round) async {
+    final key = req.headers['x-pos-key'];
+    if (key == null || key != _posKey) {
+      return Response.forbidden(jsonEncode({'error': 'unauthorized'}),
+          headers: {'content-type': 'application/json'});
+    }
+    try {
+      final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+      final status = body['status'] as String?;
+      final r = int.tryParse(round);
+      const valid = {'pending', 'preparing', 'ready', 'served'};
+      if (status == null || !valid.contains(status) || r == null) {
+        return Response.badRequest(
+            body: jsonEncode({'error': 'status and round required'}));
+      }
+      final derived = await _local.setRoundStatus(orderId, r, status);
+      await _ref.read(syncQueueServiceProvider).enqueue(
+        operation: 'update_round_status',
+        tableName: 'order_items',
+        recordId: orderId,
+        payload: {'order_id': orderId, 'round': r, 'status': status},
+      );
+      if (_ref.read(isOnlineProvider)) {
+        _ref.read(syncQueueServiceProvider).flushQueue();
+      }
+      _broadcast({
+        'type': 'order_status_changed',
+        'payload': {'order_id': orderId, 'status': derived},
+      });
+      return Response.ok(jsonEncode({'success': true}),
+          headers: {'content-type': 'application/json'});
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'error': '$e'}));
     }
   }
 

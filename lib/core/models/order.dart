@@ -191,4 +191,13 @@ class Order {
       items: items,
     );
   }
+}/// Order status derived from its lines' kitchen statuses.
+String deriveOrderStatus(Iterable<String> statuses) {
+  final s = statuses.toList();
+  if (s.isEmpty) return 'pending';
+  if (s.every((x) => x == 'served')) return 'completed';
+  final open = s.where((x) => x != 'served');
+  if (open.any((x) => x == 'pending')) return 'pending';
+  if (open.any((x) => x == 'preparing')) return 'preparing';
+  return 'ready';
 }

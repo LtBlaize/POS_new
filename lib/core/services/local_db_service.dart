@@ -78,6 +78,31 @@ class LocalDbService {
     }
   }
 
+  /// Advances one round's lines (never touches already-served lines), then
+  /// recomputes the order's status from all its lines. Returns the new status.
+  Future<String> setRoundStatus(String orderId, int round, String status) =>
+      _write((d) async {
+        late String derived;
+        await d.transaction((txn) async {
+          await txn.update(
+            'order_items',
+            {'kitchen_status': status},
+            where: "order_id = ? AND round = ? AND kitchen_status != 'served'",
+            whereArgs: [orderId, round],
+          );
+          final rows = await txn.query('order_items',
+              columns: ['kitchen_status'],
+              where: 'order_id = ?',
+              whereArgs: [orderId]);
+          derived = deriveOrderStatus(
+              rows.map((r) => r['kitchen_status'] as String));
+          await txn.update('orders', {'status': derived},
+              where: "id = ? AND status != 'cancelled'",
+              whereArgs: [orderId]);
+        });
+        return derived;
+      });
+
   Future<void> markOrderStatus(String orderId, OrderStatus status) =>
       _write((d) async {
         await d.update(
@@ -176,6 +201,10 @@ class LocalDbService {
     if (!cols.contains('discount_amount')) {
       await db.execute(
           'ALTER TABLE order_items ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0');
+    }
+    if (!cols.contains('kitchen_status')) {
+      await db.execute(
+          "ALTER TABLE order_items ADD COLUMN kitchen_status TEXT NOT NULL DEFAULT 'pending'");
     }
     if (!cols.contains('discount_type')) {
       await db.execute(
@@ -1294,7 +1323,13 @@ class LocalDbService {
   // ─────────────────────────────────────────────────────────────────────────────
   /// Writes all order_items rows for [order], including promo header +
   /// component rows. Shared by insertOfflineOrder and upsertOrders.
-    Future<void> _writeOrderItems(Transaction txn, Order order,
+    /// Lines with nothing for the kitchen to cook start as already served.
+  String _ks(CartItem i) =>
+      (i.kitchenStatus == 'pending' && !i.hasKitchenWork)
+          ? 'served'
+          : i.kitchenStatus;
+
+  Future<void> _writeOrderItems(Transaction txn, Order order,
       {int startIndex = 0}) async {
     for (int n = 0; n < order.items.length; n++) {
       final i = n + startIndex;
@@ -1315,6 +1350,7 @@ class LocalDbService {
             'variant_id': item.selectedVariant?.id,
             'send_to_kitchen': item.product.sendToKitchen ? 1 : 0,
             'round': item.round,
+            'kitchen_status': _ks(item),            
             'discount_amount': item.discountAmount,
             'discount_type': item.discountType.name,
           },
@@ -1341,6 +1377,7 @@ class LocalDbService {
           'promo_group_id': groupId,
           'send_to_kitchen': 1,
           'round': item.round,
+          'kitchen_status': _ks(item),          
           'discount_amount': item.discountAmount,
           'discount_type': item.discountType.name,
         },
@@ -1365,6 +1402,7 @@ class LocalDbService {
             'promo_group_id': groupId,
             'send_to_kitchen': c.sendToKitchen ? 1 : 0,
             'round': item.round,
+            'kitchen_status': _ks(item),
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
@@ -1725,6 +1763,7 @@ class LocalDbService {
             notes: r['notes'] as String?,
             promoId: r['promo_id'] as String?,
             round: (r['round'] as int?) ?? 1,
+            kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',            
             discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
             discountType:
                 CartItem.discountTypeFromString(r['discount_type'] as String?),
@@ -1752,6 +1791,7 @@ class LocalDbService {
           notes: r['notes'] as String?,
           selectedVariant: selectedVariant,
           round: (r['round'] as int?) ?? 1,
+          kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',          
           discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
           discountType:
               CartItem.discountTypeFromString(r['discount_type'] as String?),

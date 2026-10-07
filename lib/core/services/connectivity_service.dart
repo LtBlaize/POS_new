@@ -76,11 +76,8 @@ class ConnectivityService {
   //   8.8.8.8   = Google Public DNS (port 53)  — almost never blocked
   //   1.1.1.1   = Cloudflare DNS (port 53)     — very reliable
   //   142.250.x = Google (port 80)             — hostname fallback
-  static const _probeTargets = <(String, int)>[
-    ('8.8.8.8',      53),   // Google DNS — raw IP, no DNS needed
-    ('1.1.1.1',      53),   // Cloudflare DNS — raw IP, no DNS needed
-    ('google.com',   80),   // hostname fallback
-    ('supabase.com', 443),  // our own backend
+    static const _probeTargets = <(String, int)>[
+    ('qsdbufdixhyqlbygrncp.supabase.co', 443), // <-- put your real project host
   ];
   static const _probeTimeout = Duration(seconds: 3);
   static const _internetPollInterval = Duration(seconds: 15);

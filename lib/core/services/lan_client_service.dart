@@ -94,13 +94,15 @@ class LanClientService {
 
   /// Send a status update to the POS server. Returns true on success.
   /// Callers should enqueue to LanStatusQueue if this returns false.
-  Future<bool> patchStatus(String orderId, String status) async {
+  Future<bool> patchStatus(String orderId, String status, {int? round}) async {
     final base = _baseUrl;
     if (base == null) return false;
     try {
       final res = await http
           .patch(
-            Uri.parse('$base/orders/$orderId/status'),
+            Uri.parse(round == null
+                ? '$base/orders/$orderId/status'
+                : '$base/orders/$orderId/rounds/$round/status'),
             headers: {
               'content-type': 'application/json',
               'x-pos-key': _posKey ?? '',

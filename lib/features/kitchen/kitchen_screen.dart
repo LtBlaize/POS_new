@@ -19,7 +19,6 @@ import '../../features/auth/auth_provider.dart';
 import '../../features/tables/table_provider.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../core/services/lan_client_service.dart';
-import '../../core/services/lan_status_queue.dart';
 import '../../../main.dart' show deviceRoleProvider, DeviceRole;
 import '../../config/business_config.dart';
 import '../../core/providers/order_provider.dart';
@@ -36,6 +35,8 @@ import '../../core/models/product_variant.dart';
 final _kitchenOrdersFromDbProvider =
     AsyncNotifierProvider<_KitchenDbNotifier, List<Order>>(
         _KitchenDbNotifier.new);
+
+typedef RoundAdvance = Future<void> Function(String orderId, int round, String next);
 
 class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
   @override
@@ -91,14 +92,26 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
     return local.getActiveKitchenOrders(businessId);
   }
 
-  Future<void> advanceStatus(String orderId, OrderStatus next) async {
-    state = AsyncData((state.value ?? [])
-        .map((o) => o.id == orderId ? o.copyWith(status: next) : o)
-        .toList());
+  Future<void> advanceRound(String orderId, int round, String next) async {
+    state = AsyncData((state.value ?? []).map((o) {
+      if (o.id != orderId) return o;
+      final items = [
+        for (final i in o.items)
+          (i.round == round && i.kitchenStatus != 'served')
+              ? i.withKitchenStatus(next)
+              : i,
+      ];
+      return o.copyWith(
+        items: items,
+        status: OrderStatusX.fromString(
+            deriveOrderStatus(items.map((i) => i.kitchenStatus))),
+      );
+    }).toList());
     try {
-      await ref.read(orderServiceProvider).updateStatus(orderId, next);
+      await ref.read(orderServiceProvider).setRoundStatus(
+          orderId: orderId, round: round, status: next);
     } catch (e) {
-      debugPrint('[Kitchen] Status update error: $e');
+      debugPrint('[Kitchen] Round status error: $e');
       ref.invalidateSelf();
     }
   }
@@ -123,6 +136,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
             notes: map['notes'] as String?,
             promoId: map['promo_id'] as String?,
             round: map['round'] as int? ?? 1,
+            kitchenStatus: map['kitchen_status'] as String? ?? 'pending',            
           );
         }
         final product = map['products'] as Map<String, dynamic>? ?? {};
@@ -142,6 +156,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
           notes: map['notes'] as String?,
           round: map['round'] as int? ?? 1,
+          kitchenStatus: map['kitchen_status'] as String? ?? 'pending',
         );
       },
       buildComponent: (map) {
@@ -257,13 +272,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     return _KitchenBody(
       orders: kitchenState.orders,
       connection: kitchenState.connection,
-      onAdvanceStatus: (orderId, next) async {
-        // Optimistic update in the notifier (updates local UI immediately)
-        ref.read(kitchenStateProvider.notifier).advanceStatus(orderId, next);
-        // Route through the queue so failed patches are retried when POS
-        // is temporarily unreachable — fixes issue #25 (silent drop).
-        ref.read(lanStatusQueueProvider).enqueue(orderId, next.value);
-      },
+      onAdvanceStatus: (orderId, round, next) =>
+          ref.read(kitchenStateProvider.notifier).advanceRound(orderId, round, next),
     );
   }
 }
@@ -293,8 +303,9 @@ class _DbKitchenView extends ConsumerWidget {
             ? LanConnectionState.disconnected
             : LanConnectionState.connected,
         isDbMode: true,
-        onAdvanceStatus: (orderId, next) =>
-            ref.read(_kitchenOrdersFromDbProvider.notifier).advanceStatus(orderId, next),
+        onAdvanceStatus: (orderId, round, next) => ref
+            .read(_kitchenOrdersFromDbProvider.notifier)
+            .advanceRound(orderId, round, next),
       ),
     );
   }
@@ -306,7 +317,7 @@ class _KitchenBody extends StatelessWidget {
   final List<Order> orders;
   final LanConnectionState connection;
   final bool isDbMode;
-  final Future<void> Function(String orderId, OrderStatus next) onAdvanceStatus;
+  final RoundAdvance onAdvanceStatus;
 
   const _KitchenBody({
     required this.orders,
@@ -317,9 +328,13 @@ class _KitchenBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pending   = orders.where((o) => o.status == OrderStatus.pending).toList();
-    final preparing = orders.where((o) => o.status == OrderStatus.preparing).toList();
-    final ready     = orders.where((o) => o.status == OrderStatus.ready).toList();
+    OrderStatus effective(Order o) => o.items.isEmpty
+        ? o.status
+        : OrderStatusX.fromString(
+            deriveOrderStatus(o.items.map((i) => i.kitchenStatus)));
+    final pending   = orders.where((o) => effective(o) == OrderStatus.pending).toList();
+    final preparing = orders.where((o) => effective(o) == OrderStatus.preparing).toList();
+    final ready     = orders.where((o) => effective(o) == OrderStatus.ready).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -547,7 +562,7 @@ class _KitchenColumn extends StatelessWidget {
   final String title;
   final Color color;
   final List<Order> orders;
-  final Future<void> Function(String, OrderStatus) onAdvanceStatus;
+  final RoundAdvance onAdvanceStatus;
 
   const _KitchenColumn({
     required this.title,
@@ -627,7 +642,7 @@ class _KitchenColumn extends StatelessWidget {
 
 class _KitchenOrderCard extends ConsumerStatefulWidget {
   final Order order;
-  final Future<void> Function(String, OrderStatus) onAdvanceStatus;
+  final RoundAdvance onAdvanceStatus;
 
   const _KitchenOrderCard({
     super.key,
@@ -640,7 +655,7 @@ class _KitchenOrderCard extends ConsumerStatefulWidget {
 }
 
 class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
-  bool _loading = false;
+  String? _busyRound;
   late Timer _ageTimer;
 
   @override
@@ -657,18 +672,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     super.dispose();
   }
 
-  Future<void> _advance() async {
-    final next = switch (widget.order.status) {
-      OrderStatus.pending   => OrderStatus.preparing,
-      OrderStatus.preparing => OrderStatus.ready,
-      OrderStatus.ready     => OrderStatus.completed,
-      _                     => null,
-    };
-    if (next == null) return;
-
-    setState(() => _loading = true);
+  Future<void> _advance(int round, String next) async {
+    setState(() => _busyRound = '$round');
     try {
-      await widget.onAdvanceStatus(widget.order.id, next);
+      await widget.onAdvanceStatus(widget.order.id, round, next);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -676,166 +683,183 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
         );
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _busyRound = null);
     }
   }
 
-  String? _resolveTableLabel() {
-    final tableId = widget.order.tableId;
-    if (tableId == null || tableId.isEmpty) {
-      final type = switch (widget.order.orderType) {
+  /// Who the food is for: "TABLE 1", "TABLE 1 · Juan", "TAKEOUT · Juan"...
+  String _whereLabel() {
+    final o = widget.order;
+    final name = (o.customerName?.isNotEmpty ?? false) ? o.customerName! : null;
+    final tableId = o.tableId;
+    String base;
+    if (tableId != null && tableId.isNotEmpty) {
+      final n = ref.read(tableProvider).tableNameForUuid(tableId);
+      base = n != null
+          ? 'TABLE $n'
+          : 'TABLE …${tableId.substring(tableId.length - 6)}';
+    } else {
+      base = switch (o.orderType) {
         OrderType.takeOut => 'TAKEOUT',
         OrderType.delivery => 'DELIVERY',
         OrderType.walkIn => 'WALK-IN',
       };
-      final name = widget.order.customerName;
-      return name != null && name.isNotEmpty ? '$type · $name' : type;
     }
-    final tableNumber = ref.read(tableProvider).tableNameForUuid(tableId);
-    if (tableNumber != null) return 'Table $tableNumber';
-    return 'Table …${tableId.substring(tableId.length - 6)}';
+    return name != null ? '$base · $name' : base;
+  }
+
+  String _formatAge(Duration d) {
+    if (d.inMinutes < 1) return '< 1 min';
+    if (d.inMinutes < 60) return '${d.inMinutes} min';
+    return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
   }
 
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
-
-    final (buttonLabel, buttonColor) = switch (order.status) {
-      OrderStatus.pending   => ('Start Preparing', AppColors.warning),
-      OrderStatus.preparing => ('Mark Ready',      AppColors.info),
-      OrderStatus.ready     => ('Mark Served',     AppColors.success),
-      _                     => ('',                Colors.transparent),
-    };
-
     final age = DateTime.now().difference(order.createdAt);
-    final isOld = age.inMinutes >= 10;
-    final tableLabel = _resolveTableLabel();
-    final maxRound =
-        order.items.fold<int>(1, (m, i) => i.round > m ? i.round : m);
-    final currentItems = order.items.where((i) => i.round == maxRound).toList();
-    final earlierItems = order.items.where((i) => i.round < maxRound).toList();
+
+    final rounds = <int, List<CartItem>>{};
+    for (final i in order.items) {
+      rounds.putIfAbsent(i.round, () => []).add(i);
+    }
+    final keys = rounds.keys.toList()..sort();
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isOld ? Colors.red.shade200 : AppColors.divider,
-          width: isOld ? 1.5 : 1,
-        ),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Order #${order.orderNumber}',
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary),
+              Expanded(
+                child: Text(_whereLabel(),
+                    style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textPrimary)),
               ),
-              const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isOld ? Colors.red.shade50 : AppColors.surface,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: isOld ? Colors.red.shade200 : AppColors.divider),
+                  border: Border.all(color: AppColors.divider),
                 ),
-                child: Text(
-                  _formatAge(age),
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: isOld
-                          ? Colors.red.shade700
-                          : AppColors.textSecondary),
-                ),
+                child: Text(_formatAge(age),
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
               ),
             ],
           ),
-
-          if (tableLabel != null) ...[
-            const SizedBox(height: 2),
-            Text(tableLabel,
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-          ],
-
-          const SizedBox(height: 8),
-
-                    if (order.items.isNotEmpty) ...[
-            if (maxRound > 1)
-              Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text('ROUND $maxRound · NEW',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.warning)),
-              ),
-            ..._linesFor(currentItems),
-            if (earlierItems.isNotEmpty)
-              Theme(
-                data: Theme.of(context)
-                    .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(
-                      'Earlier rounds (${earlierItems.length} lines)',
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary)),
-                  children: _linesFor(earlierItems),
-                ),
-              ),
-          ] else
+          Text('Order #${order.orderNumber}',
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
+          const SizedBox(height: 10),
+          if (keys.isEmpty)
             const Text('Loading items...',
                 style:
-                    TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-          const SizedBox(height: 10),
+                    TextStyle(fontSize: 11, color: AppColors.textSecondary))
+          else
+            for (final r in keys)
+              _roundSection(r, rounds[r]!, keys.length > 1),
+        ],
+      ),
+    );
+  }
 
-          if (buttonLabel.isNotEmpty)
+  Widget _roundSection(int round, List<CartItem> lines, bool showHeader) {
+    final status = lines.first.kitchenStatus;
+    final served = status == 'served';
+    final (label, color, next) = switch (status) {
+      'pending' => ('Start Preparing', AppColors.warning, 'preparing'),
+      'preparing' => ('Mark Ready', AppColors.info, 'ready'),
+      'ready' => ('Mark Served', AppColors.success, 'served'),
+      _ => ('', AppColors.textSecondary, ''),
+    };
+    final tag = switch (status) {
+      'pending' => 'NEW',
+      'preparing' => 'PREPARING',
+      'ready' => 'READY',
+      _ => 'SERVED',
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: served ? Colors.transparent : color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: served
+                ? AppColors.divider
+                : color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showHeader)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Text('ROUND $round',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: served ? AppColors.textSecondary : color)),
+                  const SizedBox(width: 8),
+                  Text(tag,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: served
+                              ? AppColors.textSecondary
+                              : color.withValues(alpha: 0.8))),
+                ],
+              ),
+            ),
+          ..._linesFor(lines, served),
+          if (!served) ...[
+            const SizedBox(height: 6),
             SizedBox(
               width: double.infinity,
               height: 34,
-              child: _loading
+              child: _busyRound == '$round'
                   ? const Center(
                       child: SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2)))
                   : ElevatedButton(
-                      onPressed: _advance,
+                      onPressed: () => _advance(round, next),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
+                        backgroundColor: color,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                         padding: EdgeInsets.zero,
                       ),
-                      child: Text(buttonLabel,
+                      child: Text(label,
                           style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
             ),
+          ],
         ],
       ),
     );
   }
 
-  List<Widget> _linesFor(List<CartItem> items) => items.expand<Widget>((item) {
+  List<Widget> _linesFor(List<CartItem> items, bool served) =>
+      items.expand<Widget>((item) {
         if (item.isPromo) {
           return item.promoComponents!
               .where((c) => c.sendToKitchen)
@@ -845,6 +869,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                         ? '${c.productName} (${c.variantName})'
                         : c.productName,
                     subtitle: item.product.name,
+                    served: served,
                   ));
         }
         return [
@@ -854,15 +879,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
             subtitle: item.selectedVariant?.name,
             subtitleColor: AppColors.info,
             notes: item.notes,
+            served: served,
           ),
         ];
       }).toList();
-
-  String _formatAge(Duration d) {
-    if (d.inMinutes < 1) return '< 1 min';
-    if (d.inMinutes < 60) return '${d.inMinutes} min';
-    return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
-  }
 
   Widget _kitchenLine({
     required int quantity,
@@ -870,25 +890,27 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     String? subtitle,
     Color subtitleColor = AppColors.warning,
     String? notes,
+    bool served = false,
   }) {
+    final grey = AppColors.textSecondary.withValues(alpha: 0.6);
+    final strike = served ? TextDecoration.lineThrough : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
       child: Row(
         children: [
           Container(
-            width: 20, height: 20,
+            width: 20,
+            height: 20,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: AppColors.primary.withValues(alpha: served ? 0.04 : 0.1),
               borderRadius: BorderRadius.circular(5),
             ),
             child: Center(
-              child: Text(
-                '$quantity',
-                style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary),
-              ),
+              child: Text('$quantity',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: served ? grey : AppColors.primary)),
             ),
           ),
           const SizedBox(width: 7),
@@ -897,20 +919,24 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textPrimary)),
+                    style: TextStyle(
+                        fontSize: 12,
+                        decoration: strike,
+                        color: served ? grey : AppColors.textPrimary)),
                 if (subtitle != null)
                   Text(subtitle,
                       style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: subtitleColor)),
+                          decoration: strike,
+                          color: served ? grey : subtitleColor)),
                 if (notes != null && notes.isNotEmpty)
                   Text(notes,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 10,
-                          color: AppColors.warning,
-                          fontStyle: FontStyle.italic)),
+                          fontStyle: FontStyle.italic,
+                          decoration: strike,
+                          color: served ? grey : AppColors.warning)),
               ],
             ),
           ),

@@ -21,6 +21,8 @@ class CartItem {
   final String? promoId;
   /// Which ordering round this line belongs to (persisted lines only; 1 for old data).
   final int round;
+  /// pending | preparing | ready | served (per round, set by the kitchen).
+  final String kitchenStatus;
 
   CartItem({
     required this.product,
@@ -33,12 +35,32 @@ class CartItem {
     this.promoComponents,
     this.promoId,
     this.round = 1,
+    this.kitchenStatus = 'pending',
   }) : costAtSale = costAtSale ??
             (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
                 ? selectedVariant.costPrice
                 : product.costPrice);
 
   bool get isPromo => promoComponents != null;
+
+  /// True if the kitchen has anything to cook for this line.
+  bool get hasKitchenWork => isPromo
+      ? promoComponents!.any((c) => c.sendToKitchen)
+      : product.sendToKitchen;
+
+  CartItem withKitchenStatus(String s) => CartItem(
+        product: product,
+        selectedVariant: selectedVariant,
+        quantity: quantity,
+        discountAmount: discountAmount,
+        discountType: discountType,
+        costAtSale: costAtSale,
+        notes: notes,
+        promoComponents: promoComponents,
+        promoId: promoId,
+        round: round,
+        kitchenStatus: s,
+      );
 
   CartItem withRound(int r) => CartItem(
         product: product,
@@ -51,6 +73,7 @@ class CartItem {
         promoComponents: promoComponents,
         promoId: promoId,
         round: r,
+        kitchenStatus: kitchenStatus,
       );
 
   static DiscountType discountTypeFromString(String? s) =>
@@ -100,6 +123,7 @@ class CartItem {
         promoId: header.promoId,
         round: header.round,
         promoComponents: componentRows.map(buildComponent).toList(),
+        kitchenStatus: header.kitchenStatus,
       ));
     }
     return result;

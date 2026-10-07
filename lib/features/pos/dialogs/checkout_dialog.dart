@@ -71,50 +71,61 @@ class _SplitLeg {
 }
 
 class _SplitBreakdown {
-  /// Amount actually applied to the order for each leg, same order as the
-  /// legs list. For a cash leg this may be less than what was typed (the
-  /// rest becomes change); for every other method it equals what was typed.
   final List<double> appliedAmounts;
   final double remaining;
   final double change;
+  /// Non-cash legs can't give change, so any excess over the order total is
+  /// invalid input.
+  final double nonCashOver;
 
   const _SplitBreakdown({
     required this.appliedAmounts,
     required this.remaining,
     required this.change,
+    required this.nonCashOver,
   });
 }
 
 double _parseAmount(TextEditingController c) =>
     double.tryParse(c.text.replaceAll(',', '').trim()) ?? 0;
 
-/// Cash legs are treated as "tendered" — only the portion still needed to
-/// cover the order is applied; any excess becomes change. Every other
-/// method is applied in full as typed (no change on non-cash legs).
+int _cents(double v) => (v * 100).round();
+
 _SplitBreakdown _computeSplitBreakdown(List<_SplitLeg> legs, double subtotal) {
-  double nonCashApplied = 0;
+  final target = _cents(subtotal);
+  var nonCash = 0;
   for (final leg in legs) {
     if (leg.method != PaymentMethod.cash) {
-      nonCashApplied += _parseAmount(leg.amountController);
+      nonCash += _cents(_parseAmount(leg.amountController));
     }
   }
-  double cashNeedRemaining = (subtotal - nonCashApplied).clamp(0.0, double.infinity);  double totalChange = 0;
+  final nonCashOver = nonCash > target ? nonCash - target : 0;
+  var cashNeed = target - nonCash;
+  if (cashNeed < 0) cashNeed = 0;
+
+  var change = 0;
+  var totalApplied = 0;
   final applied = <double>[];
-
   for (final leg in legs) {
+    final typed = _cents(_parseAmount(leg.amountController));
     if (leg.method == PaymentMethod.cash) {
-      final tendered = _parseAmount(leg.amountController);
-      final legApplied = tendered <= cashNeedRemaining ? tendered : cashNeedRemaining;
-      applied.add(legApplied);
-      cashNeedRemaining -= legApplied;
-      totalChange += (tendered - legApplied);
+      final a = typed <= cashNeed ? typed : cashNeed;
+      cashNeed -= a;
+      change += typed - a;
+      totalApplied += a;
+      applied.add(a / 100.0);
     } else {
-      applied.add(_parseAmount(leg.amountController));
+      totalApplied += typed;
+      applied.add(typed / 100.0);
     }
   }
-
-  final totalApplied = applied.fold(0.0, (s, a) => s + a);
-  final remaining = (subtotal - totalApplied).clamp(0.0, double.infinity);  return _SplitBreakdown(appliedAmounts: applied, remaining: remaining, change: totalChange);
+  final remaining = target - totalApplied;
+  return _SplitBreakdown(
+    appliedAmounts: applied,
+    remaining: remaining > 0 ? remaining / 100.0 : 0.0,
+    change: change / 100.0,
+    nonCashOver: nonCashOver / 100.0,
+  );
 }
 
 // ── CheckoutDialog ────────────────────────────────────────────────────────────
@@ -231,13 +242,13 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
         }
       }
       final breakdown = _computeSplitBreakdown(_splitLegs, subtotal);
-      return breakdown.remaining <= 0.005;
+      return breakdown.remaining <= 0.005 && breakdown.nonCashOver <= 0.005;
     }
 
     final method = ref.read(_selectedPaymentProvider);
     if (method == PaymentMethod.cash) {
       if (subtotal == 0) return true;
-      return _tendered >= subtotal;
+      return (_tendered * 100).round() >= (subtotal * 100).round();
     }
     return _refController.text.trim().isNotEmpty;
   }
@@ -916,7 +927,8 @@ class _SplitPaymentSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final breakdown = _computeSplitBreakdown(legs, subtotal);
-    final isSettled = breakdown.remaining <= 0.005;
+    final isSettled =    
+    breakdown.remaining <= 0.005 && breakdown.nonCashOver <= 0.005;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -980,7 +992,9 @@ class _SplitPaymentSection extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    isSettled ? 'Fully covered' : 'Remaining',
+                    breakdown.nonCashOver > 0.005                      
+                      ? 'Non-cash exceeds total'                      
+                      : (isSettled ? 'Fully covered' : 'Remaining'),
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -990,7 +1004,7 @@ class _SplitPaymentSection extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '₱${breakdown.remaining.toStringAsFixed(2)}',
+                    '₱${(breakdown.nonCashOver > 0.005 ? breakdown.nonCashOver : breakdown.remaining).toStringAsFixed(2)}',
                     style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,

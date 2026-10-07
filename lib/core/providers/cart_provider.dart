@@ -148,10 +148,10 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   double get itemsTotal => state.fold(0, (sum, item) => sum + item.total);
 
   double get orderDiscountValue {
-    if (orderDiscountType == DiscountType.percentage) {
-      return itemsTotal * (orderDiscountAmount / 100);
-    }
-    return orderDiscountAmount;
+    final raw = orderDiscountType == DiscountType.percentage
+        ? itemsTotal * (orderDiscountAmount / 100)
+        : orderDiscountAmount;
+    return raw.clamp(0.0, itemsTotal).toDouble();
   }
 
  double _tipAmount = 0;

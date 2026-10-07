@@ -105,22 +105,29 @@ class KitchenNotifier extends Notifier<KitchenState> {
     // Could use this for sound/vibration alerts on 'order_placed'.
   }
 
-  /// Called by _KitchenOrderCard to advance an order's status.
-  Future<void> advanceStatus(String orderId, OrderStatus next) async {
-    // Optimistic update — update local state immediately
+  /// Called by the kitchen card to advance one round of an order.
+  Future<void> advanceRound(String orderId, int round, String next) async {
     final updated = state.orders.map((o) {
-      return o.id == orderId ? _copyWithStatus(o, next) : o;
+      if (o.id != orderId) return o;
+      final items = [
+        for (final i in o.items)
+          (i.round == round && i.kitchenStatus != 'served')
+              ? i.withKitchenStatus(next)
+              : i,
+      ];
+      return o.copyWith(
+        items: items,
+        status: OrderStatusX.fromString(
+            deriveOrderStatus(items.map((i) => i.kitchenStatus))),
+      );
     }).toList();
     state = state.copyWith(orders: updated);
 
-    // Send to POS server
     final ok = await ref
         .read(lanClientServiceProvider)
-        .patchStatus(orderId, next.value);
-
+        .patchStatus(orderId, next, round: round);
     if (!ok) {
-      // POS unreachable — enqueue for retry
-      ref.read(lanStatusQueueProvider).enqueue(orderId, next.value);
+      ref.read(lanStatusQueueProvider).enqueue(orderId, next, round: round);
     }
   }
 
@@ -137,6 +144,8 @@ class KitchenNotifier extends Notifier<KitchenState> {
           price: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
         ),
         quantity: map['quantity'] as int,
+        round: (map['round'] as int?) ?? 1,
+        kitchenStatus: (map['kitchen_status'] as String?) ?? 'pending',        
       );
     }).toList();
 
@@ -145,6 +154,8 @@ class KitchenNotifier extends Notifier<KitchenState> {
       businessId: businessId,
       orderNumber: m['order_number'] as int,
       tableId: m['table_id'] as String?,
+      orderType: OrderTypeX.fromString(m['order_type'] as String? ?? 'walk_in'),
+      customerName: m['customer_name'] as String?,
       status: OrderStatusX.fromString(m['status'] as String),
       createdAt: DateTime.parse(m['created_at'] as String),
       subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -153,6 +164,5 @@ class KitchenNotifier extends Notifier<KitchenState> {
     );
   }
 
-  Order _copyWithStatus(Order o, OrderStatus s) => o.copyWith(status: s);
 
 }

@@ -88,6 +88,17 @@ class CheckoutService {
       );
     }
 
+    if (payNow && isSplit) {
+      final applied =
+          effectiveSplitPayments.fold<double>(0, (s, p) => s + p.amount);
+      if (((applied - subtotal) * 100).round().abs() > 1) {
+        return CheckoutResult.error(
+          'Split payments (₱${applied.toStringAsFixed(2)}) do not match '
+          'the amount due (₱${subtotal.toStringAsFixed(2)}).',
+        );
+      }
+    }
+
     final service = _ref.read(orderServiceProvider);
     final local = _ref.read(localDbServiceProvider);
     final selectedTableName = _ref.read(tableProvider).selectedTableName;
@@ -394,7 +405,7 @@ class CheckoutService {
       if (stockErr != null) return CheckoutResult.error(stockErr);
 
       final taxRate = _ref.read(businessConfigProvider)?.taxRate ?? 0.0;
-      final sendToKitchen = hasKitchen && items.any((i) => i.product.sendToKitchen);
+      final sendToKitchen = hasKitchen && items.any((i) => i.hasKitchenWork);
 
       final res = await _ref.read(orderServiceProvider).appendItems(
             orderId: orderId,

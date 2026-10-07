@@ -51,6 +51,7 @@ void invalidateOrderCache(Ref ref, String orderId) {
           notes: row['notes'] as String?,
           promoId: row['promo_id'] as String?,
           round: row['round'] as int? ?? 1,
+          kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
           discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
           discountType: CartItem.discountTypeFromString(
               row['discount_type'] as String?),
@@ -70,6 +71,7 @@ void invalidateOrderCache(Ref ref, String orderId) {
         costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
         notes: row['notes'] as String?,
         round: row['round'] as int? ?? 1,
+        kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
         discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
         discountType:
             CartItem.discountTypeFromString(row['discount_type'] as String?),
@@ -190,6 +192,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                     notes: row['notes'] as String?,
                     promoId: row['promo_id'] as String?,
                     round: row['round'] as int? ?? 1,
+                    kitchenStatus: row['kitchen_status'] as String? ?? 'pending',                   
                     discountAmount:
                         (row['discount_amount'] as num?)?.toDouble() ?? 0,
                     discountType: CartItem.discountTypeFromString(
@@ -211,6 +214,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                   costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
                   notes: row['notes'] as String?,
                   round: row['round'] as int? ?? 1,
+                  kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
                   discountAmount:
                       (row['discount_amount'] as num?)?.toDouble() ?? 0,
                   discountType: CartItem.discountTypeFromString(
@@ -336,6 +340,8 @@ class OrderService {
     // One id for the whole attempt, so an online try that fails halfway
     // and the offline fallback refer to the same order (replay is idempotent).
     final orderId = const Uuid().v4();
+    final itemsSubtotal = items.fold<double>(0, (s, i) => s + i.total);
+    discountAmount = discountAmount.clamp(0.0, itemsSubtotal).toDouble();
 
     if (_isOnline) {
       try {
@@ -350,6 +356,7 @@ class OrderService {
           tipAmount: tipAmount,
           cashierId: cashierId,
           orderType: orderType,
+          customerName: customerName,
         );
       } catch (e) {
         if (!isNetworkError(e)) rethrow;
@@ -368,6 +375,7 @@ class OrderService {
       tipAmount: tipAmount,
       cashierId: cashierId,
       orderType: orderType,
+      customerName: customerName,
     );
   }
 
@@ -406,14 +414,15 @@ class OrderService {
           'notes': notes,
         })
         .select()
-        .single();
+        .single()
+        .timeout(const Duration(seconds: 15));
 
     final orderItems = items
         .expand((item) => _withMeta(
             _withVariant(_buildOnlineRows(orderId, item), item), item, 1))
         .toList();
 
-    await _client.from('order_items').insert(orderItems);
+    await _client.from('order_items').insert(orderItems).timeout(const Duration(seconds: 15));
 
     final order = Order.fromMap(orderRow, items: items);
 
@@ -614,6 +623,41 @@ class OrderService {
 
   /// Saves the discount/tip chosen at checkout onto an existing order so the
   /// order, receipt and reports all show what was actually charged.
+  /// Kitchen: advance one round (pending→preparing→ready→served).
+  Future<void> setRoundStatus({
+    required String orderId,
+    required int round,
+    required String status,
+  }) async {
+    final orderStatus = await _local.setRoundStatus(orderId, round, status);
+    final payload = {'order_id': orderId, 'round': round, 'status': status};
+    var queued = true;
+    final insertPending = await _local.isOrderPendingSync(orderId);
+    final hasQueued =
+        (await _local.getOrderIdsWithPendingQueue()).contains(orderId);
+    if (_isOnline && !insertPending && !hasQueued) {
+      try {
+        await _syncQueue.replayRoundStatus(payload);
+        queued = false;
+      } catch (e) {
+        debugPrint('[OrderService] setRoundStatus online failed, queuing: $e');
+      }
+    }
+    if (queued) {
+      await _syncQueue.enqueue(
+        operation: 'update_round_status',
+        tableName: 'order_items',
+        recordId: orderId,
+        payload: payload,
+      );
+      if (_isOnline) unawaited(_syncQueue.flushQueue());
+    }
+    invalidateOrderCache(_ref, orderId);
+    _ref.read(localOrdersRevisionProvider.notifier).state++;
+    EventBus.instance.emit(AppEvents.orderStatusChanged,
+        {'order_id': orderId, 'status': orderStatus});
+  }
+
   Future<void> applyAdjustments({
     required String orderId,
     required double discount,
@@ -646,8 +690,12 @@ class OrderService {
 Future<void> updateStatus(String orderId, OrderStatus status) async {
     await _local.markOrderStatus(orderId, status);
     final insertPending = await _local.isOrderPendingSync(orderId);
+    // If older changes for this order are still queued, go through the queue
+    // too, so they replay in order and can't overwrite this status later.
+    final hasQueued =
+        (await _local.getOrderIdsWithPendingQueue()).contains(orderId);
 
-    if (_isOnline && !insertPending) {
+    if (_isOnline && !insertPending && !hasQueued) {
       try {
         await _client.from('orders').update({
           'status': status.value,
@@ -783,17 +831,24 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     final insertPending = await _local.isOrderPendingSync(orderId);
     if (_isOnline && !insertPending) {
       try {
-        await _client.from('order_payments').insert(rows);
-        await _client.from('orders').update({
-          'payment_method': primary.method.value,
-          'amount_tendered': cashTendered,
-          'change_amount': changeAmount,
-          'is_split_payment': true,
-          'paid_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
-        }).eq('id', orderId);
+        final paidRows = await _client
+            .from('orders')
+            .update({
+              'payment_method': primary.method.value,
+              'amount_tendered': cashTendered,
+              'change_amount': changeAmount,
+              'is_split_payment': true,
+              'paid_at': now.toUtc().toIso8601String(),
+              'updated_at': now.toUtc().toIso8601String(),
+            })
+            .eq('id', orderId)
+            .isFilter('paid_at', null)
+            .select('id');
+        if ((paidRows as List).isEmpty) throw AlreadyPaidException();
+        await _client.from('order_payments').upsert(rows, onConflict: 'id');
         return orderPayments;
       } catch (e) {
+        if (e is AlreadyPaidException) rethrow;
         debugPrint('[OrderService] processSplitPayment online failed, queuing: $e');
       }
     }
@@ -807,6 +862,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         'business_id': businessId,
         'payments': rows,
         'primary_method': primary.method.value,
+        'paid_at': now.toUtc().toIso8601String(),
         'amount_tendered': cashTendered,
         'change_amount': changeAmount,
       },
@@ -1408,6 +1464,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         {
           ...rows[i],
           'round': round,
+          'kitchen_status': item.hasKitchenWork ? 'pending' : 'served',
           if (i == 0) 'discount_amount': item.discountAmount,
           if (i == 0) 'discount_type': item.discountType.name,
         },
