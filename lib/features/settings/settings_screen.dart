@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/config/store_build_flag.dart';
 
 import '../../core/models/business.dart' show SubscriptionPlan;
 
@@ -18,7 +19,6 @@ import '../../shared/widgets/app_colors.dart';
 import 'widgets/general_settings_section.dart';
 import 'widgets/lan_settings_section.dart';
 import 'widgets/printer_settings_section.dart';
-import 'widgets/promo_settings_section.dart';
 import 'widgets/staff_settings_section.dart' show StaffSettingsSection, OwnerPinSection;
 import 'widgets/sync_issues_section.dart';
 import 'widgets/table_settings_section.dart';
@@ -109,11 +109,6 @@ class SettingsScreen extends ConsumerWidget {
                 _SectionCard(child: const StaffSettingsSection()),
               ],
 
-              // ── Promos & packages — owners only ───────────────────────
-              if (isOwner) ...[
-                const SizedBox(height: 16),
-                _SectionCard(child: const PromoSettingsSection()),
-              ],
 
               // ── Sync issues — managers+ only, POS device only ─────────
               if (isManager) ...[
@@ -429,7 +424,7 @@ class _SubscriptionSection extends ConsumerWidget {
     }
 
     // Plans are Starter → Growth → Pro. Pro has nothing above it.
-    final nextPlanLabel = switch (plan) {
+    final nextPlanLabel = kStoreBuild ? null : switch (plan) {   
       SubscriptionPlan.starter => 'Growth',
       SubscriptionPlan.growth => 'Pro',
       SubscriptionPlan.pro => null,
@@ -513,6 +508,22 @@ class _SubscriptionSection extends ConsumerWidget {
               ),
             ],
           ),
+          if (kStoreBuild) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.support_agent_rounded, size: 16),
+                label: const Text('Contact support'),
+                onPressed: () => _showContactDialog(
+                  context,
+                  ref,
+                  currentPlan: plan.displayName,
+                  targetPlan: plan.displayName,
+                ),
+              ),
+            ),
+          ],
           // Show an upgrade path whenever there's a plan above the current
           // one — regardless of paid/trial/expired status. Pro has none.
           if (nextPlanLabel != null) ...[
@@ -630,14 +641,16 @@ class _ContactUpgradeDialog extends StatelessWidget {
     return AlertDialog(
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('Upgrade to $targetPlan'),
+      title: Text(kStoreBuild ? 'Contact support' : 'Upgrade to $targetPlan'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'We don\'t have automatic billing yet — reach out and we\'ll '
-            'get "$businessName" upgraded manually.',
+            kStoreBuild
+                ? 'Reach out to our support team about "$businessName".'
+                : 'We don\'t have automatic billing yet — reach out and we\'ll '
+                    'get "$businessName" upgraded manually.',
             style: const TextStyle(
                 fontSize: 13, color: AppColors.textSecondary),
           ),

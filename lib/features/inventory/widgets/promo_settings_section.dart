@@ -7,12 +7,24 @@ import '../../../core/providers/promo_provider.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 import 'promo_builder_dialog.dart';
+import 'inventory_shared.dart';
 
-class PromoSettingsSection extends ConsumerWidget {
+enum _PromoTypeFilter { all, bundle, buyXGetY }
+
+class PromoSettingsSection extends ConsumerStatefulWidget {
   const PromoSettingsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PromoSettingsSection> createState() =>
+      _PromoSettingsSectionState();
+}
+
+class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
+  String _search = '';
+  _PromoTypeFilter _typeFilter = _PromoTypeFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
     final promosAsync = ref.watch(promoListProvider);
 
     return Column(
@@ -50,6 +62,64 @@ class PromoSettingsSection extends ConsumerWidget {
           style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 12),
+        Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 12),
+              const Icon(Icons.search,
+                  size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _search = v),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search promos by name…',
+                    hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            InventoryFilterChip(
+              label: 'All',
+              selected: _typeFilter == _PromoTypeFilter.all,
+              onTap: () => setState(() => _typeFilter = _PromoTypeFilter.all),
+            ),
+            InventoryFilterChip(
+              label: 'Bundle',
+              icon: Icons.card_giftcard_rounded,
+              selected: _typeFilter == _PromoTypeFilter.bundle,
+              onTap: () =>
+                  setState(() => _typeFilter = _PromoTypeFilter.bundle),
+            ),
+            InventoryFilterChip(
+              label: 'Buy X Get Y',
+              icon: Icons.local_offer_rounded,
+              selected: _typeFilter == _PromoTypeFilter.buyXGetY,
+              onTap: () =>
+                  setState(() => _typeFilter = _PromoTypeFilter.buyXGetY),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         promosAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Error: $e'),
@@ -70,8 +140,34 @@ class PromoSettingsSection extends ConsumerWidget {
                 ),
               );
             }
-            final active = promos.where((p) => p.isActive).toList();
-            final inactive = promos.where((p) => !p.isActive).toList();
+            final q = _search.trim().toLowerCase();
+            final filtered = promos.where((p) {
+              if (_typeFilter == _PromoTypeFilter.bundle &&
+                  p.promoType != PromoType.bundle) {
+                return false;
+              }
+              if (_typeFilter == _PromoTypeFilter.buyXGetY &&
+                  p.promoType != PromoType.buyXGetY) {
+                return false;
+              }
+              if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            if (filtered.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: Text('No promos match your search or filter.',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                ),
+              );
+            }
+
+            final active = filtered.where((p) => p.isActive).toList();
+            final inactive = filtered.where((p) => !p.isActive).toList();
             return Column(
               children: [
                 if (active.isNotEmpty) ...[

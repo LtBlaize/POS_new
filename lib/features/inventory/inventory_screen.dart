@@ -11,6 +11,9 @@ import 'widgets/inventory_shared.dart';
 import 'widgets/inventory_filter.dart';
 import 'widgets/inventory_row.dart';
 import 'widgets/category_management_dialog.dart';
+import 'widgets/promo_settings_section.dart';
+import '../../core/models/staff.dart';
+import '../../core/providers/staff_provider.dart';
 // ── Filter state provider ─────────────────────────────────────────────────────
 
 final _filterProvider =
@@ -20,6 +23,80 @@ final _filterProvider =
 
 class InventoryScreen extends ConsumerWidget {
   const InventoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOwner = ref.watch(activeStaffProvider)?.role == StaffRole.owner;
+    if (!isOwner) return const _ProductsTab();
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Column(
+          children: [
+            Material(
+              color: Colors.white,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TabBar(
+                  isScrollable: true,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  indicatorColor: AppColors.primary,
+                  dividerColor: AppColors.divider,
+                  labelStyle: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700),
+                  tabs: const [
+                    Tab(text: 'Products'),
+                    Tab(text: 'Promos & Packages'),
+                  ],
+                ),
+              ),
+            ),
+            const Expanded(
+              child: TabBarView(
+                physics: NeverScrollableScrollPhysics(),
+                children: [_ProductsTab(), _PromosTab()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromosTab extends StatelessWidget {
+  const _PromosTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final isPhone = inventoryLayoutOf(context) == InventoryLayout.phone;
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: ListView(
+        padding: EdgeInsets.all(isPhone ? 12 : 24),
+        children: [
+          Container(
+            padding: EdgeInsets.all(isPhone ? 14 : 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: const PromoSettingsSection(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Products tab (the original inventory screen) ─────────────────────────────
+
+class _ProductsTab extends ConsumerWidget {
+  const _ProductsTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

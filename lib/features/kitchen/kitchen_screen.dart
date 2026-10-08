@@ -68,7 +68,10 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
             .inFilter('status', ['pending', 'preparing', 'ready'])
             .order('created_at', ascending: true);
 
-        final remote = rows.map((row) => _parseDbOrder(row)).toList();
+        final remote = rows
+            .map((row) => _parseDbOrder(row))
+            .where((o) => o.items.isNotEmpty)
+            .toList();
 
         final remoteIds = remote.map((o) => o.id).toSet();
         final unsynced = await local.getUnsyncedOrderIds();
@@ -89,7 +92,9 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
         debugPrint('[Kitchen] Supabase fetch error, using local DB: $e');
       }
     }
-    return local.getActiveKitchenOrders(businessId);
+    return (await local.getActiveKitchenOrders(businessId))
+        .where((o) => o.items.isNotEmpty)
+        .toList();
   }
 
   Future<void> advanceRound(String orderId, int round, String next) async {

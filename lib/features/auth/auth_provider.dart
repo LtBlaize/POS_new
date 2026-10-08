@@ -17,6 +17,12 @@ import '../../core/services/connectivity_service.dart';
 class RegistrationGuard {
   static bool isRegistering = false;
 }
+
+// Set while the user is mid-password-reset so MyApp's auth listener
+// doesn't navigate on the temporary recovery session.
+class RecoveryGuard {
+  static bool isRecovering = false;
+}
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 final supabaseClientProvider = Provider<SupabaseClient>(
@@ -159,7 +165,7 @@ final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
   try {
     final row = await client
         .from('business_configs')
-        .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management')
+        .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management, low_stock_threshold')
         .eq('business_id', businessId)
         .maybeSingle()
         .timeout(Duration(seconds: ref.read(isOnlineProvider) ? 5 : 1));
@@ -315,7 +321,7 @@ class AuthService {
     required String fullName,
     required String businessName,
     required String businessType,
-    String ownerPin = '0000',
+    required String ownerPin,
     String selectedPlan = 'growth',
   }) async {
     try {
@@ -422,7 +428,19 @@ class AuthService {
     debugPrint('[Auth] Password reset email sent to $email');
   }
 
-  // ── Update Password (called after reset link is clicked) ───────────────────
+  // ── Verify the 6-digit recovery code from the reset email ──────────────────
+  Future<void> verifyRecoveryCode({
+    required String email,
+    required String code,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email,
+      token: code,
+      type: OtpType.recovery,
+    );
+  }
+
+  // ── Update Password (called after the recovery code is verified) ───────────
   Future<void> updatePassword({required String newPassword}) async {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
     debugPrint('[Auth] Password updated successfully');

@@ -177,6 +177,7 @@ class LocalDbService {
       onOpen: (db) async {
         await _ensureOrderItemColumns(db);
         await _ensureOrderColumns(db);
+        await _ensureProductColumns(db);
         await db.execute(
             'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)');
         if (!kIsWeb &&
@@ -209,6 +210,16 @@ class LocalDbService {
     if (!cols.contains('discount_type')) {
       await db.execute(
           "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'");
+    }
+  }
+
+  Future<void> _ensureProductColumns(Database db) async {
+    final cols = (await db.rawQuery('PRAGMA table_info(products)'))
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (!cols.contains('send_to_kitchen')) {
+      await db.execute(
+          'ALTER TABLE products ADD COLUMN send_to_kitchen INTEGER NOT NULL DEFAULT 1');
     }
   }
 
@@ -956,8 +967,9 @@ class LocalDbService {
             INSERT INTO products (
               id, business_id, category_id, name, description, price,
               image_url, local_image_path, barcode, sku, track_inventory,
-              stock_quantity, is_available, is_active, category_name, synced_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              stock_quantity, is_available, is_active, category_name, synced_at,
+              send_to_kitchen
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               business_id = excluded.business_id,
               category_id = excluded.category_id,
@@ -973,12 +985,14 @@ class LocalDbService {
               is_available = excluded.is_available,
               is_active = excluded.is_active,
               category_name = excluded.category_name,
-              synced_at = excluded.synced_at
+              synced_at = excluded.synced_at,
+              send_to_kitchen = excluded.send_to_kitchen
           ''', [
             p.id, p.businessId, p.categoryId, p.name, p.description, p.price,
             p.imageUrl, p.localImagePath, p.barcode, p.sku,
             p.trackInventory ? 1 : 0, p.stockQuantity, p.isAvailable ? 1 : 0,
             p.isActive ? 1 : 0, p.category, now,
+            p.sendToKitchen ? 1 : 0,
           ]);
         }
         await batch.commit(noResult: true);
@@ -1093,6 +1107,7 @@ class LocalDbService {
         isAvailable: (row['is_available'] as int) == 1,
         isActive: (row['is_active'] as int) == 1,
         category: row['category_name'] as String? ?? '',
+        sendToKitchen: ((row['send_to_kitchen'] as int?) ?? 1) == 1,
         // variants attached by caller
       );
 

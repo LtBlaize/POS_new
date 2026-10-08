@@ -310,7 +310,7 @@ class CheckoutService {
       );
     }
 
-    if (!hasKitchen) {
+    if (!hasKitchen || !order.items.any((i) => i.hasKitchenWork)) {
       await service.updateStatus(order.id, OrderStatus.completed);
     }
 

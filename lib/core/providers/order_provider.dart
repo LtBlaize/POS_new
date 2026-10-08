@@ -1465,8 +1465,8 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           ...rows[i],
           'round': round,
           'kitchen_status': item.hasKitchenWork ? 'pending' : 'served',
-          if (i == 0) 'discount_amount': item.discountAmount,
-          if (i == 0) 'discount_type': item.discountType.name,
+          'discount_amount': i == 0 ? item.discountAmount : 0,
+          'discount_type': i == 0 ? item.discountType.name : 'fixed',
         },
     ];
   }

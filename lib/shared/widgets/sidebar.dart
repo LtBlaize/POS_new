@@ -7,6 +7,7 @@ import '../../features/auth/auth_provider.dart';
 import 'app_colors.dart';
 import '../../shared/widgets/offline_banner.dart';
 import '../../features/inventory/inventory_service.dart';
+import '../../core/config/store_build_flag.dart';
 
 class SidebarItem {
   final IconData icon;
@@ -107,8 +108,10 @@ class Sidebar extends ConsumerWidget {
           ],
         ),
         content: const Text(
-          'Your free trial has ended. Upgrade to Pro to unlock Reports, '
-          'Kitchen Display, and Table Management.',
+          kStoreBuild
+              ? "This feature isn't included in your current plan."
+              : 'Your free trial has ended. Upgrade to Pro to unlock Reports, '
+                  'Kitchen Display, and Table Management.',
           style: TextStyle(fontSize: 13),
         ),
         actions: [
@@ -116,6 +119,7 @@ class Sidebar extends ConsumerWidget {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Not now'),
           ),
+          if (!kStoreBuild)
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_provider.dart';
+import 'reset_password_screen.dart';
 import 'widgets/auth_text_field.dart';
 import '../../shared/widgets/app_colors.dart';
 import '../../shared/widgets/app_button.dart';
@@ -36,7 +37,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref.read(authServiceProvider).sendPasswordResetEmail(
             email: _emailCtrl.text.trim(),
           );
-      if (mounted) setState(() => _sent = true);
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResetPasswordScreen(email: _emailCtrl.text.trim()),
+        ),
+      );
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not send reset email. Try again.');
     } finally {
@@ -89,7 +96,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   color: AppColors.textPrimary)),
           const SizedBox(height: 8),
           const Text(
-            'Enter your email and we\'ll send you a link to reset your password.',
+            'Enter your email and we\'ll send you a 6-digit code to reset your password.',
             style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 36),
@@ -117,7 +124,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           ],
           const SizedBox(height: 28),
           AppButton(
-            label: _isLoading ? 'Sending…' : 'Send Reset Link',
+            label: _isLoading ? 'Sending…' : 'Send Code',
             onPressed: _isLoading ? null : _submit,
             icon: Icons.send_rounded,
           ),

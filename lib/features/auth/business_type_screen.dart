@@ -5,8 +5,8 @@ import 'register_screen.dart';
 import 'plan_picker_screen.dart';
 import 'widgets/auth_text_field.dart';
 import 'widgets/business_type_card.dart';
-import '../../shared/widgets/app_colors.dart';
-import '../../shared/widgets/app_button.dart';// for DeviceRole + deviceRoleProvider
+import 'widgets/auth_theme.dart';
+import 'widgets/auth_components.dart';// for DeviceRole + deviceRoleProvider
 
 class BusinessTypeScreen extends ConsumerStatefulWidget {
   const BusinessTypeScreen({super.key});
@@ -79,150 +79,86 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Step indicator
-                Row(
-                  children: [
-                    _StepDot(active: true, done: true),
-                    _StepLine(active: true),
-                    _StepDot(active: true, done: false),
-                    _StepLine(active: false),
-                    _StepDot(active: false, done: false),
-                  ],
-                ),
-                const SizedBox(height: 28),
+    return AuthScaffold(
+      maxWidth: 520,
+      onBack: () => Navigator.pop(context),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AuthStepper(current: 2, label: 'Business details'),
+            const SizedBox(height: 24),
+            const Text('Set up your business', style: AuthText.title),
+            const SizedBox(height: 24),
 
-                const Text(
-                  'Set up your business',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+            AuthTextField(
+              label: 'YOUR FULL NAME',
+              hint: 'Juan dela Cruz',
+              controller: _fullNameCtrl,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.person_outline_rounded,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Enter your name' : null,
+            ),
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'BUSINESS NAME',
+              hint: "Juan's Eatery",
+              controller: _businessNameCtrl,
+              textInputAction: TextInputAction.done,
+              prefixIcon: Icons.business_outlined,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Enter business name' : null,
+            ),
+            const SizedBox(height: 24),
+
+            const Text('BUSINESS TYPE', style: AuthText.label),
+            const SizedBox(height: 10),
+
+            ..._options.map((opt) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: BusinessTypeCard(
+                    type: opt.type,
+                    label: opt.label,
+                    description: opt.description,
+                    icon: opt.icon,
+                    isSelected: _selectedType == opt.type,
+                    onTap: () => setState(() => _selectedType = opt.type),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Step 2 of 3 — Business details',
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 32),
+                )),
 
-                AuthTextField(
-                  label: 'YOUR FULL NAME',
-                  hint: 'Juan dela Cruz',
-                  controller: _fullNameCtrl,
-                  prefixIcon: Icons.person_outline_rounded,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Enter your name' : null,
-                ),
-                const SizedBox(height: 20),
-
-                AuthTextField(
-                  label: 'BUSINESS NAME',
-                  hint: "Juan's Eatery",
-                  controller: _businessNameCtrl,
-                  prefixIcon: Icons.business_outlined,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Enter business name' : null,
-                ),
-                const SizedBox(height: 28),
-
-                const Text(
-                  'BUSINESS TYPE',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                ..._options.map((opt) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: BusinessTypeCard(
-                        type:        opt.type,
-                        label:       opt.label,
-                        description: opt.description,
-                        icon:        opt.icon,
-                        isSelected:  _selectedType == opt.type,
-                        onTap: () => setState(() => _selectedType = opt.type),
-                      ),
-                    )),
-
-                // Coming soon pill
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline_rounded,
-                        color: AppColors.textSecondary,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'More business types coming soon',
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AuthColors.field,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AuthColors.border),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.add_circle_outline_rounded,
+                      color: AuthColors.textMuted, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('More business types coming soon',
                         style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha:0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
+                            fontSize: 13, color: AuthColors.textMuted)),
                   ),
                 ],
-
-                const SizedBox(height: 28),
-                AppButton(
-                  label: 'Continue',
-                  onPressed: _submit,
-                  icon: Icons.arrow_forward_rounded,
-                ),
-                const SizedBox(height: 40),
-              ],
+              ),
             ),
-          ),
+
+            AuthErrorSlot(_error),
+            const SizedBox(height: 24),
+
+            AuthButton(
+              label: 'Continue',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: _submit,
+            ),
+          ],
         ),
       ),
     );
@@ -245,50 +181,3 @@ class _BusinessOption {
   });
 }
 
-// ── Step indicator widgets ────────────────────────────────────────────────────
-
-class _StepDot extends StatelessWidget {
-  final bool active;
-  final bool done;
-
-  const _StepDot({required this.active, required this.done});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: active ? AppColors.primary : AppColors.border,
-      ),
-      child: Center(
-        child: done
-            ? const Icon(Icons.check, color: Colors.white, size: 16)
-            : Text(
-                '2',
-                style: TextStyle(
-                  color: active ? Colors.white : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _StepLine extends StatelessWidget {
-  final bool active;
-  const _StepLine({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 2,
-        color: active ? AppColors.primary : AppColors.border,
-      ),
-    );
-  }
-}

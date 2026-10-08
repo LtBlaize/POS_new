@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_provider.dart';
 import 'otp_verification_screen.dart';
 import 'widgets/auth_text_field.dart';
-import '../../shared/widgets/app_colors.dart';
-import '../../shared/widgets/app_button.dart';
+import 'widgets/auth_theme.dart';
+import 'widgets/auth_components.dart';
 
 // Stores the pending user ID between step 1 and step 2
 final pendingUserIdProvider = StateProvider<String?>((ref) => null);
@@ -102,288 +102,120 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 8),
+    return AuthScaffold(
+      maxWidth: 480,
+      onBack: () => Navigator.pop(context),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AuthStepper(current: 1, label: 'Account credentials'),
+            const SizedBox(height: 24),
+            const Text('Create your account', style: AuthText.title),
+            const SizedBox(height: 24),
 
-                // Step indicator
-                Row(
-                  children: [
-                    _StepDot(active: true,  label: '1', done: false),
-                    _StepLine(active: false),
-                    _StepDot(active: false, label: '2', done: false),
-                    _StepLine(active: false),
-                    _StepDot(active: false, label: '3', done: false),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                const Text(
-                  'Create your account',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Step 1 of 3 — Account credentials',
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 36),
-
-                // ── Email & password ─────────────────────────────────────────
-                AuthTextField(
-                  label: 'EMAIL',
-                  hint: 'you@example.com',
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.mail_outline_rounded,
-                  validator: (v) =>
-                      (v == null || !v.contains('@'))
-                          ? 'Enter a valid email'
-                          : null,
-                ),
-                const SizedBox(height: 20),
-
-                AuthTextField(
-                  label: 'PASSWORD',
-                  hint: '••••••••',
-                  controller: _passCtrl,
-                  isPassword: true,
-                  prefixIcon: Icons.lock_outline_rounded,
-                  validator: (v) =>
-                      (v == null || v.length < 6) ? 'Min 6 characters' : null,
-                ),
-                const SizedBox(height: 20),
-
-                AuthTextField(
-                  label: 'CONFIRM PASSWORD',
-                  hint: '••••••••',
-                  controller: _confirmCtrl,
-                  isPassword: true,
-                  prefixIcon: Icons.lock_outline_rounded,
-                  validator: (v) =>
-                      v != _passCtrl.text ? 'Passwords do not match' : null,
-                ),
-                const SizedBox(height: 32),
-
-                // ── FIX: Owner PIN ───────────────────────────────────────────
-                // This PIN is used for the staff PIN lock overlay (pin_lock_overlay.dart).
-                // It is SHA-256 hashed in AuthService.hashPin() before being
-                // stored in the staff_members table — never stored as plain text.
-                const Divider(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Owner PIN',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Used to unlock the POS and access owner features.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 16),
-
-                _PinField(
-                  label: 'SET PIN (4–6 digits)',
-                  controller: _pinCtrl,
-                  validator: (v) {
-                    if (v == null || v.length < 4) return 'Min 4 digits';
-                    if (v.length > 6)              return 'Max 6 digits';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                _PinField(
-                  label: 'CONFIRM PIN',
-                  controller: _pinConfirmCtrl,
-                  validator: (v) =>
-                      v != _pinCtrl.text ? 'PINs do not match' : null,
-                ),
-                const SizedBox(height: 8),
-
-                // Security note
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha:0.07),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.shield_outlined,
-                          size: 16, color: AppColors.primary),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Your PIN is encrypted before being saved. '
-                          'It cannot be recovered — keep it safe.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha:0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 28),
-
-                AppButton(
-                  label: 'Continue',
-                  onPressed: _isLoading ? null : _submit,
-                  icon: Icons.arrow_forward_rounded,
-                ),
-                const SizedBox(height: 32),
-              ],
+            AuthTextField(
+              label: 'EMAIL',
+              hint: 'you@example.com',
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.mail_outline_rounded,
+              validator: (v) =>
+                  (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'PASSWORD',
+              hint: '••••••••',
+              helper: 'At least 6 characters',
+              controller: _passCtrl,
+              isPassword: true,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.lock_outline_rounded,
+              validator: (v) =>
+                  (v == null || v.length < 6) ? 'Min 6 characters' : null,
+            ),
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'CONFIRM PASSWORD',
+              hint: '••••••••',
+              controller: _confirmCtrl,
+              isPassword: true,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.lock_outline_rounded,
+              validator: (v) =>
+                  v != _passCtrl.text ? 'Passwords do not match' : null,
+            ),
 
-// ── PIN input widget ──────────────────────────────────────────────────────────
-// Numeric-only, obscured, styled to match AuthTextField.
+            const SizedBox(height: 24),
+            Container(height: 1, color: AuthColors.border),
+            const SizedBox(height: 20),
 
-class _PinField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final String? Function(String?)? validator;
+            // Owner PIN — hashed in AuthService.hashPin(); logic unchanged.
+            const AuthSectionHeader(
+              title: 'Owner PIN',
+              subtitle: 'Used to unlock the POS and access owner features.',
+            ),
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'SET PIN (4–6 digits)',
+              hint: '••••',
+              controller: _pinCtrl,
+              isPassword: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.pin_outlined,
+              validator: (v) {
+                if (v == null || v.length < 4) return 'Min 4 digits';
+                if (v.length > 6) return 'Max 6 digits';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'CONFIRM PIN',
+              hint: '••••',
+              controller: _pinConfirmCtrl,
+              isPassword: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_isLoading) _submit();
+              },
+              prefixIcon: Icons.pin_outlined,
+              validator: (v) =>
+                  v != _pinCtrl.text ? 'PINs do not match' : null,
+            ),
+            const SizedBox(height: 12),
 
-  const _PinField({
-    required this.label,
-    required this.controller,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      obscureText: true,
-      keyboardType: TextInputType.number,
-      maxLength: 6,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        counterText: '',           // hide the "0/6" counter
-        prefixIcon: const Icon(
-          Icons.pin_outlined,
-          color: AppColors.textSecondary,
-        ),
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Step indicator widgets ────────────────────────────────────────────────────
-
-class _StepDot extends StatelessWidget {
-  final bool active;
-  final bool done;
-  final String label;
-
-  const _StepDot({
-    required this.active,
-    required this.done,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: active ? AppColors.primary : AppColors.border,
-      ),
-      child: Center(
-        child: done
-            ? const Icon(Icons.check, color: Colors.white, size: 16)
-            : Text(
-                label,
+            const AuthInfoBanner(
+              icon: Icons.shield_outlined,
+              child: Text(
+                'Your PIN is encrypted before being saved. '
+                'It cannot be recovered — keep it safe.',
                 style: TextStyle(
-                  color: active ? Colors.white : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
+                    fontSize: 12, color: AuthColors.textSecondary, height: 1.4),
               ),
-      ),
-    );
-  }
-}
+            ),
 
-class _StepLine extends StatelessWidget {
-  final bool active;
-  const _StepLine({required this.active});
+            AuthErrorSlot(_error),
+            const SizedBox(height: 24),
 
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 2,
-        color: active ? AppColors.primary : AppColors.border,
+            AuthButton(
+              label: 'Continue',
+              icon: Icons.arrow_forward_rounded,
+              loading: _isLoading,
+              onPressed: _submit,
+            ),
+          ],
+        ),
       ),
     );
   }

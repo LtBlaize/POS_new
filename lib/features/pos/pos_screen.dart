@@ -97,6 +97,17 @@ class POSScreen extends ConsumerWidget {
     final safeIndex =
         screens.isEmpty ? 0 : activeIndex.clamp(0, screens.length - 1);
 
+    // Lets other widgets (e.g. the low-stock dialog) jump to a tab by label.
+    ref.listen<String?>(posRequestedTabProvider, (prev, next) {
+      if (next == null) return;
+      final i = screens.indexWhere((s) => s.label == next);
+      if (i >= 0) {
+        ref.read(_activeIndexProvider.notifier).state = i;
+        ref.read(posSearchQueryProvider.notifier).state = '';
+      }
+      ref.read(posRequestedTabProvider.notifier).state = null;
+    });
+
     return Scaffold(
       body: PinLockOverlay(
         child: switch (layout) {

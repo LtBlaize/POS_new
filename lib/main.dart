@@ -246,6 +246,11 @@ class _MyAppState extends ConsumerState<MyApp> {
             // ── Signed in ──────────────────────────────────────────────────
             debugPrint('[Auth] Signed in: ${currentUser.id} → checking registration state');
 
+            if (RecoveryGuard.isRecovering) {
+              debugPrint('[Auth] Mid-password-reset — skipping navigation');
+              return;
+            }
+
             final isPendingRegistration = ref.read(pendingUserIdProvider) != null;
             if (isPendingRegistration) {
               debugPrint('[Auth] Mid-registration — skipping navigation, waiting for completeRegistration()');

@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_provider.dart';
 import 'register_screen.dart';
-import '../../shared/widgets/app_colors.dart';
-import '../../shared/widgets/app_button.dart';
+import 'widgets/auth_theme.dart';
+import 'widgets/auth_components.dart';
+import '../../core/config/store_build_flag.dart';
 
 class PlanPickerScreen extends ConsumerStatefulWidget {
   const PlanPickerScreen({super.key});
@@ -15,6 +16,26 @@ class PlanPickerScreen extends ConsumerStatefulWidget {
 
 class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
   String _selectedPlan = 'growth';
+
+  // Read once. _submit() clears pendingBusinessTypeProvider, and a
+  // ref.watch would flip the wording back to retail mid-navigation.
+  late final bool _isRestaurant;
+
+  @override
+  void initState() {
+    super.initState();
+    _isRestaurant = ref.read(pendingBusinessTypeProvider) == 'restaurant';
+  }
+
+  // Utang is retail-only (hidden in restaurant mode). Display filter only.
+  List<_Feature> _forType(List<_Feature> f) => _isRestaurant
+      ? f.where((x) => x.label != 'Credits (utang)').toList()
+      : f.where((x) =>
+          !x.label.startsWith('Kitchen display') &&
+          !x.label.startsWith('Table') &&
+          !x.label.startsWith('Tables') &&
+          !x.label.startsWith('Multi-station kitchen') &&
+          !x.label.startsWith('Unlimited tables')).toList();
   bool   _isLoading    = false;
   String? _error;
 
@@ -38,7 +59,8 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
             fullName:     ref.read(pendingFullNameProvider) ?? '',
             businessName: ref.read(pendingBusinessNameProvider) ?? '',
             businessType: ref.read(pendingBusinessTypeProvider) ?? 'retail',
-            ownerPin:     ref.read(pendingOwnerPinProvider) ?? '0000',
+            ownerPin:     ref.read(pendingOwnerPinProvider) ??
+                (throw Exception('PIN missing')),
             selectedPlan: _selectedPlan,
           );
 
@@ -73,172 +95,154 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
+    final cards = <Widget>[
+      _PlanCard(
+        plan: 'starter',
+        title: 'Starter',
+        price: kStoreBuild ? '7-day free trial' : '₱499 / month',
+        description:
+            _isRestaurant
+                ? '1 terminal, up to 2 staff — the essentials to get started.'
+                : '1 terminal, up to 2 staff — everything a growing tindahan needs.',
+        features: _forType(const [
+          _Feature('POS & orders', true),
+          _Feature('Unlimited products', true),
+          _Feature('Credits (utang)', true),
+          _Feature('Shifts', true),
+          _Feature('Up to 5 active promos', true),
+          _Feature('Reports & Excel export', false),
+          _Feature('Kitchen display', false),
+          _Feature('Table management', false),
+        ]),
+        isSelected: _selectedPlan == 'starter',
+        isBestValue: false,
+        onTap: () => setState(() => _selectedPlan = 'starter'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Step indicator
-              Row(
-                children: [
-                  _StepDot(active: true, done: true),
-                  _StepLine(active: true),
-                  _StepDot(active: true, done: true),
-                  _StepLine(active: true),
-                  _StepDot(active: true, done: false),
-                ],
-              ),
-              const SizedBox(height: 28),
+      _PlanCard(
+        plan: 'growth',
+        title: 'Growth',
+        price: kStoreBuild ? '7-day free trial' : '₱799 / month',
+        description:
+            kStoreBuild
+                ? 'Full access free for 7 days. Up to 3 terminals, unlimited staff.'
+                : 'Full access free for 7 days, then ₱799/mo. Up to 3 terminals, unlimited staff.',
+        features: _forType(const [
+          _Feature('POS & orders', true),
+          _Feature('Unlimited products', true),
+          _Feature('Credits (utang)', true),
+          _Feature('Shifts', true),
+          _Feature('Unlimited promos', true),
+          _Feature('Reports & Excel export', true),
+          _Feature('Kitchen display (1 station)', true),
+          _Feature('Tables (up to 6, 1 room)', true),
+        ]),
+        isSelected: _selectedPlan == 'growth',
+        isBestValue: true,
+        onTap: () => setState(() => _selectedPlan = 'growth'),
+      ),
+      _PlanCard(
+        plan: 'pro',
+        title: 'Pro',
+        price: kStoreBuild ? '7-day free trial' : '₱1,299 / month',
+        description:
+            'Full access free for 7 days, then ₱1,299/mo. Unlimited terminals & tables.',
+        features: _forType(const [
+          _Feature('Everything in Growth', true),
+          _Feature('Unlimited terminals', true),
+          _Feature('Unlimited tables & rooms', true),
+          _Feature('Multi-station kitchen', true),
+          _Feature('Custom role permissions', true),
+        ]),
+        isSelected: _selectedPlan == 'pro',
+        isBestValue: false,
+        onTap: () => setState(() => _selectedPlan = 'pro'),
+      ),
+    ];
 
-              const Text(
-                'Choose your plan',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+    return AuthScaffold(
+      maxWidth: 1000,
+      onBack: () => Navigator.pop(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AuthStepper(current: 3, label: 'Plan selection'),
+          const SizedBox(height: 24),
+          const Text('Choose your plan', style: AuthText.title),
+          const SizedBox(height: 6),
+          const Text('You can change this anytime.', style: AuthText.subtitle),
+          const SizedBox(height: 24),
+
+          // Side-by-side on wide windows, stacked on narrow ones.
+          LayoutBuilder(builder: (context, c) {
+            if (c.maxWidth >= 720) {
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      Expanded(child: cards[i]),
+                    ],
+                  ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Step 3 of 3 — You can change this anytime.',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 32),
-
-              // ── Plan cards ─────────────────────────────────────────────────
-              _PlanCard(
-                plan:        'starter',
-                title:       'Starter',
-                price:       '₱499 / month',
-                description: '1 terminal, up to 2 staff — everything a growing tindahan needs.',
-                features: const [
-                  _Feature('POS & orders',            true),
-                  _Feature('Unlimited products',      true),
-                  _Feature('Credits (utang)',         true),
-                  _Feature('Shifts',                  true),
-                  _Feature('Up to 5 active promos',   true),
-                  _Feature('Reports & Excel export',  false),
-                  _Feature('Kitchen display',         false),
-                  _Feature('Table management',        false),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  cards[i],
                 ],
-                isSelected: _selectedPlan == 'starter',
-                isBestValue: false,
-                onTap: () => setState(() => _selectedPlan = 'starter'),
-              ),
-              const SizedBox(height: 12),
-
-              _PlanCard(
-                plan:        'growth',
-                title:       'Growth',
-                price:       '₱799 / month',
-                description: 'Full access free for 7 days, then ₱799/mo. Up to 3 terminals, unlimited staff.',
-                features: const [
-                  _Feature('POS & orders',              true),
-                  _Feature('Unlimited products',        true),
-                  _Feature('Credits (utang)',           true),
-                  _Feature('Shifts',                    true),
-                  _Feature('Unlimited promos',          true),
-                  _Feature('Reports & Excel export',    true),
-                  _Feature('Kitchen display (1 station)', true),
-                  _Feature('Tables (up to 6, 1 room)',  true),
-                ],
-                isSelected:  _selectedPlan == 'growth',
-                isBestValue: true,
-                onTap: () => setState(() => _selectedPlan = 'growth'),
-              ),
-              const SizedBox(height: 12),
-
-              _PlanCard(
-                plan:        'pro',
-                title:       'Pro',
-                price:       '₱1,299 / month',
-                description: 'Full access free for 7 days, then ₱1,299/mo. Unlimited terminals & tables.',
-                features: const [
-                  _Feature('Everything in Growth',     true),
-                  _Feature('Unlimited terminals',      true),
-                  _Feature('Unlimited tables & rooms', true),
-                  _Feature('Multi-station kitchen',    true),
-                  _Feature('Custom role permissions',  true),
-                ],
-                isSelected:  _selectedPlan == 'pro',
-                isBestValue: false,
-                onTap: () => setState(() => _selectedPlan = 'pro'),
-              ),
-
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
               ],
+            );
+          }),
 
-              const SizedBox(height: 28),
+          AuthErrorSlot(_error),
+          const SizedBox(height: 24),
 
-              AppButton(
-                label:     _isLoading ? 'Setting up…' : _ctaLabel,
-                onPressed: _isLoading ? null : _submit,
-                icon:      Icons.check_rounded,
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: AuthButton(
+                label: _isLoading ? 'Setting up…' : _ctaLabel,
+                icon: Icons.check_rounded,
+                loading: _isLoading,
+                onPressed: _submit,
               ),
-
-              const SizedBox(height: 12),
-              Text(
-                'No credit card required. Trial ends in 7 days.',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          const Text(
+            'No credit card required. Trial ends in 7 days.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AuthColors.textMuted),
+          ),
+        ],
       ),
     );
   }
 
   String get _ctaLabel => switch (_selectedPlan) {
         'starter' => 'Start 7-day trial',
-        'growth'  => 'Start 7-day trial',
-        'pro'     => 'Start 7-day trial',
-        _         => 'Continue',
+        'growth' => 'Start 7-day trial',
+        'pro' => 'Start 7-day trial',
+        _ => 'Continue',
       };
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
 
 class _PlanCard extends StatelessWidget {
-  final String         plan;
-  final String         title;
-  final String         price;
-  final String         description;
+  final String plan;
+  final String title;
+  final String price;
+  final String description;
   final List<_Feature> features;
-  final bool           isSelected;
-  final bool           isBestValue;
-  final VoidCallback   onTap;
+  final bool isSelected;
+  final bool isBestValue;
+  final VoidCallback onTap;
 
   const _PlanCard({
     required this.plan,
@@ -253,128 +257,126 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: isSelected ? 2 : 1,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AuthColors.accent.withValues(alpha: 0.10)
+                : AuthColors.field,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AuthColors.accentLight : AuthColors.border,
+              width: isSelected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(title,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AuthColors.textPrimary)),
+                        if (isBestValue)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AuthColors.accent,
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                          ),
-                          if (isBestValue) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'Best value',
+                            child: const Text('Best value',
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        price,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected ? AppColors.primary : Colors.transparent,
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.border,
-                      width: 2,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white)),
+                          ),
+                      ],
                     ),
                   ),
-                  child: isSelected
-                      ? const Icon(Icons.check, size: 14, color: Colors.white)
-                      : null,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 10),
-            ...features.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(
-                        f.included
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.remove_circle_outline_rounded,
-                        size: 16,
-                        color: f.included
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
+                  const SizedBox(width: 8),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected
+                          ? AuthColors.accent
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected
+                            ? AuthColors.accentLight
+                            : AuthColors.textMuted,
+                        width: 2,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        f.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: f.included
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                        : null,
                   ),
-                )),
-          ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(price,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AuthColors.textPrimary)),
+              const SizedBox(height: 8),
+              Text(description,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AuthColors.textSecondary)),
+              const SizedBox(height: 14),
+              Container(height: 1, color: AuthColors.border),
+              const SizedBox(height: 12),
+              ...features.map((f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          f.included
+                              ? Icons.check_circle_rounded
+                              : Icons.remove_circle_outline_rounded,
+                          size: 16,
+                          color: f.included
+                              ? AuthColors.accentLight
+                              : AuthColors.textMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            f.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: f.included
+                                  ? AuthColors.textPrimary
+                                  : AuthColors.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
         ),
       ),
     );
@@ -383,53 +385,6 @@ class _PlanCard extends StatelessWidget {
 
 class _Feature {
   final String label;
-  final bool   included;
+  final bool included;
   const _Feature(this.label, this.included);
-}
-
-// ── Step indicator (matches register_screen.dart) ─────────────────────────────
-
-class _StepDot extends StatelessWidget {
-  final bool active;
-  final bool done;
-  const _StepDot({required this.active, required this.done});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: active ? AppColors.primary : AppColors.border,
-      ),
-      child: Center(
-        child: done
-            ? const Icon(Icons.check, color: Colors.white, size: 16)
-            : Text(
-                '3',
-                style: TextStyle(
-                  color: active ? Colors.white : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _StepLine extends StatelessWidget {
-  final bool active;
-  const _StepLine({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 2,
-        color: active ? AppColors.primary : AppColors.border,
-      ),
-    );
-  }
 }

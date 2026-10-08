@@ -11,6 +11,20 @@ import '../../../shared/widgets/app_colors.dart';
 import 'auth_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/staff_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+const _supportPhone = '09065790889';
+const _supportEmail = 'noblezaravenblair@gmail.com';
+const _supportMessenger = 'https://m.me/YOUR_PAGE_NAME'; // TODO: your page
+
+Future<void> _open(BuildContext context, Uri uri) async {
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open that app')),
+    );
+  }
+}
 
 class SubscriptionExpiredScreen extends ConsumerWidget {
   const SubscriptionExpiredScreen({super.key});
@@ -47,11 +61,43 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Please contact your provider to restore access.',
+                  'Contact support to reactivate your account.',
                   style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.call_rounded, size: 16),
+                      label: const Text('Call'),
+                      onPressed: () => _open(
+                          context, Uri(scheme: 'tel', path: _supportPhone)),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.sms_outlined, size: 16),
+                      label: const Text('Text'),
+                      onPressed: () => _open(
+                          context, Uri(scheme: 'sms', path: _supportPhone)),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.email_outlined, size: 16),
+                      label: const Text('Email'),
+                      onPressed: () => _open(
+                          context, Uri(scheme: 'mailto', path: _supportEmail)),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('Messenger'),
+                      onPressed: () =>
+                          _open(context, Uri.parse(_supportMessenger)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 OutlinedButton(
                   onPressed: () async {
                     ref.read(cartProvider.notifier).clear();

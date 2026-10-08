@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_provider.dart';
 import 'register_screen.dart';
 import 'widgets/auth_text_field.dart';
-import '../../shared/widgets/app_colors.dart';
-import '../../shared/widgets/app_button.dart';
+import 'widgets/auth_theme.dart';
+import 'widgets/auth_components.dart';
+
 
 // ── FIX: Removed import of main.dart ─────────────────────────────────────────
 // login_screen.dart previously imported main.dart to access DeviceRole and
@@ -93,154 +94,97 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 24),
-
-                  // Logo
-                  Center(
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.point_of_sale_rounded,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    'Welcome back',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Sign in to your POS account',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-
-                  AuthTextField(
-                    label: 'EMAIL',
-                    hint: 'you@example.com',
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    prefixIcon: Icons.mail_outline_rounded,
-                    validator: (v) =>
-                        (v == null || !v.contains('@'))
-                            ? 'Enter a valid email'
-                            : null,
-                  ),
-                  const SizedBox(height: 20),
-
-                  AuthTextField(
-                    label: 'PASSWORD',
-                    hint: '••••••••',
-                    controller: _passCtrl,
-                    isPassword: true,
-                    prefixIcon: Icons.lock_outline_rounded,
-                    validator: (v) =>
-                        (v == null || v.length < 6)
-                            ? 'Min 6 characters'
-                            : null,
-                  ),
-
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha:0.08),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _error!,
-                        style: const TextStyle(color: Colors.red, fontSize: 13),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () => Navigator.pushNamed(context, '/forgot-password'),
-                      child: const Text(
-                        'Forgot Password?',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  AppButton(
-                    label: _isLoading ? 'Signing in…' : 'Sign In',
-                    onPressed: _isLoading ? null : _submit,
-                  ),
-                  const SizedBox(height: 20),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Don't have an account? ",
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterScreen(),
-                          ),
-                        ),
-                        child: const Text(
-                          'Register',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                ],
+    return AuthScaffold(
+      maxWidth: 440,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AuthColors.accent,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(Icons.point_of_sale_rounded,
+                    color: Colors.white, size: 32),
               ),
             ),
-          ),
+            const SizedBox(height: 20),
+            const Text('Welcome back',
+                textAlign: TextAlign.center, style: AuthText.title),
+            const SizedBox(height: 6),
+            const Text('Sign in to your POS account',
+                textAlign: TextAlign.center, style: AuthText.subtitle),
+            const SizedBox(height: 28),
+
+            AuthTextField(
+              label: 'EMAIL',
+              hint: 'you@example.com',
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              prefixIcon: Icons.mail_outline_rounded,
+              validator: (v) =>
+                  (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+            ),
+            const SizedBox(height: 16),
+            AuthTextField(
+              label: 'PASSWORD',
+              hint: '••••••••',
+              controller: _passCtrl,
+              isPassword: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_isLoading) _submit();
+              },
+              prefixIcon: Icons.lock_outline_rounded,
+              validator: (v) =>
+                  (v == null || v.length < 6) ? 'Min 6 characters' : null,
+            ),
+
+            AuthErrorSlot(_error),
+
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
+                style: TextButton.styleFrom(
+                    foregroundColor: AuthColors.accentLight),
+                child: const Text('Forgot password?'),
+              ),
+            ),
+            const SizedBox(height: 4),
+
+            AuthButton(
+              label: _isLoading ? 'Signing in…' : 'Sign In',
+              loading: _isLoading,
+              onPressed: _submit,
+            ),
+            const SizedBox(height: 16),
+
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text("Don't have an account?", style: AuthText.subtitle),
+                TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                  ),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AuthColors.accentLight),
+                  child: const Text('Register'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
