@@ -201,6 +201,16 @@ class SyncQueueService {
         return 'product:$recordId';
       case 'adjust_variant_stock':
         return 'variant:$recordId';
+      case 'upsert_credit_customer':
+        return 'credit:$recordId';
+      case 'add_credit':
+        final creditPayload =
+            jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
+        final creditOrderId = creditPayload['order_id'] as String?;
+        // Utang tied to an order must replay after that order's insert (FK).
+        return creditOrderId != null
+            ? 'order:$creditOrderId'
+            : 'credit:${creditPayload['customer_id']}';
       case 'record_credit_payment':
         final payload =
             jsonDecode(entry['payload'] as String) as Map<String, dynamic>;
@@ -375,15 +385,32 @@ class SyncQueueService {
         );
 
       case 'insert_receipt':
-        // Idempotency: skip if receipt already exists
-        try {
-          await _client
-              .from('receipts')
-              .select('id')
-              .eq('receipt_number', recordId)
-              .single();
-          debugPrint('[SyncQueue] Receipt $recordId already exists, skipping');
-        } catch (_) {
+        // A receipt made offline carries a temporary order number. Rebuild
+        // its number from the order's official one. The order's insert_order
+        // entry always replays first (same conflict key).
+        final rcOrder = await _client
+            .from('orders')
+            .select('order_number')
+            .eq('id', payload['order_id'] as String)
+            .maybeSingle();
+        if (rcOrder != null) {
+          final issued =
+              DateTime.parse(payload['issued_at'] as String).toLocal();
+          final rcDate = '${issued.year}'
+              '${issued.month.toString().padLeft(2, '0')}'
+              '${issued.day.toString().padLeft(2, '0')}';
+          payload['receipt_number'] =
+              'RCP-$rcDate-${(rcOrder['order_number'] as int).toString().padLeft(6, '0')}';
+        }
+        final rcNumber = payload['receipt_number'] as String;
+        final rcExisting = await _client
+            .from('receipts')
+            .select('id')
+            .eq('receipt_number', rcNumber)
+            .maybeSingle();
+        if (rcExisting != null) {
+          debugPrint('[SyncQueue] Receipt $rcNumber already exists, skipping');
+        } else {
           await _client.from('receipts').insert(payload);
         }
 
@@ -461,70 +488,34 @@ class SyncQueueService {
           await _recomputeOrderTotals(payload['order_id'] as String);
         }
 
-      case 'record_credit_payment':
-        // Idempotency: skip if payment transaction already exists
-        final existingPayment = await _client
-            .from('credit_transactions')
-            .select('id')
-            .eq('id', payload['payment_tx_id'] as String)
-            .maybeSingle();
-        if (existingPayment != null) {
-          debugPrint(
-              '[SyncQueue] record_credit_payment already synced, skipping');
-          break;
+      case 'upsert_credit_customer':
+        await _client.from('credit_customers').upsert(payload,
+            onConflict: 'id', ignoreDuplicates: true);
+
+      case 'add_credit':
+        final creditCustomer = payload['customer'] as Map<String, dynamic>?;
+        if (creditCustomer != null) {
+          await _client.from('credit_customers').upsert(creditCustomer,
+              onConflict: 'id', ignoreDuplicates: true);
         }
-
-        final customerId = payload['customer_id'] as String;
-        final amount = (payload['amount'] as num).toDouble();
-        final paymentTxId = payload['payment_tx_id'] as String;
-
-        await _client.from('credit_transactions').insert({
-          'id': paymentTxId,
-          'customer_id': customerId,
-          'business_id': payload['business_id'],
-          'type': 'payment',
-          'amount': amount,
-          'amount_remaining': 0,
-          'is_settled': true,
-          'note': payload['note'],
-          'created_at': payload['created_at'],
+        await _client.rpc('add_credit', params: {
+          'p_id': recordId,
+          'p_customer_id': payload['customer_id'],
+          'p_business_id': payload['business_id'],
+          'p_amount': payload['amount'],
+          'p_note': payload['note'],
+          'p_order_id': payload['order_id'],
+          'p_created_at': payload['created_at'],
         });
 
-        // FIFO settlement against unsettled credits
-        final unsettled = await _client
-            .from('credit_transactions')
-            .select()
-            .eq('customer_id', customerId)
-            .eq('type', 'credit')
-            .eq('is_settled', false)
-            .order('created_at', ascending: true);
-
-        double remaining = amount;
-        for (final row in unsettled as List) {
-          if (remaining <= 0) break;
-          final creditTxId = row['id'] as String;
-          final amtRemaining = (row['amount_remaining'] as num).toDouble();
-          final applied = remaining >= amtRemaining ? amtRemaining : remaining;
-          final newRemaining = amtRemaining - applied;
-          remaining -= applied;
-
-          await _client.from('credit_transactions').update({
-            'amount_remaining': newRemaining,
-            'is_settled': newRemaining == 0,
-            'settled_at':
-                newRemaining == 0 ? DateTime.now().toIso8601String() : null,
-          }).eq('id', creditTxId);
-
-          await _client.from('credit_settlements').insert({
-            'payment_tx_id': paymentTxId,
-            'credit_tx_id': creditTxId,
-            'amount_applied': applied,
-          });
-        }
-
-        await _client.rpc('decrement_credit_owed', params: {
-          'p_customer_id': customerId,
-          'p_amount': amount,
+      case 'record_credit_payment':
+        await _client.rpc('apply_credit_payment', params: {
+          'p_payment_id': payload['payment_tx_id'],
+          'p_customer_id': payload['customer_id'],
+          'p_business_id': payload['business_id'],
+          'p_amount': payload['amount'],
+          'p_note': payload['note'],
+          'p_created_at': payload['created_at'],
         });
 
       case 'void_order':
@@ -788,9 +779,25 @@ class SyncQueueService {
     final items = (payload['items'] as List).cast<Map<String, dynamic>>();
     final orderPayload = Map<String, dynamic>.from(payload)..remove('items');
 
-    await _client
+    // Check first: an upsert with ignoreDuplicates still fires the
+    // BEFORE INSERT trigger on retries and would burn a number.
+    final existingOrder = await _client
         .from('orders')
-        .upsert(orderPayload, onConflict: 'id', ignoreDuplicates: true);
+        .select('order_number')
+        .eq('id', orderId)
+        .maybeSingle();
+    final int serverNumber;
+    if (existingOrder == null) {
+      final inserted = await _client
+          .from('orders')
+          .insert(orderPayload)
+          .select('order_number')
+          .single();
+      serverNumber = inserted['order_number'] as int;
+    } else {
+      serverNumber = existingOrder['order_number'] as int;
+    }
+    await _local.updateOrderNumber(orderId, serverNumber);
 
     final existing = await _client
         .from('order_items')

@@ -1,7 +1,6 @@
 // lib/core/services/credit_service.dart
 
-import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../models/credit.dart';
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
+import 'sync_queue_service.dart';
 
 final creditServiceProvider = Provider<CreditService>((ref) {
   return CreditService(
@@ -32,6 +32,10 @@ class CreditService {
   // ── Customers ──────────────────────────────────────────────────────────────
 
   Future<List<CreditCustomer>> getCustomers(String businessId) async {
+    // Unsynced utang/payments exist: the server balance is stale, trust local.
+    if (await _db.pendingQueueCount() > 0) {
+      return _localCustomers(businessId);
+    }
     try {
       final rows = await _supabase
           .from('credit_customers')
@@ -51,6 +55,17 @@ class CreditService {
       );
       return rows.map(_customerFromMap).toList();
     }
+  }
+
+  Future<List<CreditCustomer>> _localCustomers(String businessId) async {
+    final d = await _db.db;
+    final rows = await d.query(
+      'credit_customers',
+      where: 'business_id = ?',
+      whereArgs: [businessId],
+      orderBy: 'name ASC',
+    );
+    return rows.map(_customerFromMap).toList();
   }
 
   Future<void> _cacheCustomers(List<CreditCustomer> customers) async {
@@ -92,24 +107,44 @@ class CreditService {
     required String name,
     required String phone,
   }) async {
-    final row = await _supabase
-        .from('credit_customers')
-        .insert({
-          'business_id': businessId,
-          'name': name,
-          'phone': phone,
-          'total_owed': 0.0,
-        })
-        .select()
-        .single();
-
-    final customer = _customerFromMap(row);
+    final now = DateTime.now().toUtc();
+    final customer = CreditCustomer(
+      id: _uuid(),
+      businessId: businessId,
+      name: name,
+      phone: phone,
+      totalOwed: 0,
+      createdAt: now,
+      updatedAt: now,
+    );
     final d = await _db.db;
     await d.insert('credit_customers', _customerToLocalRow(customer),
         conflictAlgorithm: ConflictAlgorithm.replace);
+
+    final row = {
+      'id': customer.id,
+      'business_id': businessId,
+      'name': name,
+      'phone': phone,
+    };
+    if (_isOnline) {
+      try {
+        await _supabase
+            .from('credit_customers')
+            .upsert(row, onConflict: 'id', ignoreDuplicates: true);
+        return customer;
+      } catch (e) {
+        debugPrint('[Credit] createCustomer failed, queuing: $e');
+      }
+    }
+    await _ref.read(syncQueueServiceProvider).enqueue(
+          operation: 'upsert_credit_customer',
+          tableName: 'credit_customers',
+          recordId: customer.id,
+          payload: row,
+        );
     return customer;
   }
-
   // ── Transactions ───────────────────────────────────────────────────────────
 
   Future<List<CreditTransaction>> getTransactions(String customerId) async {
@@ -132,7 +167,7 @@ class CreditService {
     }
   }
 
-  /// Add utang — called at checkout
+  /// Add utang. Local first, then server (or queue). Idempotent on the tx id.
   Future<void> addCredit({
     required String customerId,
     required String businessId,
@@ -140,31 +175,15 @@ class CreditService {
     String? note,
     String? orderId,
   }) async {
-    final txRow = await _supabase
-        .from('credit_transactions')
-        .insert({
-          'customer_id': customerId,
-          'business_id': businessId,
-          'type': 'credit',
-          'amount': amount,
-          'amount_remaining': amount,
-          'is_settled': false,
-          'note': note,
-          'order_id': orderId,
-        })
-        .select()
-        .single();
+    final txId = _uuid();
+    final createdAt = DateTime.now().toUtc().toIso8601String();
 
-    await _supabase.rpc('increment_credit_owed', params: {
-      'p_customer_id': customerId,
-      'p_amount': amount,
-    });
-
-    // Mirror to SQLite
     final d = await _db.db;
+    final custRows = await d.query('credit_customers',
+        where: 'id = ?', whereArgs: [customerId], limit: 1);
     await d.transaction((txn) async {
       await txn.insert('credit_transactions', {
-        'id': txRow['id'],
+        'id': txId,
         'customer_id': customerId,
         'business_id': businessId,
         'type': 'credit',
@@ -173,188 +192,108 @@ class CreditService {
         'is_settled': 0,
         'note': note,
         'order_id': orderId,
-        'created_at': txRow['created_at'],
+        'created_at': createdAt,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       await txn.rawUpdate(
         'UPDATE credit_customers SET total_owed = total_owed + ?, updated_at = ? WHERE id = ?',
-        [amount, DateTime.now().toIso8601String(), customerId],
+        [amount, createdAt, customerId],
       );
     });
+
+    if (_isOnline) {
+      try {
+        await _supabase.rpc('add_credit', params: {
+          'p_id': txId,
+          'p_customer_id': customerId,
+          'p_business_id': businessId,
+          'p_amount': amount,
+          'p_note': note,
+          'p_order_id': orderId,
+          'p_created_at': createdAt,
+        });
+        return;
+      } catch (e) {
+        debugPrint('[Credit] add_credit failed, queuing: $e');
+      }
+    }
+
+    final c = custRows.isEmpty ? null : custRows.first;
+    await _ref.read(syncQueueServiceProvider).enqueue(
+      operation: 'add_credit',
+      tableName: 'credit_transactions',
+      recordId: txId,
+      payload: {
+        'customer_id': customerId,
+        'business_id': businessId,
+        'amount': amount,
+        'note': note,
+        'order_id': orderId,
+        'created_at': createdAt,
+        // Lets the replay create the customer first if it isn't on the server.
+        if (c != null)
+          'customer': {
+            'id': c['id'],
+            'business_id': c['business_id'],
+            'name': c['name'],
+            'phone': c['phone'],
+          },
+      },
+    );
   }
 
-  /// Record payment — FIFO online, simple offline with sync queue.
+  /// Record a payment. Local first, then one atomic server call (or queue).
   Future<PaymentResult> recordPayment({
     required String customerId,
     required String businessId,
     required double amount,
     String? note,
   }) async {
-    final now = DateTime.now();
-    // Pre-generate ID so both online and offline paths use the same one,
-    // making the sync queue replay idempotent via upsert.
     final paymentTxId = _uuid();
+    final createdAt = DateTime.now().toUtc().toIso8601String();
 
-    // ── Offline fast path ───────────────────────────────────────────────────
-    //
-    // Why check online here instead of using isOnlineProvider?
-    // CreditService is a plain class with no Ref — it doesn't have access
-    // to Riverpod providers. A lightweight probe is the cleanest option.
-    if (!_isOnline) {
-      // 1. Save payment locally so the cashier sees it immediately
-      await _db.insertCreditTransaction(
-        id: paymentTxId,
-        customerId: customerId,
-        businessId: businessId,
-        type: 'payment',
-        amount: amount,
-        note: note,
-        createdAt: now.toIso8601String(),
-      );
+    await _db.insertCreditTransaction(
+      id: paymentTxId,
+      customerId: customerId,
+      businessId: businessId,
+      type: 'payment',
+      amount: amount,
+      note: note,
+      createdAt: createdAt,
+    );
+    await _db.updateCreditCustomerOwed(customerId: customerId, delta: -amount);
 
-      // 2. Reduce local total_owed so the UI reflects the payment
-      await _db.updateCreditCustomerOwed(
-        customerId: customerId,
-        delta: -amount,
-      );
-
-      // 3. Queue for sync when back online.
-      //    The replay handler in sync_queue_service.dart will do the full
-      //    FIFO settlement against Supabase when connectivity returns.
-      final d = await _db.db;
-      await d.insert('sync_queue', {
-        'operation': 'record_credit_payment',
-        'table_name': 'credit_transactions',
-        'record_id': paymentTxId,
-        'payload': jsonEncode({
-          'payment_tx_id': paymentTxId,
-          'customer_id': customerId,
-          'business_id': businessId,
-          'amount': amount,
-          'note': note,
-          'created_at': now.toIso8601String(),
-        }),
-        'created_at': now.toIso8601String(),
-        'retries': 0,
-      });
-
-      return PaymentResult(
-        paymentTxId: paymentTxId,
-        settledCredits: [],
-        leftoverCredit: 0,
-      );
+    if (_isOnline) {
+      try {
+        await _supabase.rpc('apply_credit_payment', params: {
+          'p_payment_id': paymentTxId,
+          'p_customer_id': customerId,
+          'p_business_id': businessId,
+          'p_amount': amount,
+          'p_note': note,
+          'p_created_at': createdAt,
+        });
+        return PaymentResult(
+            paymentTxId: paymentTxId, settledCredits: const [], leftoverCredit: 0);
+      } catch (e) {
+        debugPrint('[Credit] apply_credit_payment failed, queuing: $e');
+      }
     }
 
-    // ── Online path ─────────────────────────────────────────────────────────
-
-    // 1. Fetch all unsettled credit transactions, oldest first (FIFO)
-    final unsettled = await _supabase
-        .from('credit_transactions')
-        .select()
-        .eq('customer_id', customerId)
-        .eq('type', 'credit')
-        .eq('is_settled', false)
-        .order('created_at', ascending: true);
-
-    // 2. Insert the payment transaction using the pre-generated ID
-    //    so the offline and online records always share the same UUID.
-    final paymentRow = await _supabase
-        .from('credit_transactions')
-        .insert({
-          'id': paymentTxId,
-          'customer_id': customerId,
-          'business_id': businessId,
-          'type': 'payment',
-          'amount': amount,
-          'amount_remaining': 0,
-          'is_settled': true,
-          'note': note,
-        })
-        .select()
-        .single();
-
-    // 3. Apply FIFO settlement
-    double remaining = amount;
-    final settlements = <Map<String, dynamic>>[];
-    final creditUpdates = <Map<String, dynamic>>[];
-
-    for (final row in unsettled) {
-      if (remaining <= 0) break;
-
-      final creditTxId = row['id'] as String;
-      final amountRemaining = (row['amount_remaining'] as num).toDouble();
-      final applied =
-          remaining >= amountRemaining ? amountRemaining : remaining;
-      final newRemaining = amountRemaining - applied;
-      remaining -= applied;
-
-      settlements.add({
+    await _ref.read(syncQueueServiceProvider).enqueue(
+      operation: 'record_credit_payment',
+      tableName: 'credit_transactions',
+      recordId: paymentTxId,
+      payload: {
         'payment_tx_id': paymentTxId,
-        'credit_tx_id': creditTxId,
-        'amount_applied': applied,
-      });
-
-      creditUpdates.add({
-        'id': creditTxId,
-        'amount_remaining': newRemaining,
-        'is_settled': newRemaining == 0,
-        'settled_at':
-            newRemaining == 0 ? DateTime.now().toIso8601String() : null,
-      });
-    }
-
-    // 4. Batch-update each affected credit transaction in Supabase
-    for (final update in creditUpdates) {
-      await _supabase
-          .from('credit_transactions')
-          .update({
-            'amount_remaining': update['amount_remaining'],
-            'is_settled': update['is_settled'],
-            'settled_at': update['settled_at'],
-          })
-          .eq('id', update['id']);
-    }
-
-    // 5. Insert settlement records
-    if (settlements.isNotEmpty) {
-      await _supabase.from('credit_settlements').insert(settlements);
-    }
-
-    // 6. Update customer total_owed — only deduct what was actually applied
-    final actuallyApplied = amount - remaining;
-    if (actuallyApplied > 0) {
-      await _supabase.rpc('decrement_credit_owed', params: {
-        'p_customer_id': customerId,
-        'p_amount': actuallyApplied,
-      });
-    }
-
-    // 7. Mirror payment to SQLite
-    final d = await _db.db;
-    await d.transaction((txn) async {
-      await txn.insert('credit_transactions', {
-        'id': paymentTxId,
         'customer_id': customerId,
         'business_id': businessId,
-        'type': 'payment',
         'amount': amount,
         'note': note,
-        'order_id': null,
-        'created_at': paymentRow['created_at'],
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-      await txn.rawUpdate(
-        'UPDATE credit_customers SET total_owed = MAX(0, total_owed - ?), updated_at = ? WHERE id = ?',
-        [amount, DateTime.now().toIso8601String(), customerId],
-      );
-    });
-
-    return PaymentResult(
-      paymentTxId: paymentTxId,
-      settledCredits: creditUpdates
-          .where((u) => u['is_settled'] == true)
-          .map((u) => u['id'] as String)
-          .toList(),
-      leftoverCredit: remaining,
+        'created_at': createdAt,
+      },
     );
+    return PaymentResult(
+        paymentTxId: paymentTxId, settledCredits: const [], leftoverCredit: 0);
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────────
@@ -390,7 +329,7 @@ class CreditService {
         amountRemaining: r['amount_remaining'] != null
             ? (r['amount_remaining'] as num).toDouble()
             : null,
-        isSettled: r['is_settled'] as bool? ?? false,
+        isSettled: r['is_settled'] == true || r['is_settled'] == 1,
         settledAt: r['settled_at'] != null
             ? DateTime.parse(r['settled_at'] as String)
             : null,

@@ -48,12 +48,21 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
       _loading = true;
       _error = null;
     });
-    await ref.read(creditCustomersProvider.notifier).recordPayment(
-          customerId: widget.customer.id,
-          amount: amount,
-          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-        );
-    if (mounted) Navigator.pop(context, true);
+    try {
+      await ref.read(creditCustomersProvider.notifier).recordPayment(
+            customerId: widget.customer.id,
+            amount: amount,
+            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          );
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Payment failed. Please try again.';
+        });
+      }
+    }
   }
 
   @override

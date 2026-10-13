@@ -15,6 +15,7 @@ import 'widgets/shifts_tab.dart';
 import 'widgets/audit_log_tab.dart';
 import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
+import '../../core/providers/shift_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAYOUT HELPER
@@ -39,6 +40,8 @@ class ReportsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(currentShiftProvider,
+        (_, __) => ref.invalidate(shiftReportProvider));
     final selectedDate = ref.watch(selectedDateProvider);
     final dateRange = ref.watch(dateRangeProvider);
     final activeTab = ref.watch(reportTabProvider);
@@ -93,8 +96,12 @@ class ReportsScreen extends ConsumerWidget {
             activeTab: activeTab,
             dailyReport: dailyReport,
             shifts: shifts,
-            onTabChanged: (t) =>
-                ref.read(reportTabProvider.notifier).state = t,
+            onTabChanged: (t) {
+              ref.read(reportTabProvider.notifier).state = t;
+              if (t == ReportTab.shifts) {
+                ref.invalidate(shiftReportProvider);
+              }
+            },
             onPrev: isRangeMode
                 ? null
                 : () => ref.read(selectedDateProvider.notifier).state =

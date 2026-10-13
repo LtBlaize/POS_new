@@ -458,7 +458,7 @@ class OrderService {
 
     final offlineId = orderId;
     final now = DateTime.now();
-    final localOrderNumber = now.millisecondsSinceEpoch;
+    final localOrderNumber = await _local.nextLocalOrderNumber(businessId);
 
     final order = Order(
       id: offlineId,
@@ -503,7 +503,7 @@ class OrderService {
         'tip_amount': tipAmount,
         'total_amount': totalAmount,
         'notes': notes,
-        'created_at': now.toIso8601String(),
+        'created_at': now.toUtc().toIso8601String(),
         'items': itemPayloads,
       },
     );
@@ -750,7 +750,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
       'amount_tendered': amountTendered,
       'change_amount': changeAmount,
       'reference_number': referenceNumber,
-      'paid_at': DateTime.now().toIso8601String(),
+      'paid_at': DateTime.now().toUtc().toIso8601String(),
     };
 
     final insertPending = await _local.isOrderPendingSync(orderId);

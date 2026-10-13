@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/credit.dart';
 import '../services/credit_service.dart';
 import '../providers/app_context_provider.dart';
+import '../services/sync_queue_service.dart';
 
 final creditCustomersProvider =
     AsyncNotifierProvider<CreditCustomersNotifier, List<CreditCustomer>>(
@@ -12,6 +13,7 @@ final creditCustomersProvider =
 class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
   @override
   Future<List<CreditCustomer>> build() async {
+    ref.watch(syncCompleteProvider); // reload balances after the queue syncs
     final businessId = ref.watch(activeBusinessIdProvider);
     if (businessId == null) return [];
     return ref.read(creditServiceProvider).getCustomers(businessId);

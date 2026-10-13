@@ -507,7 +507,7 @@ final dailyReportProvider =
 });
 
 final shiftReportProvider =
-    FutureProvider.family<List<ShiftEntry>, DateTime>((ref, date) async {
+    FutureProvider.autoDispose.family<List<ShiftEntry>, DateTime>((ref, date) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return [];
 

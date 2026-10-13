@@ -104,7 +104,7 @@ class ReceiptService {
       'currency': currency,
       'footer_text': footerText,
       'issued_by': issuedBy,
-      'issued_at': now.toIso8601String(),
+      'issued_at': now.toUtc().toIso8601String(),
     };
 
     if (!_isOnline) {

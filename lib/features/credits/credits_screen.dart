@@ -508,13 +508,10 @@ class _CustomerDetail extends ConsumerWidget {
     if (result == true) {
       ref.invalidate(creditTransactionsProvider(customer.id));
       ref.invalidate(creditCustomersProvider);
-      await Future.delayed(Duration.zero);
-      final updated = ref
-          .read(creditCustomersProvider)
-          .value
-          ?.firstWhere((c) => c.id == customer.id,
-              orElse: () => customer);
-      if (updated != null) onUpdated(updated);
+      final list = await ref.read(creditCustomersProvider.future);
+      final updated = list.firstWhere((c) => c.id == customer.id,
+          orElse: () => customer);
+      onUpdated(updated);
     }
   }
 }

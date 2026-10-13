@@ -9,17 +9,23 @@ import '../../../core/providers/credit_provider.dart';
 /// Result returned when user confirms utang at checkout
 class AddCreditResult {
   final CreditCustomer customer;
-  const AddCreditResult(this.customer);
+  final String? note;
+  const AddCreditResult(this.customer, {this.note});
 }
 
 class AddCreditDialog extends ConsumerStatefulWidget {
   final double amount;
   final String? orderId;
 
+  /// true at checkout: only pick the customer, the caller records the utang
+  /// after the order exists.
+  final bool deferCredit;
+
   const AddCreditDialog({
     super.key,
     required this.amount,
     this.orderId,
+    this.deferCredit = false,
   });
 
   @override
@@ -101,13 +107,19 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
     try {
       final notifier = ref.read(creditCustomersProvider.notifier);
       final customer = await notifier.findOrCreate(name: name, phone: phone);
-      await notifier.addCredit(
-        customerId: customer.id,
-        amount: widget.amount,
-        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-        orderId: widget.orderId,
-      );
-      if (mounted) Navigator.pop(context, AddCreditResult(customer));
+      final note =
+          _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
+      if (!widget.deferCredit) {
+        await notifier.addCredit(
+          customerId: customer.id,
+          amount: widget.amount,
+          note: note,
+          orderId: widget.orderId,
+        );
+      }
+      if (mounted) {
+        Navigator.pop(context, AddCreditResult(customer, note: note));
+      }
     } catch (e) {
       setState(() {
         _error = 'Something went wrong';

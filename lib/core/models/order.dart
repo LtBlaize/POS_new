@@ -185,9 +185,9 @@ class Order {
       customerName: map['customer_name'] as String?,
       notes: map['notes'] as String?,
       paidAt: map['paid_at'] != null
-          ? DateTime.parse(map['paid_at'] as String)
+          ? DateTime.parse(map['paid_at'] as String).toLocal()
           : null,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
       items: items,
     );
   }

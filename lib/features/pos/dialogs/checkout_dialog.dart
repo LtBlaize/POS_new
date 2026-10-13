@@ -25,7 +25,7 @@ import '../../settings/settings_provider.dart';
 import '../../auth/manager_override_dialog.dart';
 import '../../../core/services/audit_service.dart';
 import '../../../core/providers/role_permissions_provider.dart';
-import '../../../core/services/credit_service.dart';
+import '../../../core/providers/credit_provider.dart';
 import '../../../core/providers/order_provider.dart';
 
 /// Frees the table after a CONFIRMED payment, unless another unpaid order is
@@ -1354,7 +1354,8 @@ class _UtangButton extends ConsumerWidget {
           : () async {
               final result = await showDialog<AddCreditResult>(
                 context: context,
-                builder: (_) => AddCreditDialog(amount: subtotal),
+                builder: (_) =>
+                    AddCreditDialog(amount: subtotal, deferCredit: true),
               );
               if (result == null || !context.mounted) return;
 
@@ -1399,15 +1400,26 @@ class _UtangButton extends ConsumerWidget {
               // Record the credit debt against the selected customer
               if (checkoutResult.order != null) {
                 try {
-                  await ref.read(creditServiceProvider).addCredit(
-                    customerId: result.customer.id,
-                    businessId: result.customer.businessId,
-                    amount: subtotal,
-                    orderId: checkoutResult.order!.id,
-                    note: 'Utang — order #${checkoutResult.order!.orderNumber}',
-                  );
+                  await ref.read(creditCustomersProvider.notifier).addCredit(
+                        customerId: result.customer.id,
+                        amount: subtotal,
+                        orderId: checkoutResult.order!.id,
+                        note: [
+                          'Utang — order #${checkoutResult.order!.orderNumber}',
+                          if (result.note != null) result.note!,
+                        ].join(' · '),
+                      );
                 } catch (e) {
                   debugPrint('[Utang] Credit record failed: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Order saved, but utang for ${result.customer.name} '
+                          'was NOT recorded. Add it manually.'),
+                      backgroundColor: CheckoutTheme.rose,
+                      behavior: SnackBarBehavior.floating,
+                    ));
+                  }
                 }
               }
 

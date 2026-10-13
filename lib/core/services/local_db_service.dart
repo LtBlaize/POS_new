@@ -1744,6 +1744,26 @@ class LocalDbService {
         limit: 1);
     return rows.isNotEmpty;
   }
+  /// Temporary number for an order made offline: one past the highest real
+  /// number this device knows. The server's official number replaces it on
+  /// sync. The < 1e9 filter ignores old millisecond-style numbers.
+  Future<int> nextLocalOrderNumber(String businessId) async {
+    final d = await db;
+    final r = await d.rawQuery(
+        'SELECT MAX(order_number) AS m FROM orders '
+        'WHERE business_id = ? AND order_number < 1000000000',
+        [businessId]);
+    return ((r.first['m'] as int?) ?? 0) + 1;
+  }
+
+  /// Offline orders get a temporary local number; once the server assigns
+  /// the official per-business number, overwrite the local one.
+  Future<void> updateOrderNumber(String orderId, int orderNumber) =>
+      _write((d) async {
+        await d.update('orders', {'order_number': orderNumber},
+            where: 'id = ?', whereArgs: [orderId]);
+      });
+
   Future<void> markOrderSynced(String orderId) async {
     final d = await db;
     await d.update(
@@ -1847,9 +1867,9 @@ class LocalDbService {
         notes: row['notes'] as String?,
         customerName: row['customer_name'] as String?,
         paidAt: row['paid_at'] != null
-            ? DateTime.parse(row['paid_at'] as String)
+            ? DateTime.parse(row['paid_at'] as String).toLocal()
             : null,
-        createdAt: DateTime.parse(row['created_at'] as String),
+        createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
         items: items,
       );
 

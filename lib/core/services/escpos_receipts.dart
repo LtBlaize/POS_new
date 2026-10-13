@@ -76,7 +76,7 @@ class EscPosReceipts {
               align: PosAlign.center, bold: true, height: PosTextSize.size2)));
     }
     b.addAll(g.text('Order #${order.orderNumber}'));
-    final d = order.createdAt;
+    final d = order.createdAt.toLocal();
     b.addAll(g.text('${d.year}-${d.month.toString().padLeft(2, '0')}-'
         '${d.day.toString().padLeft(2, '0')} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}'));

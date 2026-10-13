@@ -441,20 +441,6 @@ class ShiftService {
         tally(o);
       }
 
-      // ── Tally credit given ─────────────────────────────────────────────────
-      try {
-        final credits = await _supabase
-            .from('credit_transactions')
-            .select('amount')
-            .eq('business_id', businessId)
-            .eq('type', 'credit')
-            .gte('created_at', from.toUtc().toIso8601String())
-            .lte('created_at', to.toUtc().toIso8601String());
-
-        for (final c in credits) {
-          creditGiven += (c['amount'] as num).toDouble();
-        }
-      } catch (_) {}
 
       // ── Tally credits paid (payments collected on existing utang) ──────────
       try {
@@ -492,20 +478,6 @@ class ShiftService {
       }
       await tallySplitOrders();
 
-      // Credit given — offline
-      try {
-        final creditRows = await d.rawQuery('''
-          SELECT amount FROM credit_transactions
-          WHERE type = 'credit'
-            AND created_at >= ? AND created_at <= ?
-        ''', [
-          from.toUtc().toIso8601String(),
-          to.toUtc().toIso8601String(),
-        ]);
-        for (final c in creditRows) {
-          creditGiven += (c['amount'] as num).toDouble();
-        }
-      } catch (_) {}
 
       // Credits paid — offline
       try {
