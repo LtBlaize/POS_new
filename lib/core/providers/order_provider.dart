@@ -721,7 +721,24 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
 
   // ── Process payment ─────────────────────────────────────────────────────────
 
-  Future<void> processPayment({
+    Future<void> processPayment({
+    required String orderId,
+    required PaymentMethod method,
+    required double amountTendered,
+    required double changeAmount,
+    String? referenceNumber,
+  }) async {
+    await _processPaymentCore(
+      orderId: orderId,
+      method: method,
+      amountTendered: amountTendered,
+      changeAmount: changeAmount,
+      referenceNumber: referenceNumber,
+    );
+    await _completeIfNothingToCook(orderId);
+  }
+
+  Future<void> _processPaymentCore({
     required String orderId,
     required PaymentMethod method,
     required double amountTendered,
@@ -789,7 +806,23 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   // populated with the dominant leg for backward compatibility with any
   // code reading those columns directly; order_payments is the real
   // breakdown and is_split_payment marks the order as one to look up.
-  Future<List<OrderPayment>> processSplitPayment({
+    Future<List<OrderPayment>> processSplitPayment({
+    required String orderId,
+    required String businessId,
+    required List<PaymentSplitInput> payments,
+    double changeAmount = 0,
+  }) async {
+    final result = await _processSplitPaymentCore(
+      orderId: orderId,
+      businessId: businessId,
+      payments: payments,
+      changeAmount: changeAmount,
+    );
+    await _completeIfNothingToCook(orderId);
+    return result;
+  }
+
+  Future<List<OrderPayment>> _processSplitPaymentCore({
     required String orderId,
     required String businessId,
     required List<PaymentSplitInput> payments,
@@ -1297,6 +1330,23 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     final cached = orders.where((o) => o.id == orderId).firstOrNull;
     if (cached != null) return cached;
     throw Exception('Order $orderId not found in local cache');
+  }
+
+    /// After payment: if every item is already served (nothing for the kitchen
+  /// to do), the order is finished. Without this, retail-only orders stay
+  /// "pending" forever because only the kitchen advances status.
+  Future<void> _completeIfNothingToCook(String orderId) async {
+    try {
+      final order = await fetchOrderWithItems(orderId);
+      if (order.status == OrderStatus.completed ||
+          order.status == OrderStatus.cancelled) return;
+      if (order.items.isNotEmpty &&
+          order.items.every((i) => i.kitchenStatus == 'served')) {
+        await updateStatus(orderId, OrderStatus.completed);
+      }
+    } catch (e) {
+      debugPrint('[OrderService] completeIfNothingToCook (non-fatal): $e');
+    }
   }
 
   // ── Cost resolution ─────────────────────────────────────────────────────────

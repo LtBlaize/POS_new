@@ -1,7 +1,7 @@
 // lib/features/settings/widgets/printer_settings_section.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:printing/printing.dart';
+import '../../../core/services/thermal_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/widgets/app_colors.dart';
@@ -19,11 +19,11 @@ class PrinterSettingsState {
   final bool is58mm;
   final String? selectedPrinterName;
   final String? selectedPrinterUrl;
-  final List<Printer> availablePrinters;
+  final List<PrinterDevice> availablePrinters;
   final bool isLoadingPrinters;
 
   const PrinterSettingsState({
-    this.is58mm = false,
+    this.is58mm = true,
     this.selectedPrinterName,
     this.selectedPrinterUrl,
     this.availablePrinters = const [],
@@ -34,7 +34,7 @@ class PrinterSettingsState {
     bool? is58mm,
     String? selectedPrinterName,
     String? selectedPrinterUrl,
-    List<Printer>? availablePrinters,
+    List<PrinterDevice>? availablePrinters,
     bool? isLoadingPrinters,
   }) =>
       PrinterSettingsState(
@@ -55,9 +55,9 @@ class PrinterSettingsNotifier extends StateNotifier<PrinterSettingsState> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     state = state.copyWith(
-      is58mm: prefs.getBool(PrinterPrefsKeys.is58mm) ?? false,
-      selectedPrinterName: prefs.getString(PrinterPrefsKeys.name),
-      selectedPrinterUrl: prefs.getString(PrinterPrefsKeys.url),
+      is58mm: prefs.getBool(PrinterPrefsKeys.is58mm) ?? true,
+      selectedPrinterName: prefs.getString(PrinterPrefs2.name),
+      selectedPrinterUrl: prefs.getString(PrinterPrefs2.id),
     );
   }
 
@@ -67,20 +67,19 @@ class PrinterSettingsNotifier extends StateNotifier<PrinterSettingsState> {
     state = state.copyWith(is58mm: value);
   }
 
-  Future<void> selectPrinter(Printer printer) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(PrinterPrefsKeys.name, printer.name);
-    await prefs.setString(PrinterPrefsKeys.url, printer.url.toString());
+  Future<void> selectPrinter(PrinterDevice printer) async {
+    await ThermalTransport.saveSelection(printer);
     state = state.copyWith(
       selectedPrinterName: printer.name,
-      selectedPrinterUrl: printer.url.toString(),
+      selectedPrinterUrl: printer.id,
     );
   }
 
   Future<void> clearPrinter() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(PrinterPrefsKeys.name);
-    await prefs.remove(PrinterPrefsKeys.url);
+    await prefs.remove(PrinterPrefs2.kind);
+    await prefs.remove(PrinterPrefs2.id);
+    await prefs.remove(PrinterPrefs2.name);
     state = PrinterSettingsState(
       is58mm: state.is58mm,
       availablePrinters: state.availablePrinters,
@@ -90,7 +89,7 @@ class PrinterSettingsNotifier extends StateNotifier<PrinterSettingsState> {
   Future<void> refreshPrinters() async {
     state = state.copyWith(isLoadingPrinters: true);
     try {
-      final printers = await Printing.listPrinters();
+      final printers = await ThermalTransport.listDevices();
       state = state.copyWith(
         availablePrinters: printers,
         isLoadingPrinters: false,
@@ -218,7 +217,7 @@ class _PrinterSettingsSectionState
                     ]
                   : settings.availablePrinters.map((printer) {
                       final isSelected =
-                          printer.name == settings.selectedPrinterName;
+                          printer.id == settings.selectedPrinterUrl;
                       return _PrinterListTile(
                         printer: printer,
                         isSelected: isSelected,
@@ -317,7 +316,7 @@ class _TestPrintRow extends StatelessWidget {
 
 // ── Printer list tile ─────────────────────────────────────────────────────────
 class _PrinterListTile extends StatelessWidget {
-  final Printer printer;
+  final PrinterDevice printer;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -357,8 +356,8 @@ class _PrinterListTile extends StatelessWidget {
                           color: isSelected
                               ? AppColors.primary
                               : AppColors.textPrimary)),
-                  if (printer.url.toString().isNotEmpty)
-                    Text(printer.url.toString(),
+                  if (printer.id.isNotEmpty)
+                    Text(printer.kind == 'bluetooth' ? 'Bluetooth ${printer.id}' : 'Windows printer',
                         style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary)),

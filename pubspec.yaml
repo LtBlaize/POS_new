@@ -60,7 +60,11 @@ dependencies:
 
   printing: ^5.13.1        # PDF generation + print dialog
   pdf: ^3.10.8             # Build the thermal receipt PDF
-  esc_pos_utils_plus: ^2.0.1  # ESC/POS commands for cash drawer pulse
+  esc_pos_utils_plus: ^2.0.1  # ESC/POS byte generator
+  print_bluetooth_thermal: ^1.1.4  # Android Bluetooth printing
+  permission_handler: ^11.3.0      # Bluetooth runtime permissions
+  win32: ^5.5.0                    # Windows raw printing
+  ffi: ^2.1.0
   
   flutter_dotenv: ^5.1.0
 dev_dependencies:
