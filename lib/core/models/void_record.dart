@@ -30,32 +30,32 @@ class VoidRecord {
   });
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'order_id': orderId,
-        'product_id': productId,
-        'product_name': productName,
-        'unit_price': unitPrice,
-        'quantity': quantity,
-        'subtotal': subtotal,
-        'reason': reason,
-        'voided_by_staff_id': voidedByStaffId,
-        'voided_by_staff_name': voidedByStaffName,
-        'voided_at': voidedAt.toIso8601String(),
-      };
+    'id': id,
+    'order_id': orderId,
+    'product_id': productId,
+    'product_name': productName,
+    'unit_price': unitPrice,
+    'quantity': quantity,
+    'subtotal': subtotal,
+    'reason': reason,
+    'voided_by_staff_id': voidedByStaffId,
+    'voided_by_staff_name': voidedByStaffName,
+    'voided_at': voidedAt.toIso8601String(),
+  };
 
   factory VoidRecord.fromMap(Map<String, dynamic> m) => VoidRecord(
-        id: m['id'] as String,
-        orderId: m['order_id'] as String,
-        productId: m['product_id'] as String,
-        productName: m['product_name'] as String,
-        unitPrice: (m['unit_price'] as num).toDouble(),
-        quantity: m['quantity'] as int,
-        subtotal: (m['subtotal'] as num).toDouble(),
-        reason: m['reason'] as String,
-        voidedByStaffId: m['voided_by_staff_id'] as String,
-        voidedByStaffName: m['voided_by_staff_name'] as String,
-        voidedAt: DateTime.parse(m['voided_at'] as String),
-      );
+    id: m['id'] as String,
+    orderId: m['order_id'] as String,
+    productId: m['product_id'] as String,
+    productName: m['product_name'] as String,
+    unitPrice: (m['unit_price'] as num).toDouble(),
+    quantity: m['quantity'] as int,
+    subtotal: (m['subtotal'] as num).toDouble(),
+    reason: m['reason'] as String,
+    voidedByStaffId: m['voided_by_staff_id'] as String,
+    voidedByStaffName: m['voided_by_staff_name'] as String,
+    voidedAt: DateTime.parse(m['voided_at'] as String),
+  );
 }
 
 /// Standard void reasons shown in the dialog.

@@ -21,7 +21,6 @@ final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
 });
 
-
 class CheckoutService {
   final Ref _ref;
   CheckoutService(this._ref);
@@ -37,12 +36,13 @@ class CheckoutService {
     if (!_isOnline) return null;
 
     final client = _ref.read(supabaseClientProvider);
-    final row = await client
-        .from('restaurant_tables')
-        .select('id')
-        .eq('business_id', businessId)
-        .eq('table_number', tableNumber.toString())
-        .maybeSingle();
+    final row =
+        await client
+            .from('restaurant_tables')
+            .select('id')
+            .eq('business_id', businessId)
+            .eq('table_number', tableNumber.toString())
+            .maybeSingle();
     return row?['id'] as String?;
   }
 
@@ -89,8 +89,10 @@ class CheckoutService {
     }
 
     if (payNow && isSplit) {
-      final applied =
-          effectiveSplitPayments.fold<double>(0, (s, p) => s + p.amount);
+      final applied = effectiveSplitPayments.fold<double>(
+        0,
+        (s, p) => s + p.amount,
+      );
       if (((applied - subtotal) * 100).round().abs() > 1) {
         return CheckoutResult.error(
           'Split payments (₱${applied.toStringAsFixed(2)}) do not match '
@@ -110,7 +112,9 @@ class CheckoutService {
     // Resolve cashier ID from active staff session
     final activeStaff = _ref.read(activeStaffProvider);
     final cashierId = activeStaff?.id;
-    debugPrint('[Checkout] activeStaff: ${activeStaff?.name}, cashierId: $cashierId');
+    debugPrint(
+      '[Checkout] activeStaff: ${activeStaff?.name}, cashierId: $cashierId',
+    );
 
     Order order;
 
@@ -126,7 +130,10 @@ class CheckoutService {
       if ((discountAmount - order.discountAmount).abs() > 0.005 ||
           (tipAmount - order.tipAmount).abs() > 0.005) {
         await service.applyAdjustments(
-            orderId: order.id, discount: discountAmount, tip: tipAmount);
+          orderId: order.id,
+          discount: discountAmount,
+          tip: tipAmount,
+        );
         order = order.copyWith(
           discountAmount: discountAmount,
           tipAmount: tipAmount,
@@ -140,7 +147,12 @@ class CheckoutService {
         final client = _ref.read(supabaseClientProvider);
         for (final item in items) {
           if (item.isPromo) {
-            final err = await _checkPromoStockOnline(client, local, businessId, item);
+            final err = await _checkPromoStockOnline(
+              client,
+              local,
+              businessId,
+              item,
+            );
             if (err != null) return CheckoutResult.error(err);
             continue;
           }
@@ -152,11 +164,12 @@ class CheckoutService {
             continue;
           }
           try {
-            final row = await client
-                .from('products')
-                .select('stock_quantity, name')
-                .eq('id', item.product.id)
-                .single();
+            final row =
+                await client
+                    .from('products')
+                    .select('stock_quantity, name')
+                    .eq('id', item.product.id)
+                    .single();
             final available = row['stock_quantity'] as int? ?? 0;
             if (item.quantity > available) {
               return CheckoutResult.error(
@@ -167,8 +180,7 @@ class CheckoutService {
           } catch (e) {
             debugPrint('[Checkout] Stock check failed, using local cache: $e');
             final cached = await local.getProducts(businessId);
-            final p =
-                cached.where((p) => p.id == item.product.id).firstOrNull;
+            final p = cached.where((p) => p.id == item.product.id).firstOrNull;
             if (p != null &&
                 p.trackInventory &&
                 item.quantity > p.stockQuantity) {
@@ -194,8 +206,7 @@ class CheckoutService {
             if (err != null) return CheckoutResult.error(err);
             continue;
           }
-          final p =
-              cached.where((p) => p.id == item.product.id).firstOrNull;
+          final p = cached.where((p) => p.id == item.product.id).firstOrNull;
           if (p != null && item.quantity > p.stockQuantity) {
             return CheckoutResult.error(
               '${p.name} only has ${p.stockQuantity} in stock '
@@ -214,7 +225,8 @@ class CheckoutService {
         );
         if (tableUuid == null && _isOnline) {
           return CheckoutResult.error(
-              'Could not find Table $selectedTableName.');
+            'Could not find Table $selectedTableName.',
+          );
         }
       }
 
@@ -244,28 +256,32 @@ class CheckoutService {
             });
           } catch (e) {
             debugPrint('[Checkout] Kitchen ticket online failed, queuing: $e');
-            await _ref.read(syncQueueServiceProvider).enqueue(
-              operation: 'insert_kitchen_ticket',
-              tableName: 'kitchen_tickets',
-              recordId: order.id,
-              payload: {
-                'order_id': order.id,
-                'business_id': businessId,
-                'status': 'queued',
-              },
-            );
+            await _ref
+                .read(syncQueueServiceProvider)
+                .enqueue(
+                  operation: 'insert_kitchen_ticket',
+                  tableName: 'kitchen_tickets',
+                  recordId: order.id,
+                  payload: {
+                    'order_id': order.id,
+                    'business_id': businessId,
+                    'status': 'queued',
+                  },
+                );
           }
         } else {
-          await _ref.read(syncQueueServiceProvider).enqueue(
-            operation: 'insert_kitchen_ticket',
-            tableName: 'kitchen_tickets',
-            recordId: order.id,
-            payload: {
-              'order_id': order.id,
-              'business_id': businessId,
-              'status': 'queued',
-            },
-          );
+          await _ref
+              .read(syncQueueServiceProvider)
+              .enqueue(
+                operation: 'insert_kitchen_ticket',
+                tableName: 'kitchen_tickets',
+                recordId: order.id,
+                payload: {
+                  'order_id': order.id,
+                  'business_id': businessId,
+                  'status': 'queued',
+                },
+              );
         }
       }
 
@@ -282,12 +298,15 @@ class CheckoutService {
     }
 
     // ── Process payment ─────────────────────────────────────────────────────
-    final actualTendered = isSplit
-        ? effectiveSplitPayments.fold<double>(0, (s, p) => s + p.amount) + splitChangeAmount
-        : (paymentMethod == PaymentMethod.cash ? tendered : subtotal);
-    final actualChange = isSplit
-        ? splitChangeAmount
-        : (paymentMethod == PaymentMethod.cash ? change : 0.0);
+    final actualTendered =
+        isSplit
+            ? effectiveSplitPayments.fold<double>(0, (s, p) => s + p.amount) +
+                splitChangeAmount
+            : (paymentMethod == PaymentMethod.cash ? tendered : subtotal);
+    final actualChange =
+        isSplit
+            ? splitChangeAmount
+            : (paymentMethod == PaymentMethod.cash ? change : 0.0);
     final cleanRef =
         referenceNumber?.trim().isEmpty == true
             ? null
@@ -332,24 +351,28 @@ class CheckoutService {
       isSplitPayment: isSplit,
     );
 
-    await _ref.read(receiptServiceProvider).createReceipt(
-      order: paidOrder,
-      businessName: businessName,
-      businessAddress: businessAddress,
-      businessPhone: businessPhone,
-      businessEmail: businessEmail,
-      taxRate: taxRate,
-      issuedBy: profile.id,
-      footerText: isRestaurant
-          ? 'Thank you for dining with us!'
-          : 'Thank you for shopping with us!',
-    );
+    await _ref
+        .read(receiptServiceProvider)
+        .createReceipt(
+          order: paidOrder,
+          businessName: businessName,
+          businessAddress: businessAddress,
+          businessPhone: businessPhone,
+          businessEmail: businessEmail,
+          taxRate: taxRate,
+          issuedBy: profile.id,
+          footerText:
+              isRestaurant
+                  ? 'Thank you for dining with us!'
+                  : 'Thank you for shopping with us!',
+        );
 
     // ✅ NEW: Auto open cash drawer — also opens when a split payment
     // includes a cash leg, not just when cash is the sole method.
-    final hasCashLeg = isSplit
-        ? effectiveSplitPayments.any((p) => p.method == PaymentMethod.cash)
-        : paymentMethod == PaymentMethod.cash;
+    final hasCashLeg =
+        isSplit
+            ? effectiveSplitPayments.any((p) => p.method == PaymentMethod.cash)
+            : paymentMethod == PaymentMethod.cash;
     if (hasCashLeg) {
       try {
         await ThermalPrintService.openCashDrawer();
@@ -380,7 +403,7 @@ class CheckoutService {
     );
   }
 
-    Future<CheckoutResult> addToTab({
+  Future<CheckoutResult> addToTab({
     required String orderId,
     required bool hasKitchen,
     required List<CartItem> items,
@@ -407,7 +430,9 @@ class CheckoutService {
       final taxRate = _ref.read(businessConfigProvider)?.taxRate ?? 0.0;
       final sendToKitchen = hasKitchen && items.any((i) => i.hasKitchenWork);
 
-      final res = await _ref.read(orderServiceProvider).appendItems(
+      final res = await _ref
+          .read(orderServiceProvider)
+          .appendItems(
             orderId: orderId,
             businessId: businessId,
             items: items,
@@ -420,14 +445,20 @@ class CheckoutService {
       }
 
       _ref.read(cartProvider.notifier).clear();
-      return CheckoutResult.addedToTab(round: res.round, pendingSync: res.queued);
+      return CheckoutResult.addedToTab(
+        round: res.round,
+        pendingSync: res.queued,
+      );
     } catch (e) {
       return CheckoutResult.error('Could not add items: $e');
     }
   }
 
   Future<void> _createKitchenTicket(
-      String orderId, String businessId, int round) async {
+    String orderId,
+    String businessId,
+    int round,
+  ) async {
     final payload = {
       'order_id': orderId,
       'business_id': businessId,
@@ -436,13 +467,18 @@ class CheckoutService {
     };
     if (_isOnline) {
       try {
-        await _ref.read(supabaseClientProvider).from('kitchen_tickets').insert(payload);
+        await _ref
+            .read(supabaseClientProvider)
+            .from('kitchen_tickets')
+            .insert(payload);
         return;
       } catch (e) {
         debugPrint('[Checkout] Round ticket online failed, queuing: $e');
       }
     }
-    await _ref.read(syncQueueServiceProvider).enqueue(
+    await _ref
+        .read(syncQueueServiceProvider)
+        .enqueue(
           operation: 'insert_kitchen_ticket',
           tableName: 'kitchen_tickets',
           recordId: orderId,
@@ -451,9 +487,12 @@ class CheckoutService {
   }
 
   Future<String?> _validateStockLocal(
-      String businessId, List<CartItem> items) async {
-    final cached =
-        await _ref.read(localDbServiceProvider).getProducts(businessId);
+    String businessId,
+    List<CartItem> items,
+  ) async {
+    final cached = await _ref
+        .read(localDbServiceProvider)
+        .getProducts(businessId);
     for (final item in items) {
       if (item.isPromo) {
         final e = await _checkPromoStockLocal(cached, item);
@@ -476,7 +515,9 @@ class CheckoutService {
   }
 
   Future<String?> _validateStockOnline(
-      String businessId, List<CartItem> items) async {
+    String businessId,
+    List<CartItem> items,
+  ) async {
     final client = _ref.read(supabaseClientProvider);
     final local = _ref.read(localDbServiceProvider);
     for (final item in items) {
@@ -491,11 +532,12 @@ class CheckoutService {
         if (e != null) return e;
         continue;
       }
-      final row = await client
-          .from('products')
-          .select('stock_quantity, name')
-          .eq('id', item.product.id)
-          .single();
+      final row =
+          await client
+              .from('products')
+              .select('stock_quantity, name')
+              .eq('id', item.product.id)
+              .single();
       final available = row['stock_quantity'] as int? ?? 0;
       if (item.quantity > available) {
         return '${row['name']} only has $available in stock '
@@ -508,12 +550,13 @@ class CheckoutService {
   Future<int?> _variantStockLeft(String productId, String variantId) async {
     if (_isOnline) {
       try {
-        final row = await _ref
-            .read(supabaseClientProvider)
-            .from('product_variants')
-            .select('stock_quantity')
-            .eq('id', variantId)
-            .single();
+        final row =
+            await _ref
+                .read(supabaseClientProvider)
+                .from('product_variants')
+                .select('stock_quantity')
+                .eq('id', variantId)
+                .single();
         return row['stock_quantity'] as int? ?? 0;
       } catch (_) {}
     }
@@ -530,12 +573,13 @@ class CheckoutService {
 
     if (_isOnline) {
       try {
-        final row = await _ref
-            .read(supabaseClientProvider)
-            .from('product_variants')
-            .select('stock_quantity, name')
-            .eq('id', id)
-            .single();
+        final row =
+            await _ref
+                .read(supabaseClientProvider)
+                .from('product_variants')
+                .select('stock_quantity, name')
+                .eq('id', id)
+                .single();
         available = row['stock_quantity'] as int? ?? 0;
         name = row['name'] as String? ?? name;
       } catch (_) {}
@@ -557,15 +601,19 @@ class CheckoutService {
   }
 
   String _methodLabel(PaymentMethod method) => switch (method) {
-        PaymentMethod.gcash => 'GCash',
-        PaymentMethod.maya => 'Maya',
-        PaymentMethod.card => 'card',
-        PaymentMethod.cash => 'cash',
-        PaymentMethod.credit => 'credit',
-      };
+    PaymentMethod.gcash => 'GCash',
+    PaymentMethod.maya => 'Maya',
+    PaymentMethod.card => 'card',
+    PaymentMethod.cash => 'cash',
+    PaymentMethod.credit => 'credit',
+  };
 
   Future<String?> _checkPromoStockOnline(
-      dynamic client, LocalDbService local, String businessId, CartItem item) async {
+    dynamic client,
+    LocalDbService local,
+    String businessId,
+    CartItem item,
+  ) async {
     for (final c in item.promoComponents!) {
       if (!c.trackInventory) continue;
       final needed = c.quantity * item.quantity;
@@ -578,18 +626,21 @@ class CheckoutService {
         continue;
       }
       try {
-        final row = await client
-            .from('products')
-            .select('stock_quantity, name')
-            .eq('id', c.productId)
-            .single();
+        final row =
+            await client
+                .from('products')
+                .select('stock_quantity, name')
+                .eq('id', c.productId)
+                .single();
         final available = row['stock_quantity'] as int? ?? 0;
         if (needed > available) {
           return '${row['name']} only has $available in stock '
               '(this order needs $needed for "${item.product.name}").';
         }
       } catch (e) {
-        debugPrint('[Checkout] Promo stock check failed, using local cache: $e');
+        debugPrint(
+          '[Checkout] Promo stock check failed, using local cache: $e',
+        );
         final cached = await local.getProducts(businessId);
         final p = cached.where((p) => p.id == c.productId).firstOrNull;
         if (p != null && needed > p.stockQuantity) {
@@ -623,7 +674,6 @@ class CheckoutService {
   }
 }
 
-
 // ── Result type ───────────────────────────────────────────────────────────────
 
 enum CheckoutStatus { paid, sentToKitchen, error }
@@ -651,31 +701,25 @@ class CheckoutResult {
     required Order order,
     required double tendered,
     required double change,
-  }) =>
-      CheckoutResult._(
-        status: CheckoutStatus.paid,
-        order: order,
-        tendered: tendered,
-        change: change,
-      );
+  }) => CheckoutResult._(
+    status: CheckoutStatus.paid,
+    order: order,
+    tendered: tendered,
+    change: change,
+  );
 
-  factory CheckoutResult.sentToKitchen(Order order) => CheckoutResult._(
-        status: CheckoutStatus.sentToKitchen,
-        order: order,
-      );
+  factory CheckoutResult.sentToKitchen(Order order) =>
+      CheckoutResult._(status: CheckoutStatus.sentToKitchen, order: order);
 
   factory CheckoutResult.addedToTab({
     required int round,
     required bool pendingSync,
-  }) =>
-      CheckoutResult._(
-        status: CheckoutStatus.sentToKitchen,
-        round: round,
-        pendingSync: pendingSync,
-      );
+  }) => CheckoutResult._(
+    status: CheckoutStatus.sentToKitchen,
+    round: round,
+    pendingSync: pendingSync,
+  );
 
-  factory CheckoutResult.error(String message) => CheckoutResult._(
-        status: CheckoutStatus.error,
-        errorMessage: message,
-      );
+  factory CheckoutResult.error(String message) =>
+      CheckoutResult._(status: CheckoutStatus.error, errorMessage: message);
 }

@@ -22,14 +22,18 @@ enum PosViewMode { products, promos }
 /// Toggled by the "Promos" chip in CategoryBar; read by _POSMain to decide
 /// whether to render ProductGrid or PromoGrid. Lives here rather than in
 /// pos_screen.dart since CategoryBar is the only thing that writes to it.
-final posViewModeProvider = StateProvider<PosViewMode>((ref) => PosViewMode.products);
+final posViewModeProvider = StateProvider<PosViewMode>(
+  (ref) => PosViewMode.products,
+);
 
 class CategoryBar extends ConsumerWidget {
   const CategoryBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categoriesAsync = ref.watch(categoryListProvider); // FutureProvider now
+    final categoriesAsync = ref.watch(
+      categoryListProvider,
+    ); // FutureProvider now
     final selected = ref.watch(selectedCategoryProvider);
     final viewMode = ref.watch(posViewModeProvider);
     final hasPromos = ref.watch(purchasablePromosProvider).isNotEmpty;
@@ -52,33 +56,39 @@ class CategoryBar extends ConsumerWidget {
             icon: Icons.apps_rounded,
             isSelected: viewMode == PosViewMode.products && selected == null,
             onTap: () {
-              ref.read(posViewModeProvider.notifier).state = PosViewMode.products;
+              ref.read(posViewModeProvider.notifier).state =
+                  PosViewMode.products;
               ref.read(selectedCategoryProvider.notifier).state = null;
               ref.read(posSearchQueryProvider.notifier).state = '';
             },
           ),
           const SizedBox(width: 8),
-          ...categories.map((cat) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _CategoryChip(
-                  label: cat,
-                  icon: _iconFor(cat),
-                  isSelected: viewMode == PosViewMode.products && selected == cat,
-                  onTap: () {
-                    ref.read(posViewModeProvider.notifier).state = PosViewMode.products;
-                    ref.read(selectedCategoryProvider.notifier).state = cat;
-                    ref.read(posSearchQueryProvider.notifier).state = '';
-                  },
-                ),
-              )),
+          ...categories.map(
+            (cat) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _CategoryChip(
+                label: cat,
+                icon: _iconFor(cat),
+                isSelected: viewMode == PosViewMode.products && selected == cat,
+                onTap: () {
+                  ref.read(posViewModeProvider.notifier).state =
+                      PosViewMode.products;
+                  ref.read(selectedCategoryProvider.notifier).state = cat;
+                  ref.read(posSearchQueryProvider.notifier).state = '';
+                },
+              ),
+            ),
+          ),
           if (hasPromos) ...[
             const SizedBox(width: 8),
             _CategoryChip(
               label: 'Promos',
               icon: Icons.local_offer_rounded,
               isSelected: viewMode == PosViewMode.promos,
-              onTap: () =>
-                  ref.read(posViewModeProvider.notifier).state = PosViewMode.promos,
+              onTap:
+                  () =>
+                      ref.read(posViewModeProvider.notifier).state =
+                          PosViewMode.promos,
             ),
           ],
         ],
@@ -86,7 +96,6 @@ class CategoryBar extends ConsumerWidget {
     );
   }
 }
-
 
 class _CategoryChip extends StatelessWidget {
   final String label;
@@ -115,15 +124,16 @@ class _CategoryChip extends StatelessWidget {
             color: isSelected ? AppColors.primary : AppColors.divider,
             width: 1.5,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  )
-                ]
-              : [],
+          boxShadow:
+              isSelected
+                  ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                  : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

@@ -41,22 +41,24 @@ class _ShiftsTabState extends State<ShiftsTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.people_alt_outlined,
-                size: 48,
-                color: AppColors.textSecondary.withValues(alpha:0.2)),
+            Icon(
+              Icons.people_alt_outlined,
+              size: 48,
+              color: AppColors.textSecondary.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: 16),
             const Text(
               'No shifts for this day',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 4),
             const Text(
               'Shifts appear here once a cashier opens one.',
-              style:
-                  TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -102,9 +104,10 @@ class _ShiftsTabState extends State<ShiftsTab> {
               entry: entry,
               isExpanded: isExpanded,
               isPhone: isPhone,
-              onTap: () => setState(() {
-                _expandedId = isExpanded ? null : entry.shift.id;
-              }),
+              onTap:
+                  () => setState(() {
+                    _expandedId = isExpanded ? null : entry.shift.id;
+                  }),
             );
           }),
         ],
@@ -145,7 +148,7 @@ class DaySummaryCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -159,11 +162,14 @@ class DaySummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.summarize_outlined,
-                    size: 15, color: AppColors.primary),
+                child: const Icon(
+                  Icons.summarize_outlined,
+                  size: 15,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(width: 8),
               const Text(
@@ -176,10 +182,9 @@ class DaySummaryCard extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: amber.withValues(alpha:0.1),
+                  color: amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -205,8 +210,7 @@ class DaySummaryCard extends StatelessWidget {
           ),
           const Text(
             'Total Revenue',
-            style:
-                TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -214,29 +218,35 @@ class DaySummaryCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               SummaryChip(
-                  label: 'Cash',
-                  value: '₱${fmtShort(summary.cashSales)}',
-                  color: green),
+                label: 'Cash',
+                value: '₱${fmtShort(summary.cashSales)}',
+                color: green,
+              ),
               SummaryChip(
-                  label: 'GCash/Maya',
-                  value: '₱${fmtShort(summary.gcashSales)}',
-                  color: blue),
+                label: 'GCash/Maya',
+                value: '₱${fmtShort(summary.gcashSales)}',
+                color: blue,
+              ),
               SummaryChip(
-                  label: 'Other',
-                  value: '₱${fmtShort(summary.otherSales)}',
-                  color: AppColors.textSecondary),
+                label: 'Other',
+                value: '₱${fmtShort(summary.otherSales)}',
+                color: AppColors.textSecondary,
+              ),
               SummaryChip(
-                  label: 'Utang',
-                  value: '₱${fmtShort(summary.creditGiven)}',
-                  color: accent),
+                label: 'Utang',
+                value: '₱${fmtShort(summary.creditGiven)}',
+                color: accent,
+              ),
               SummaryChip(
-                  label: 'Orders',
-                  value: '${summary.totalOrders}',
-                  color: AppColors.primary),
+                label: 'Orders',
+                value: '${summary.totalOrders}',
+                color: AppColors.primary,
+              ),
               SummaryChip(
-                  label: 'Items',
-                  value: '${summary.totalItems}',
-                  color: AppColors.textSecondary),
+                label: 'Items',
+                value: '${summary.totalItems}',
+                color: AppColors.textSecondary,
+              ),
             ],
           ),
         ],
@@ -279,15 +289,15 @@ class ShiftCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isExpanded
-              ? AppColors.primary.withValues(alpha:0.4)
-              : AppColors.divider,
+          color:
+              isExpanded
+                  ? AppColors.primary.withValues(alpha: 0.4)
+                  : AppColors.divider,
           width: isExpanded ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withValues(alpha:isExpanded ? 0.06 : 0.03),
+            color: Colors.black.withValues(alpha: isExpanded ? 0.06 : 0.03),
             blurRadius: isExpanded ? 12 : 4,
             offset: const Offset(0, 2),
           ),
@@ -307,8 +317,9 @@ class ShiftCard extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor:
-                            AppColors.primary.withValues(alpha:0.08),
+                        backgroundColor: AppColors.primary.withValues(
+                          alpha: 0.08,
+                        ),
                         child: Text(
                           shift.staffName[0].toUpperCase(),
                           style: const TextStyle(
@@ -344,12 +355,15 @@ class ShiftCard extends StatelessWidget {
                       // Status badge
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha:0.1),
+                          color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: statusColor.withValues(alpha:0.3)),
+                            color: statusColor.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -358,8 +372,9 @@ class ShiftCard extends StatelessWidget {
                               width: 6,
                               height: 6,
                               decoration: BoxDecoration(
-                                  color: statusColor,
-                                  shape: BoxShape.circle),
+                                color: statusColor,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                             const SizedBox(width: 5),
                             Text(
@@ -390,7 +405,9 @@ class ShiftCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(10),
@@ -432,9 +449,10 @@ class ShiftCard extends StatelessWidget {
           AnimatedSize(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            child: isExpanded
-                ? ShiftDetail(entry: entry, isPhone: isPhone)
-                : const SizedBox.shrink(),
+            child:
+                isExpanded
+                    ? ShiftDetail(entry: entry, isPhone: isPhone)
+                    : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -442,11 +460,11 @@ class ShiftCard extends StatelessWidget {
   }
 
   Widget _vDivider() => Container(
-        width: 1,
-        height: 24,
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-        color: AppColors.divider,
-      );
+    width: 1,
+    height: 24,
+    margin: const EdgeInsets.symmetric(horizontal: 10),
+    color: AppColors.divider,
+  );
 
   String _timeRange(CashierShift s) {
     String fmt(DateTime dt) {
@@ -499,70 +517,83 @@ class ShiftDetail extends StatelessWidget {
           const SizedBox(height: 10),
           isPhone
               ? Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                            child: DetailCell(
-                                label: 'Total',
-                                value: '₱${fmtCurrency(shift.totalSales)}',
-                                color: AppColors.textPrimary)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: DetailCell(
-                                label: 'Cash',
-                                value: '₱${fmtCurrency(shift.cashSales)}',
-                                color: _green)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                            child: DetailCell(
-                                label: 'GCash/Maya',
-                                value:
-                                    '₱${fmtCurrency(shift.gcashSales)}',
-                                color: _blue)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: DetailCell(
-                                label: 'Utang',
-                                value:
-                                    '₱${fmtCurrency(shift.creditGiven)}',
-                                color: _accent)),
-                      ],
-                    ),
-                  ],
-                )
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DetailCell(
+                          label: 'Total',
+                          value: '₱${fmtCurrency(shift.totalSales)}',
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DetailCell(
+                          label: 'Cash',
+                          value: '₱${fmtCurrency(shift.cashSales)}',
+                          color: _green,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DetailCell(
+                          label: 'GCash/Maya',
+                          value: '₱${fmtCurrency(shift.gcashSales)}',
+                          color: _blue,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DetailCell(
+                          label: 'Utang',
+                          value: '₱${fmtCurrency(shift.creditGiven)}',
+                          color: _accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
               : Row(
-                  children: [
-                    Expanded(
-                        child: DetailCell(
-                            label: 'Total',
-                            value: '₱${fmtCurrency(shift.totalSales)}',
-                            color: AppColors.textPrimary)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: DetailCell(
-                            label: 'Cash',
-                            value: '₱${fmtCurrency(shift.cashSales)}',
-                            color: _green)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: DetailCell(
-                            label: 'GCash/Maya',
-                            value: '₱${fmtCurrency(shift.gcashSales)}',
-                            color: _blue)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: DetailCell(
-                            label: 'Utang Given',
-                            value:
-                                '₱${fmtCurrency(shift.creditGiven)}',
-                            color: _accent)),
-                  ],
-                ),
+                children: [
+                  Expanded(
+                    child: DetailCell(
+                      label: 'Total',
+                      value: '₱${fmtCurrency(shift.totalSales)}',
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DetailCell(
+                      label: 'Cash',
+                      value: '₱${fmtCurrency(shift.cashSales)}',
+                      color: _green,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DetailCell(
+                      label: 'GCash/Maya',
+                      value: '₱${fmtCurrency(shift.gcashSales)}',
+                      color: _blue,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DetailCell(
+                      label: 'Utang Given',
+                      value: '₱${fmtCurrency(shift.creditGiven)}',
+                      color: _accent,
+                    ),
+                  ),
+                ],
+              ),
 
           const SizedBox(height: 16),
 
@@ -572,24 +603,31 @@ class ShiftDetail extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: DetailCell(
-                      label: 'Orders',
-                      value: '${entry.orderCount}',
-                      color: _blue)),
+                child: DetailCell(
+                  label: 'Orders',
+                  value: '${entry.orderCount}',
+                  color: _blue,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
-                  child: DetailCell(
-                      label: 'Items Sold',
-                      value: '${entry.itemsSold}',
-                      color: _green)),
+                child: DetailCell(
+                  label: 'Items Sold',
+                  value: '${entry.itemsSold}',
+                  color: _green,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
-                  child: DetailCell(
-                      label: 'Avg / Order',
-                      value: entry.orderCount > 0
+                child: DetailCell(
+                  label: 'Avg / Order',
+                  value:
+                      entry.orderCount > 0
                           ? '₱${fmtCurrency(entry.avgOrderValue)}'
                           : '—',
-                      color: AppColors.textSecondary)),
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
 
@@ -622,7 +660,9 @@ class ShiftDetail extends StatelessWidget {
               child: Text(
                 shift.notes!,
                 style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ],
@@ -645,14 +685,16 @@ class CashReconcile extends StatelessWidget {
     final overShort = shift.overShort;
     final isExact = overShort == 0;
     final isOver = overShort > 0;
-    final diffColor = isExact
-        ? const Color(0xFF10B981)
-        : isOver
+    final diffColor =
+        isExact
+            ? const Color(0xFF10B981)
+            : isOver
             ? const Color(0xFF3B82F6)
             : const Color(0xFFE94560);
-    final diffLabel = isExact
-        ? 'Exact ✓'
-        : isOver
+    final diffLabel =
+        isExact
+            ? 'Exact ✓'
+            : isOver
             ? 'Over ▲'
             : 'Short ▼';
 
@@ -666,37 +708,42 @@ class CashReconcile extends StatelessWidget {
       child: Column(
         children: [
           ReconRow(
-              label: 'Opening Cash',
-              value: '₱${fmtCurrency(shift.openingCash)}',
-              color: AppColors.textPrimary),
+            label: 'Opening Cash',
+            value: '₱${fmtCurrency(shift.openingCash)}',
+            color: AppColors.textPrimary,
+          ),
           ReconRow(
-              label: '+ Cash Sales',
-              value: '₱${fmtCurrency(shift.cashSales)}',
-              color: const Color(0xFF10B981)),
+            label: '+ Cash Sales',
+            value: '₱${fmtCurrency(shift.cashSales)}',
+            color: const Color(0xFF10B981),
+          ),
           if (shift.expenses > 0)
             ReconRow(
-                label: '− Expenses',
-                value: '₱${fmtCurrency(shift.expenses)}',
-                color: const Color(0xFFE94560)),
+              label: '− Expenses',
+              value: '₱${fmtCurrency(shift.expenses)}',
+              color: const Color(0xFFE94560),
+            ),
           const Divider(height: 14),
           ReconRow(
-              label: 'Expected',
-              value: '₱${fmtCurrency(shift.expectedCash)}',
-              color: AppColors.textPrimary,
-              bold: true),
+            label: 'Expected',
+            value: '₱${fmtCurrency(shift.expectedCash)}',
+            color: AppColors.textPrimary,
+            bold: true,
+          ),
           if (shift.actualCashCount != null) ...[
             ReconRow(
-                label: 'Actual Count',
-                value: '₱${fmtCurrency(shift.actualCashCount!)}',
-                color: AppColors.textPrimary,
-                bold: true),
+              label: 'Actual Count',
+              value: '₱${fmtCurrency(shift.actualCashCount!)}',
+              color: AppColors.textPrimary,
+              bold: true,
+            ),
             const Divider(height: 14),
             ReconRow(
-                label: diffLabel,
-                value:
-                    '${isOver ? '+' : ''}₱${fmtCurrency(overShort.abs())}',
-                color: diffColor,
-                bold: true),
+              label: diffLabel,
+              value: '${isOver ? '+' : ''}₱${fmtCurrency(overShort.abs())}',
+              color: diffColor,
+              bold: true,
+            ),
           ],
         ],
       ),
@@ -725,19 +772,22 @@ class ReconRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(
-                fontSize: 12,
-                color:
-                    bold ? AppColors.textPrimary : AppColors.textSecondary,
-                fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-              )),
-          Text(value,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w700,
-              )),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: bold ? AppColors.textPrimary : AppColors.textSecondary,
+              fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -777,17 +827,18 @@ class TimingRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: shift.closedAt != null
-              ? DetailCell(
-                  label: 'Closed',
-                  value: _fmt(shift.closedAt!),
-                  color: const Color(0xFFE94560),
-                )
-              : const DetailCell(
-                  label: 'Status',
-                  value: 'Still Open',
-                  color: Color(0xFFF59E0B),
-                ),
+          child:
+              shift.closedAt != null
+                  ? DetailCell(
+                    label: 'Closed',
+                    value: _fmt(shift.closedAt!),
+                    color: const Color(0xFFE94560),
+                  )
+                  : const DetailCell(
+                    label: 'Status',
+                    value: 'Still Open',
+                    color: Color(0xFFF59E0B),
+                  ),
         ),
         const SizedBox(width: 8),
         Expanded(

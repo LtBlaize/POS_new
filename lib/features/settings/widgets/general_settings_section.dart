@@ -6,7 +6,6 @@ import '../../../core/models/business.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../../../core/services/audit_service.dart';
 
-
 class GeneralSettingsSection extends ConsumerStatefulWidget {
   final Business business;
   const GeneralSettingsSection({super.key, required this.business});
@@ -60,12 +59,14 @@ class _GeneralSettingsSectionState
           children: [
             _InfoRow(label: 'Name', value: widget.business.name),
             _InfoRow(
-                label: 'Type',
-                value: widget.business.businessType.displayName),
+              label: 'Type',
+              value: widget.business.businessType.displayName,
+            ),
             _InfoRow(label: 'Currency', value: widget.business.currency),
             _InfoRow(
-                label: 'Plan',
-                value: widget.business.subscriptionPlan.displayName),
+              label: 'Plan',
+              value: widget.business.subscriptionPlan.displayName,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -78,8 +79,9 @@ class _GeneralSettingsSectionState
             _TextFieldRow(
               label: 'Tax rate (%)',
               controller: _taxController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               hint: '0.00',
             ),
             _SwitchRow(
@@ -116,15 +118,15 @@ class _GeneralSettingsSectionState
                 label: 'Require table on every order',
                 sublabel: 'Order cannot be placed without a table selected',
                 value: config.requireTableOnOrder,
-                onChanged: (v) =>
-                    _save(config.copyWith(requireTableOnOrder: v)),
+                onChanged:
+                    (v) => _save(config.copyWith(requireTableOnOrder: v)),
               ),
               _SwitchRow(
                 label: 'Enable kitchen display',
                 sublabel: 'Send orders to KDS screen',
                 value: config.enableKitchenDisplay,
-                onChanged: (v) =>
-                    _save(config.copyWith(enableKitchenDisplay: v)),
+                onChanged:
+                    (v) => _save(config.copyWith(enableKitchenDisplay: v)),
               ),
               if (config.enableKitchenDisplay)
                 KitchenModeSelector(config: config),
@@ -132,8 +134,8 @@ class _GeneralSettingsSectionState
                 label: 'Enable table management',
                 sublabel: 'Show table selector in POS',
                 value: config.enableTableManagement,
-                onChanged: (v) =>
-                    _save(config.copyWith(enableTableManagement: v)),
+                onChanged:
+                    (v) => _save(config.copyWith(enableTableManagement: v)),
               ),
             ],
           ),
@@ -149,20 +151,21 @@ class _GeneralSettingsSectionState
               _SwitchRow(
                 label: 'Enable barcode scanner',
                 value: config.enableBarcodeScanner,
-                onChanged: (v) =>
-                    _save(config.copyWith(enableBarcodeScanner: v)),
+                onChanged:
+                    (v) => _save(config.copyWith(enableBarcodeScanner: v)),
               ),
               _SwitchRow(
                 label: 'Enable low stock alerts',
                 value: config.enableInventoryAlerts,
-                onChanged: (v) =>
-                    _save(config.copyWith(enableInventoryAlerts: v)),
+                onChanged:
+                    (v) => _save(config.copyWith(enableInventoryAlerts: v)),
               ),
               if (config.enableInventoryAlerts)
                 _TextFieldRow(
                   label: 'Low stock threshold',
                   controller: TextEditingController(
-                      text: config.lowStockThreshold.toString()),
+                    text: config.lowStockThreshold.toString(),
+                  ),
                   keyboardType: TextInputType.number,
                   hint: '5',
                   onSubmitted: (v) {
@@ -185,18 +188,27 @@ class _GeneralSettingsSectionState
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
             ),
-            child: settingsState.isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Save changes',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
+            child:
+                settingsState.isSaving
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : const Text(
+                      'Save changes',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
           ),
         ),
       ],
@@ -205,16 +217,18 @@ class _GeneralSettingsSectionState
 
   void _save(BusinessConfig config) {
     ref.read(settingsProvider.notifier).saveConfig(config);
-    ref.read(auditServiceProvider).log(
-      actionType:  AuditAction.settingsChanged,
-      description: 'Business settings updated',
-      metadata: {
-        'tax_rate':        config.taxRate,
-        'allow_discounts': config.allowDiscounts,
-        'kitchen_display': config.enableKitchenDisplay,
-        'table_mgmt':      config.enableTableManagement,
-      },
-    );
+    ref
+        .read(auditServiceProvider)
+        .log(
+          actionType: AuditAction.settingsChanged,
+          description: 'Business settings updated',
+          metadata: {
+            'tax_rate': config.taxRate,
+            'allow_discounts': config.allowDiscounts,
+            'kitchen_display': config.enableKitchenDisplay,
+            'table_mgmt': config.enableTableManagement,
+          },
+        );
   }
 
   void _saveAll(BusinessConfig config) {
@@ -222,10 +236,12 @@ class _GeneralSettingsSectionState
         double.tryParse(_taxController.text.trim()) ?? config.taxRate;
     final footer = _footerController.text.trim();
 
-    _save(config.copyWith(
-      taxRate: taxRate,
-      receiptFooter: footer.isEmpty ? null : footer,
-    ));
+    _save(
+      config.copyWith(
+        taxRate: taxRate,
+        receiptFooter: footer.isEmpty ? null : footer,
+      ),
+    );
   }
 }
 
@@ -251,12 +267,15 @@ class _SettingGroup extends StatelessWidget {
           children: [
             Icon(icon, size: 15, color: AppColors.primary),
             const SizedBox(width: 6),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.3)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.3,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -267,19 +286,23 @@ class _SettingGroup extends StatelessWidget {
             border: Border.all(color: AppColors.divider),
           ),
           child: Column(
-            children: children
-                .map((child) => Column(
-                      children: [
-                        child,
-                        if (child != children.last)
-                          Divider(
+            children:
+                children
+                    .map(
+                      (child) => Column(
+                        children: [
+                          child,
+                          if (child != children.last)
+                            Divider(
                               height: 1,
                               indent: 16,
                               endIndent: 16,
-                              color: AppColors.divider),
-                      ],
-                    ))
-                .toList(),
+                              color: AppColors.divider,
+                            ),
+                        ],
+                      ),
+                    )
+                    .toList(),
           ),
         ),
       ],
@@ -310,17 +333,24 @@ class _SwitchRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 if (sublabel != null) ...[
                   const SizedBox(height: 2),
-                  Text(sublabel!,
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary)),
-                ]
+                  Text(
+                    sublabel!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -364,11 +394,14 @@ class _TextFieldRow extends StatelessWidget {
             width: 120,
             child: Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary)),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -381,10 +414,14 @@ class _TextFieldRow extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(color: AppColors.divider),
@@ -415,15 +452,22 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
-          ),
-          Text(value,
+            child: Text(
+              label,
               style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary)),
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

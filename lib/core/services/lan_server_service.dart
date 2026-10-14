@@ -18,13 +18,13 @@ import 'connectivity_service.dart';
 import 'sync_queue_service.dart';
 
 final lanServerServiceProvider = Provider<LanServerService>((ref) {
-  final s = LanServerService(ref);   // pass ref instead of just localDb
+  final s = LanServerService(ref); // pass ref instead of just localDb
   ref.onDispose(s.stop);
   return s;
 });
 
 class LanServerService {
-  final Ref _ref;                                    // ← was just LocalDbService
+  final Ref _ref; // ← was just LocalDbService
   LocalDbService get _local => _ref.read(localDbServiceProvider);
   static const int port = 8080;
 
@@ -35,20 +35,25 @@ class LanServerService {
   // null = unlimited / not yet known.
   int? maxTerminals;
 
-  LanServerService(this._ref);   
+  LanServerService(this._ref);
 
   Future<void> start() async {
     if (_server != null) return;
 
-    final router = Router()
-      ..get('/ping', _ping)
-      ..get('/ws', _handleWs)         // ← NEW: WebSocket upgrade endpoint
-      ..get('/orders/pending', _getPendingOrders)
-      ..patch('/orders/<orderId>/status', _updateOrderStatus)
-      ..patch('/orders/<orderId>/rounds/<round>/status', _updateRoundStatus);
+    final router =
+        Router()
+          ..get('/ping', _ping)
+          ..get('/ws', _handleWs) // ← NEW: WebSocket upgrade endpoint
+          ..get('/orders/pending', _getPendingOrders)
+          ..patch('/orders/<orderId>/status', _updateOrderStatus)
+          ..patch(
+            '/orders/<orderId>/rounds/<round>/status',
+            _updateRoundStatus,
+          );
 
-    final handler =
-        Pipeline().addMiddleware(_corsMiddleware()).addHandler(router.call);
+    final handler = Pipeline()
+        .addMiddleware(_corsMiddleware())
+        .addHandler(router.call);
 
     _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
@@ -130,8 +135,7 @@ class LanServerService {
   }
 
   /// Called by ParkedOrderService to push park/restore events to LAN clients.
-  void broadcastParkedOrderEvent(
-      String type, Map<String, dynamic> payload) {
+  void broadcastParkedOrderEvent(String type, Map<String, dynamic> payload) {
     _broadcast({'type': type, 'payload': payload});
   }
 
@@ -180,31 +184,48 @@ class LanServerService {
     }
     try {
       final businessId = req.url.queryParameters['business_id'] ?? '';
-      final orders = await _local.getOrders(businessId);
-      final pending = orders
-          .where((o) =>
-              o.status == OrderStatus.pending ||
-              o.status == OrderStatus.preparing ||
-              o.status == OrderStatus.ready)
-          .toList();
+      final orders = await _local.getActiveKitchenOrders(businessId);
+      final pending =
+          orders
+              .where(
+                (o) =>
+                    o.status == OrderStatus.pending ||
+                    o.status == OrderStatus.preparing ||
+                    o.status == OrderStatus.ready,
+              )
+              .toList();
 
-      final json = pending
-          .map((o) => {
-                'id': o.id,
-                'order_number': o.orderNumber,
-                'table_id': o.tableId,
-                'order_type': o.orderType.value,
-                'customer_name': o.customerName,
-                'status': o.status.value,
-                'created_at': o.createdAt.toIso8601String(),
-                'items': o.items.where((i) => i.hasKitchenWork)
-                    .map((i) => {'product_name': i.product.name, 'quantity': i.quantity})
-                    .toList(),
-              })
-          .toList();
+      final json =
+          pending
+              .map(
+                (o) => {
+                  'id': o.id,
+                  'order_number': o.orderNumber,
+                  'table_id': o.tableId,
+                  'order_type': o.orderType.value,
+                  'customer_name': o.customerName,
+                  'status': o.status.value,
+                  'created_at': o.createdAt.toIso8601String(),
+                  'items':
+                      o.items
+                          .where((i) => i.hasKitchenWork)
+                          .map(
+                            (i) => {
+                              'product_name': i.product.name,
+                              'quantity': i.quantity,
+                              'round': i.round,
+                              'kitchen_status': i.kitchenStatus,
+                            },
+                          )
+                          .toList(),
+                },
+              )
+              .toList();
 
-      return Response.ok(jsonEncode(json),
-          headers: {'content-type': 'application/json'});
+      return Response.ok(
+        jsonEncode(json),
+        headers: {'content-type': 'application/json'},
+      );
     } catch (e) {
       return Response.internalServerError(body: jsonEncode({'error': '$e'}));
     }
@@ -214,15 +235,18 @@ class LanServerService {
     // Auth check — reject requests that don't carry the shared secret
     final key = req.headers['x-pos-key'];
     if (key == null || key != _posKey) {
-      return Response.forbidden(jsonEncode({'error': 'unauthorized'}),
-          headers: {'content-type': 'application/json'});
+      return Response.forbidden(
+        jsonEncode({'error': 'unauthorized'}),
+        headers: {'content-type': 'application/json'},
+      );
     }
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
       final statusStr = body['status'] as String?;
       if (statusStr == null) {
         return Response.badRequest(
-            body: jsonEncode({'error': 'status required'}));
+          body: jsonEncode({'error': 'status required'}),
+        );
       }
 
       final status = OrderStatusX.fromString(statusStr);
@@ -231,12 +255,14 @@ class LanServerService {
       await _local.markOrderStatus(orderId, status);
 
       // 2. FIX: enqueue to Supabase so the status isn't lost when internet returns
-      await _ref.read(syncQueueServiceProvider).enqueue(
-        operation: 'update_order_status',
-        tableName: 'orders',
-        recordId: orderId,
-        payload: {'status': statusStr},
-      );
+      await _ref
+          .read(syncQueueServiceProvider)
+          .enqueue(
+            operation: 'update_order_status',
+            tableName: 'orders',
+            recordId: orderId,
+            payload: {'status': statusStr},
+          );
 
       // 3. If online right now, flush immediately — no need to wait for next reconnect
       if (_ref.read(isOnlineProvider)) {
@@ -249,20 +275,26 @@ class LanServerService {
         'payload': {'order_id': orderId, 'status': statusStr},
       });
 
-      return Response.ok(jsonEncode({'success': true}),
-          headers: {'content-type': 'application/json'});
+      return Response.ok(
+        jsonEncode({'success': true}),
+        headers: {'content-type': 'application/json'},
+      );
     } catch (e) {
-      return Response.internalServerError(
-          body: jsonEncode({'error': '$e'}));
+      return Response.internalServerError(body: jsonEncode({'error': '$e'}));
     }
   }
 
   Future<Response> _updateRoundStatus(
-      Request req, String orderId, String round) async {
+    Request req,
+    String orderId,
+    String round,
+  ) async {
     final key = req.headers['x-pos-key'];
     if (key == null || key != _posKey) {
-      return Response.forbidden(jsonEncode({'error': 'unauthorized'}),
-          headers: {'content-type': 'application/json'});
+      return Response.forbidden(
+        jsonEncode({'error': 'unauthorized'}),
+        headers: {'content-type': 'application/json'},
+      );
     }
     try {
       final body = jsonDecode(await req.readAsString()) as Map<String, dynamic>;
@@ -271,15 +303,18 @@ class LanServerService {
       const valid = {'pending', 'preparing', 'ready', 'served'};
       if (status == null || !valid.contains(status) || r == null) {
         return Response.badRequest(
-            body: jsonEncode({'error': 'status and round required'}));
+          body: jsonEncode({'error': 'status and round required'}),
+        );
       }
       final derived = await _local.setRoundStatus(orderId, r, status);
-      await _ref.read(syncQueueServiceProvider).enqueue(
-        operation: 'update_round_status',
-        tableName: 'order_items',
-        recordId: orderId,
-        payload: {'order_id': orderId, 'round': r, 'status': status},
-      );
+      await _ref
+          .read(syncQueueServiceProvider)
+          .enqueue(
+            operation: 'update_round_status',
+            tableName: 'order_items',
+            recordId: orderId,
+            payload: {'order_id': orderId, 'round': r, 'status': status},
+          );
       if (_ref.read(isOnlineProvider)) {
         _ref.read(syncQueueServiceProvider).flushQueue();
       }
@@ -287,15 +322,19 @@ class LanServerService {
         'type': 'order_status_changed',
         'payload': {'order_id': orderId, 'status': derived},
       });
-      return Response.ok(jsonEncode({'success': true}),
-          headers: {'content-type': 'application/json'});
+      return Response.ok(
+        jsonEncode({'success': true}),
+        headers: {'content-type': 'application/json'},
+      );
     } catch (e) {
       return Response.internalServerError(body: jsonEncode({'error': '$e'}));
     }
   }
 
-  Middleware _corsMiddleware() => (Handler handler) => (Request req) async {
-        if (req.method == 'OPTIONS') return Response.ok('', headers: _corsHeaders);
+  Middleware _corsMiddleware() =>
+      (Handler handler) => (Request req) async {
+        if (req.method == 'OPTIONS')
+          return Response.ok('', headers: _corsHeaders);
         return (await handler(req)).change(headers: _corsHeaders);
       };
 

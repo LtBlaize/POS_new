@@ -21,24 +21,29 @@ class StaffSettingsSection extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Text('Staff Members',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary)),
+            const Text(
+              'Staff Members',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
             const Spacer(),
             ElevatedButton.icon(
-              onPressed: () =>
-                  _showAddStaffDialog(context, ref, isRestaurant),
+              onPressed: () => _showAddStaffDialog(context, ref, isRestaurant),
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Staff'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ],
@@ -51,40 +56,44 @@ class StaffSettingsSection extends ConsumerWidget {
 
         // ── Staff list (owners excluded) ───────────────────────────────
         staffAsync.when(
-          loading: () =>
-              const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Error: $e'),
           data: (staff) {
-            final nonOwners = staff
-                .where((s) => s.role != StaffRole.owner)
-                .toList();
+            final nonOwners =
+                staff.where((s) => s.role != StaffRole.owner).toList();
             return nonOwners.isEmpty
                 ? Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.divider),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'No staff yet. Add your first staff member.',
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
-                    child: const Center(
-                      child: Text(
-                        'No staff yet. Add your first staff member.',
-                        style: TextStyle(
-                            color: AppColors.textSecondary),
-                      ),
-                    ),
-                  )
+                  ),
+                )
                 : Column(
-                    children: nonOwners
-                        .map((s) => _StaffTile(
+                  children:
+                      nonOwners
+                          .map(
+                            (s) => _StaffTile(
                               staff: s,
-                              onEdit: () => _showEditStaffDialog(
-                                  context, ref, s, isRestaurant),
-                              onDelete: () =>
-                                  _confirmDelete(context, ref, s),
-                            ))
-                        .toList(),
-                  );
+                              onEdit:
+                                  () => _showEditStaffDialog(
+                                    context,
+                                    ref,
+                                    s,
+                                    isRestaurant,
+                                  ),
+                              onDelete: () => _confirmDelete(context, ref, s),
+                            ),
+                          )
+                          .toList(),
+                );
           },
         ),
       ],
@@ -92,17 +101,22 @@ class StaffSettingsSection extends ConsumerWidget {
   }
 
   void _showAddStaffDialog(
-      BuildContext context, WidgetRef ref, bool isRestaurant) {
+    BuildContext context,
+    WidgetRef ref,
+    bool isRestaurant,
+  ) {
     final fm = ref.read(featureManagerProvider);
     final maxStaff = fm.limits.maxStaffAccounts;
-    final currentCount = (ref.read(staffListProvider).asData?.value ?? [])
-        .where((s) => s.role != StaffRole.owner)
-        .length;
+    final currentCount =
+        (ref.read(staffListProvider).asData?.value ?? [])
+            .where((s) => s.role != StaffRole.owner)
+            .length;
     if (maxStaff != null && currentCount >= maxStaff) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              '${fm.currentPlan.displayName} allows up to $maxStaff staff accounts. Upgrade for unlimited staff.'),
+            '${fm.currentPlan.displayName} allows up to $maxStaff staff accounts. Upgrade for unlimited staff.',
+          ),
           backgroundColor: Colors.orange.shade700,
         ),
       );
@@ -110,59 +124,73 @@ class StaffSettingsSection extends ConsumerWidget {
     }
     showDialog(
       context: context,
-      builder: (ctx) => _StaffDialog(
-        isRestaurant: isRestaurant,
-        onSave: (name, role, pin) async {
-          await ref.read(staffListProvider.notifier).addStaff(
-              name: name, role: role, pin: pin, maxStaffAccounts: maxStaff);
-        },
-      ),
-    );
-  }
-
-  void _showEditStaffDialog(BuildContext context, WidgetRef ref,
-      StaffMember staff, bool isRestaurant) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _StaffDialog(
-        existing: staff,
-        isRestaurant: isRestaurant,
-        onSave: (name, role, pin) async {
-          await ref.read(staffListProvider.notifier).updateStaff(
-                id: staff.id,
-                name: name,
-                role: role,
-                newPin: pin.isEmpty ? null : pin,
-              );
-        },
-      ),
-    );
-  }
-
-  void _confirmDelete(
-      BuildContext context, WidgetRef ref, StaffMember staff) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove Staff'),
-        content: Text('Remove ${staff.name} from staff?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
+      builder:
+          (ctx) => _StaffDialog(
+            isRestaurant: isRestaurant,
+            onSave: (name, role, pin) async {
               await ref
                   .read(staffListProvider.notifier)
-                  .deleteStaff(staff.id);
+                  .addStaff(
+                    name: name,
+                    role: role,
+                    pin: pin,
+                    maxStaffAccounts: maxStaff,
+                  );
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove'),
           ),
-        ],
-      ),
+    );
+  }
+
+  void _showEditStaffDialog(
+    BuildContext context,
+    WidgetRef ref,
+    StaffMember staff,
+    bool isRestaurant,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => _StaffDialog(
+            existing: staff,
+            isRestaurant: isRestaurant,
+            onSave: (name, role, pin) async {
+              await ref
+                  .read(staffListProvider.notifier)
+                  .updateStaff(
+                    id: staff.id,
+                    name: name,
+                    role: role,
+                    newPin: pin.isEmpty ? null : pin,
+                  );
+            },
+          ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, StaffMember staff) {
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Remove Staff'),
+            content: Text('Remove ${staff.name} from staff?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await ref
+                      .read(staffListProvider.notifier)
+                      .deleteStaff(staff.id);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
     );
   }
 }
@@ -185,8 +213,8 @@ class _RolePermissionsCard extends ConsumerWidget {
   };
 
   static const _capabilityLabels = <String, (String, IconData)>{
-    'can_void_item':    ('Void items', Icons.remove_circle_outline),
-    'can_void_order':   ('Void orders', Icons.remove_shopping_cart_outlined),
+    'can_void_item': ('Void items', Icons.remove_circle_outline),
+    'can_void_order': ('Void orders', Icons.remove_shopping_cart_outlined),
     'can_apply_discount': ('Apply discounts', Icons.local_offer_outlined),
     'can_issue_refund': ('Issue refunds', Icons.replay_outlined),
   };
@@ -218,21 +246,27 @@ class _RolePermissionsCard extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(Icons.tune_rounded,
-                    size: 16, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.tune_rounded,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 8),
-                const Text('Tab Access by Role',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                const Text(
+                  'Tab Access by Role',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const Spacer(),
                 if (permsAsync.isLoading)
                   const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child:
-                          CircularProgressIndicator(strokeWidth: 2)),
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
               ],
             ),
           ),
@@ -241,137 +275,176 @@ class _RolePermissionsCard extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
             child: Text(
               'Owner always has full access.',
-              style: TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
           ),
           const Divider(height: 1),
 
           permsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('Error loading permissions: $e',
-                  style: const TextStyle(color: Colors.red)),
-            ),
-            data: (perms) => Column(
-              children: _roles.map((role) {
-                final roleKey = role.key;
-                final color = _roleColors[role] ?? Colors.grey;
-                final roleTabs = perms[roleKey] ?? {};
+            loading:
+                () => const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+            error:
+                (e, _) => Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Error loading permissions: $e',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+            data:
+                (perms) => Column(
+                  children:
+                      _roles.map((role) {
+                        final roleKey = role.key;
+                        final color = _roleColors[role] ?? Colors.grey;
+                        final roleTabs = perms[roleKey] ?? {};
 
-                return ExpansionTile(
-                  leading: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: color.withValues(alpha:0.15),
-                    child: Text(
-                      role.label[0],
-                      style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12),
-                    ),
-                  ),
-                  title: Text(role.label,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text(
-                    '${roleTabs.length} tab${roleTabs.length == 1 ? '' : 's'} enabled',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary),
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: Text('Screen access',
-                          style: TextStyle(
-                              fontSize: 11,
+                        return ExpansionTile(
+                          leading: CircleAvatar(
+                            radius: 14,
+                            backgroundColor: color.withValues(alpha: 0.15),
+                            child: Text(
+                              role.label[0],
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            role.label,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
-                    ),
-                    ...tabsForBusinessType(isRestaurant).map((tab) {
-                      final info = _tabLabels[tab];
-                      if (info == null) return const SizedBox.shrink();
-                      final (label, icon) = info;
-                      final enabled = roleTabs.contains(tab);
-                      return SwitchListTile(
-                        dense: true,
-                        secondary: Icon(icon,
-                            size: 18, color: AppColors.textSecondary),
-                        title: Text(label,
-                            style: const TextStyle(fontSize: 13)),
-                        value: enabled,
-                        activeThumbColor: color,
-                        onChanged: (_) async {
-                          try {
-                            await ref
-                                .read(rolePermissionsProvider.notifier)
-                                .toggle(roleKey, tab);
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e
-                                      .toString()
-                                      .replaceFirst('Exception: ', '')),
-                                  backgroundColor: Colors.orange.shade700,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                      );
-                    }),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text('Actions',
-                          style: TextStyle(
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${roleTabs.length} tab${roleTabs.length == 1 ? '' : 's'} enabled',
+                            style: TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
-                    ),
-                    ..._capabilityLabels.entries.map((entry) {
-                      final (label, icon) = entry.value;
-                      final capabilities = ref
-                          .read(rolePermissionsProvider.notifier)
-                          .capabilitiesFor(role);
-                      final enabled = capabilities.valueFor(entry.key);
-                      return SwitchListTile(
-                        dense: true,
-                        secondary: Icon(icon,
-                            size: 18, color: AppColors.textSecondary),
-                        title: Text(label,
-                            style: const TextStyle(fontSize: 13)),
-                        value: enabled,
-                        activeThumbColor: color,
-                        onChanged: (_) async {
-                          try {
-                            await ref
-                                .read(rolePermissionsProvider.notifier)
-                                .toggleCapability(roleKey, entry.key);
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e
-                                      .toString()
-                                      .replaceFirst('Exception: ', '')),
-                                  backgroundColor: Colors.orange.shade700,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              child: Text(
+                                'Screen access',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
                                 ),
+                              ),
+                            ),
+                            ...tabsForBusinessType(isRestaurant).map((tab) {
+                              final info = _tabLabels[tab];
+                              if (info == null) return const SizedBox.shrink();
+                              final (label, icon) = info;
+                              final enabled = roleTabs.contains(tab);
+                              return SwitchListTile(
+                                dense: true,
+                                secondary: Icon(
+                                  icon,
+                                  size: 18,
+                                  color: AppColors.textSecondary,
+                                ),
+                                title: Text(
+                                  label,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                value: enabled,
+                                activeThumbColor: color,
+                                onChanged: (_) async {
+                                  try {
+                                    await ref
+                                        .read(rolePermissionsProvider.notifier)
+                                        .toggle(roleKey, tab);
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            e.toString().replaceFirst(
+                                              'Exception: ',
+                                              '',
+                                            ),
+                                          ),
+                                          backgroundColor:
+                                              Colors.orange.shade700,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
                               );
-                            }
-                          }
-                        },
-                      );
-                    }),
-                  ],
-                );
-              }).toList(),
-            ),
+                            }),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                              child: Text(
+                                'Actions',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            ..._capabilityLabels.entries.map((entry) {
+                              final (label, icon) = entry.value;
+                              final capabilities = ref
+                                  .read(rolePermissionsProvider.notifier)
+                                  .capabilitiesFor(role);
+                              final enabled = capabilities.valueFor(entry.key);
+                              return SwitchListTile(
+                                dense: true,
+                                secondary: Icon(
+                                  icon,
+                                  size: 18,
+                                  color: AppColors.textSecondary,
+                                ),
+                                title: Text(
+                                  label,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                value: enabled,
+                                activeThumbColor: color,
+                                onChanged: (_) async {
+                                  try {
+                                    await ref
+                                        .read(rolePermissionsProvider.notifier)
+                                        .toggleCapability(roleKey, entry.key);
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            e.toString().replaceFirst(
+                                              'Exception: ',
+                                              '',
+                                            ),
+                                          ),
+                                          backgroundColor:
+                                              Colors.orange.shade700,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              );
+                            }),
+                          ],
+                        );
+                      }).toList(),
+                ),
           ),
         ],
       ),
@@ -404,8 +477,7 @@ class _StaffTile extends StatelessWidget {
     final color = _roleColors[staff.role] ?? Colors.grey;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
@@ -415,13 +487,14 @@ class _StaffTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: color.withValues(alpha:0.15),
+            backgroundColor: color.withValues(alpha: 0.15),
             child: Text(
               staff.name[0].toUpperCase(),
               style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14),
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -429,22 +502,31 @@ class _StaffTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(staff.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(
+                  staff.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 2),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha:0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(staff.role.label,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
+                  child: Text(
+                    staff.role.label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -470,8 +552,7 @@ class _StaffTile extends StatelessWidget {
 class _StaffDialog extends StatefulWidget {
   final StaffMember? existing;
   final bool isRestaurant;
-  final Future<void> Function(String name, StaffRole role, String pin)
-      onSave;
+  final Future<void> Function(String name, StaffRole role, String pin) onSave;
 
   const _StaffDialog({
     this.existing,
@@ -493,14 +574,16 @@ class _StaffDialogState extends State<_StaffDialog> {
   @override
   void initState() {
     super.initState();
-    final available =
-        StaffRoleAvailability.forBusinessType(widget.isRestaurant);
+    final available = StaffRoleAvailability.forBusinessType(
+      widget.isRestaurant,
+    );
     if (widget.existing != null) {
       _nameController.text = widget.existing!.name;
       // Clamp to a valid role for this business type
-      _role = available.contains(widget.existing!.role)
-          ? widget.existing!.role
-          : available.first;
+      _role =
+          available.contains(widget.existing!.role)
+              ? widget.existing!.role
+              : available.first;
     } else {
       _role = available.first;
     }
@@ -529,9 +612,7 @@ class _StaffDialogState extends State<_StaffDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -541,12 +622,12 @@ class _StaffDialogState extends State<_StaffDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final availableRoles =
-        StaffRoleAvailability.forBusinessType(widget.isRestaurant);
+    final availableRoles = StaffRoleAvailability.forBusinessType(
+      widget.isRestaurant,
+    );
 
     return Dialog(
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SizedBox(
         width: 380,
         child: Padding(
@@ -555,45 +636,58 @@ class _StaffDialogState extends State<_StaffDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_isEdit ? 'Edit Staff' : 'Add Staff',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                _isEdit ? 'Edit Staff' : 'Add Staff',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 20),
 
-              const Text('Name',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text(
+                'Name',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: _nameController,
                 decoration: InputDecoration(
                   hintText: 'e.g. Juan dela Cruz',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
 
-              const Text('Role',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text(
+                'Role',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 6),
               DropdownButtonFormField<StaffRole>(
                 initialValue: _role,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
-                items: availableRoles
-                    .map((r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(r.label),
-                        ))
-                    .toList(),
+                items:
+                    availableRoles
+                        .map(
+                          (r) =>
+                              DropdownMenuItem(value: r, child: Text(r.label)),
+                        )
+                        .toList(),
                 onChanged: (v) {
                   if (v != null) setState(() => _role = v);
                 },
@@ -601,11 +695,11 @@ class _StaffDialogState extends State<_StaffDialog> {
               const SizedBox(height: 16),
 
               Text(
-                _isEdit
-                    ? 'New PIN (leave blank to keep)'
-                    : '4-digit PIN',
+                _isEdit ? 'New PIN (leave blank to keep)' : '4-digit PIN',
                 style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 6),
               TextField(
@@ -616,16 +710,20 @@ class _StaffDialogState extends State<_StaffDialog> {
                 decoration: InputDecoration(
                   hintText: '••••',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   counterText: '',
                   suffixIcon: IconButton(
-                    icon: Icon(_showPin
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined),
-                    onPressed: () =>
-                        setState(() => _showPin = !_showPin),
+                    icon: Icon(
+                      _showPin
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    onPressed: () => setState(() => _showPin = !_showPin),
                   ),
                 ),
               ),
@@ -635,14 +733,12 @@ class _StaffDialogState extends State<_StaffDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _saving
-                          ? null
-                          : () => Navigator.pop(context),
+                      onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: const Text('Cancel'),
                     ),
@@ -654,20 +750,22 @@ class _StaffDialogState extends State<_StaffDialog> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
+                      child:
+                          _saving
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white),
-                            )
-                          : Text(_isEdit ? 'Save' : 'Add'),
+                                  color: Colors.white,
+                                ),
+                              )
+                              : Text(_isEdit ? 'Save' : 'Add'),
                     ),
                   ),
                 ],
@@ -692,9 +790,10 @@ class OwnerPinSection extends ConsumerWidget {
         const Text(
           'Your PIN',
           style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary),
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 4),
         const Text(
@@ -710,10 +809,11 @@ class OwnerPinSection extends ConsumerWidget {
             label: const Text('Change PIN'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
         ),
@@ -724,28 +824,31 @@ class OwnerPinSection extends ConsumerWidget {
   void _showChangePinDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (ctx) => _ChangePinDialog(
-        onSave: (currentPin, newPin) async {
-          // Verify current PIN first
-          final staffAsync = ref.read(staffListProvider);
-          final staffList = staffAsync.asData?.value ?? [];
-          final owner = staffList.firstWhere(
-            (s) => s.role == StaffRole.owner,
-            orElse: () => throw Exception('Owner not found'),
-          );
-
-          if (!owner.checkPin(currentPin)) {
-            throw Exception('Current PIN is incorrect');
-          }
-
-          await ref.read(staffListProvider.notifier).updateStaff(
-                id: owner.id,
-                name: owner.name,
-                role: owner.role,
-                newPin: newPin,
+      builder:
+          (ctx) => _ChangePinDialog(
+            onSave: (currentPin, newPin) async {
+              // Verify current PIN first
+              final staffAsync = ref.read(staffListProvider);
+              final staffList = staffAsync.asData?.value ?? [];
+              final owner = staffList.firstWhere(
+                (s) => s.role == StaffRole.owner,
+                orElse: () => throw Exception('Owner not found'),
               );
-        },
-      ),
+
+              if (!owner.checkPin(currentPin)) {
+                throw Exception('Current PIN is incorrect');
+              }
+
+              await ref
+                  .read(staffListProvider.notifier)
+                  .updateStaff(
+                    id: owner.id,
+                    name: owner.name,
+                    role: owner.role,
+                    newPin: newPin,
+                  );
+            },
+          ),
     );
   }
 }
@@ -833,9 +936,10 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -846,16 +950,18 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
           decoration: InputDecoration(
             hintText: '••••',
             counterText: '',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 12),
+              horizontal: 14,
+              vertical: 12,
+            ),
             suffixIcon: IconButton(
               icon: Icon(
-                  show
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 18),
+                show
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 18,
+              ),
               onPressed: onToggle,
             ),
           ),
@@ -867,8 +973,7 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SizedBox(
         width: 380,
         child: Padding(
@@ -877,17 +982,17 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Change PIN',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800)),
+              const Text(
+                'Change PIN',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 20),
 
               _pinField(
                 controller: _currentController,
                 label: 'Current PIN',
                 show: _showCurrent,
-                onToggle: () =>
-                    setState(() => _showCurrent = !_showCurrent),
+                onToggle: () => setState(() => _showCurrent = !_showCurrent),
               ),
               const SizedBox(height: 14),
 
@@ -903,32 +1008,37 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
                 controller: _confirmController,
                 label: 'Confirm New PIN',
                 show: _showConfirm,
-                onToggle: () =>
-                    setState(() => _showConfirm = !_showConfirm),
+                onToggle: () => setState(() => _showConfirm = !_showConfirm),
               ),
 
               // Error message
               AnimatedSize(
                 duration: const Duration(milliseconds: 200),
-                child: _error == null
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline,
-                                color: Colors.red, size: 14),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                _error!,
-                                style: const TextStyle(
-                                    color: Colors.red, fontSize: 12),
+                child:
+                    _error == null
+                        ? const SizedBox.shrink()
+                        : Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.red,
+                                size: 14,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
               ),
 
               const SizedBox(height: 24),
@@ -937,13 +1047,12 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed:
-                          _saving ? null : () => Navigator.pop(context),
+                      onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: const Text('Cancel'),
                     ),
@@ -955,19 +1064,22 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
+                      child:
+                          _saving
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white))
-                          : const Text('Change PIN'),
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Text('Change PIN'),
                     ),
                   ),
                 ],

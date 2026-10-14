@@ -17,13 +17,13 @@ class OtpVerificationScreen extends ConsumerStatefulWidget {
       _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState
-    extends ConsumerState<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   // 6 individual controllers + focus nodes for each digit box
-  final List<TextEditingController> _ctrlList =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusList =
-      List.generate(6, (_) => FocusNode());
+  final List<TextEditingController> _ctrlList = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusList = List.generate(6, (_) => FocusNode());
 
   bool _isLoading = false;
   bool _isResending = false;
@@ -73,10 +73,9 @@ class _OtpVerificationScreenState
     });
 
     try {
-      await ref.read(authServiceProvider).verifyRegistrationOtp(
-            email: widget.email,
-            otp: _otp,
-          );
+      await ref
+          .read(authServiceProvider)
+          .verifyRegistrationOtp(email: widget.email, otp: _otp);
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -104,9 +103,7 @@ class _OtpVerificationScreenState
     if (_resendCooldown > 0 || _isResending) return;
     setState(() => _isResending = true);
     try {
-      await ref
-          .read(authServiceProvider)
-          .resendOtp(email: widget.email);
+      await ref.read(authServiceProvider).resendOtp(email: widget.email);
       if (mounted) {
         _startCooldown();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +112,8 @@ class _OtpVerificationScreenState
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -130,7 +128,9 @@ class _OtpVerificationScreenState
   }
 
   String _friendlyError(String raw) {
-    if (raw.contains('invalid') || raw.contains('expired') || raw.contains('Token')) {
+    if (raw.contains('invalid') ||
+        raw.contains('expired') ||
+        raw.contains('Token')) {
       return 'Invalid or expired code. Check your email and try again.';
     }
     if (raw.contains('network')) return 'Network error. Check your connection.';
@@ -167,16 +167,18 @@ class _OtpVerificationScreenState
               child: Text.rich(
                 TextSpan(
                   style: const TextStyle(
-                      fontSize: 14,
-                      color: AuthColors.textSecondary,
-                      height: 1.4),
+                    fontSize: 14,
+                    color: AuthColors.textSecondary,
+                    height: 1.4,
+                  ),
                   children: [
                     const TextSpan(text: 'We sent a 6-digit code to '),
                     TextSpan(
                       text: _maskedEmail,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AuthColors.textPrimary),
+                        fontWeight: FontWeight.w600,
+                        color: AuthColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -227,30 +229,38 @@ class _OtpVerificationScreenState
             const SizedBox(height: 16),
 
             Center(
-              child: _isResending
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AuthColors.accentLight))
-                  : Wrap(
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        const Text("Didn't receive it?",
-                            style: AuthText.subtitle),
-                        TextButton(
-                          onPressed: _resendCooldown > 0 ? null : _resend,
-                          style: TextButton.styleFrom(
-                            foregroundColor: AuthColors.accentLight,
-                            disabledForegroundColor: AuthColors.textMuted,
-                          ),
-                          child: Text(_resendCooldown > 0
-                              ? 'Resend in ${_resendCooldown}s'
-                              : 'Resend code'),
+              child:
+                  _isResending
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AuthColors.accentLight,
                         ),
-                      ],
-                    ),
+                      )
+                      : Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          const Text(
+                            "Didn't receive it?",
+                            style: AuthText.subtitle,
+                          ),
+                          TextButton(
+                            onPressed: _resendCooldown > 0 ? null : _resend,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AuthColors.accentLight,
+                              disabledForegroundColor: AuthColors.textMuted,
+                            ),
+                            child: Text(
+                              _resendCooldown > 0
+                                  ? 'Resend in ${_resendCooldown}s'
+                                  : 'Resend code',
+                            ),
+                          ),
+                        ],
+                      ),
             ),
           ],
         ),
@@ -294,9 +304,10 @@ class _OtpBox extends StatelessWidget {
         animation: focusNode,
         builder: (context, _) {
           final focused = focusNode.hasFocus;
-          final borderColor = hasError
-              ? AuthColors.error
-              : focused
+          final borderColor =
+              hasError
+                  ? AuthColors.error
+                  : focused
                   ? AuthColors.accentLight
                   : AuthColors.border;
           return AnimatedContainer(
@@ -307,15 +318,18 @@ class _OtpBox extends StatelessWidget {
               color: AuthColors.field,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: borderColor, width: (focused || hasError) ? 1.5 : 1),
-              boxShadow: (focused && !hasError)
-                  ? [
-                      BoxShadow(
-                        color: AuthColors.accentLight.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                      )
-                    ]
-                  : null,
+                color: borderColor,
+                width: (focused || hasError) ? 1.5 : 1,
+              ),
+              boxShadow:
+                  (focused && !hasError)
+                      ? [
+                        BoxShadow(
+                          color: AuthColors.accentLight.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                        ),
+                      ]
+                      : null,
             ),
             child: TextFormField(
               controller: controller,
@@ -328,9 +342,10 @@ class _OtpBox extends StatelessWidget {
               cursorColor: AuthColors.accentLight,
               keyboardAppearance: Brightness.dark,
               style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AuthColors.textPrimary),
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AuthColors.textPrimary,
+              ),
               decoration: const InputDecoration(
                 counterText: '',
                 isDense: true,

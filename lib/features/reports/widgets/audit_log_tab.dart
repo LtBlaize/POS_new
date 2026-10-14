@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../reports_providers.dart';
 
-
 class AuditLogTab extends ConsumerStatefulWidget {
   const AuditLogTab({super.key});
 
@@ -19,18 +18,18 @@ class _AuditLogTabState extends ConsumerState<AuditLogTab> {
   final _staffController = TextEditingController();
 
   static const _actionTypes = [
-    ('All Actions',      null),
-    ('Void item',        'void_item'),
-    ('Void order',       'void_order'),
-    ('Discount',         'discount_applied'),
-    ('Override',         'manager_override'),
-    ('Refund',           'order_refund'),
-    ('Shift open',       'shift_open'),
-    ('Shift close',      'shift_close'),
-    ('Staff login',      'staff_login'),
-    ('Settings',         'settings_changed'),
+    ('All Actions', null),
+    ('Void item', 'void_item'),
+    ('Void order', 'void_order'),
+    ('Discount', 'discount_applied'),
+    ('Override', 'manager_override'),
+    ('Refund', 'order_refund'),
+    ('Shift open', 'shift_open'),
+    ('Shift close', 'shift_close'),
+    ('Staff login', 'staff_login'),
+    ('Settings', 'settings_changed'),
     ('Inventory adjust', 'inventory_adjust'),
-    ('Credit',           'credit_added'),
+    ('Credit', 'credit_added'),
   ];
 
   @override
@@ -51,47 +50,53 @@ class _AuditLogTabState extends ConsumerState<AuditLogTab> {
           filter: filter,
           staffController: _staffController,
           actionTypes: _actionTypes,
-          onFilterChanged: (f) =>
-              ref.read(auditFilterProvider.notifier).state = f,
+          onFilterChanged:
+              (f) => ref.read(auditFilterProvider.notifier).state = f,
           onClear: () {
             _staffController.clear();
-            ref.read(auditFilterProvider.notifier).state =
-                const AuditFilter();
+            ref.read(auditFilterProvider.notifier).state = const AuditFilter();
           },
         ),
 
         // ── Log list ─────────────────────────────────────────────────────────
         Expanded(
           child: logsAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Text('Error loading audit log: $e',
-                  style: const TextStyle(color: AppColors.danger)),
-            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error:
+                (e, _) => Center(
+                  child: Text(
+                    'Error loading audit log: $e',
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
+                ),
             data: (entries) {
               if (entries.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.history_rounded,
-                          size: 48,
-                          color:
-                              AppColors.textSecondary.withValues(alpha:0.2)),
+                      Icon(
+                        Icons.history_rounded,
+                        size: 48,
+                        color: AppColors.textSecondary.withValues(alpha: 0.2),
+                      ),
                       const SizedBox(height: 16),
-                      const Text('No audit entries found',
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
+                      const Text(
+                        'No audit entries found',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       const Text(
                         'Actions like voids, discounts and logins\nwill appear here.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary),
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -132,7 +137,8 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasActiveFilter = filter.actionType != null ||
+    final hasActiveFilter =
+        filter.actionType != null ||
         (filter.staffName?.isNotEmpty ?? false) ||
         filter.from != null ||
         filter.to != null;
@@ -147,61 +153,71 @@ class _FilterBar extends StatelessWidget {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: actionTypes.map((pair) {
-                final (label, value) = pair;
-                final active = filter.actionType == value;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: GestureDetector(
-                    onTap: () => onFilterChanged(
-                        filter.copyWith(actionType: value)),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? AppColors.primary.withValues(alpha:0.1)
-                            : AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: active
-                              ? AppColors.primary.withValues(alpha:0.4)
-                              : AppColors.divider,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (value != null)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Icon(
-                                _iconForAction(value),
-                                size: 11,
-                                color: active
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                              ),
+              children:
+                  actionTypes.map((pair) {
+                    final (label, value) = pair;
+                    final active = filter.actionType == value;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: GestureDetector(
+                        onTap:
+                            () => onFilterChanged(
+                              filter.copyWith(actionType: value),
                             ),
-                          Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: active
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: active
-                                  ? AppColors.primary
-                                  : AppColors.textSecondary,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                active
+                                    ? AppColors.primary.withValues(alpha: 0.1)
+                                    : AppColors.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color:
+                                  active
+                                      ? AppColors.primary.withValues(alpha: 0.4)
+                                      : AppColors.divider,
                             ),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (value != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Icon(
+                                    _iconForAction(value),
+                                    size: 11,
+                                    color:
+                                        active
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                  ),
+                                ),
+                              Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight:
+                                      active
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                  color:
+                                      active
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
           ),
           const SizedBox(height: 8),
@@ -218,25 +234,29 @@ class _FilterBar extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: 'Search by staff name…',
                       hintStyle: const TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary),
-                      prefixIcon: const Icon(Icons.search,
-                          size: 16, color: AppColors.textSecondary),
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: AppColors.divider),
+                        borderSide: const BorderSide(color: AppColors.divider),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: AppColors.divider),
+                        borderSide: const BorderSide(color: AppColors.divider),
                       ),
                     ),
-                    onChanged: (v) => onFilterChanged(
-                        filter.copyWith(staffName: v.isEmpty ? null : v)),
+                    onChanged:
+                        (v) => onFilterChanged(
+                          filter.copyWith(staffName: v.isEmpty ? null : v),
+                        ),
                   ),
                 ),
               ),
@@ -244,8 +264,9 @@ class _FilterBar extends StatelessWidget {
               _DateRangeButton(
                 from: filter.from,
                 to: filter.to,
-                onPick: (from, to) =>
-                    onFilterChanged(filter.copyWith(from: from, to: to)),
+                onPick:
+                    (from, to) =>
+                        onFilterChanged(filter.copyWith(from: from, to: to)),
               ),
               if (hasActiveFilter) ...[
                 const SizedBox(width: 6),
@@ -253,18 +274,24 @@ class _FilterBar extends StatelessWidget {
                   onTap: onClear,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha:0.08),
+                      color: AppColors.danger.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: AppColors.danger.withValues(alpha:0.3)),
+                        color: AppColors.danger.withValues(alpha: 0.3),
+                      ),
                     ),
-                    child: const Text('Clear',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.danger,
-                            fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -276,20 +303,20 @@ class _FilterBar extends StatelessWidget {
   }
 
   IconData _iconForAction(String action) => switch (action) {
-        'void_item'         => Icons.remove_circle_outline,
-        'void_order'        => Icons.remove_shopping_cart_outlined,
-        'discount_applied'  => Icons.local_offer_outlined,
-        'manager_override'  => Icons.admin_panel_settings_outlined,
-        'order_refund'      => Icons.replay_outlined,
-        'shift_open'        => Icons.login_rounded,
-        'shift_close'       => Icons.logout_rounded,
-        'staff_login'       => Icons.person_outline,
-        'settings_changed'  => Icons.settings_outlined,
-        'inventory_adjust'  => Icons.inventory_2_outlined,
-        'credit_added'      => Icons.receipt_long_outlined,
-        'credit_paid'       => Icons.payments_outlined,
-        _                   => Icons.history_rounded,
-      };
+    'void_item' => Icons.remove_circle_outline,
+    'void_order' => Icons.remove_shopping_cart_outlined,
+    'discount_applied' => Icons.local_offer_outlined,
+    'manager_override' => Icons.admin_panel_settings_outlined,
+    'order_refund' => Icons.replay_outlined,
+    'shift_open' => Icons.login_rounded,
+    'shift_close' => Icons.logout_rounded,
+    'staff_login' => Icons.person_outline,
+    'settings_changed' => Icons.settings_outlined,
+    'inventory_adjust' => Icons.inventory_2_outlined,
+    'credit_added' => Icons.receipt_long_outlined,
+    'credit_paid' => Icons.payments_outlined,
+    _ => Icons.history_rounded,
+  };
 }
 
 class _DateRangeButton extends StatelessWidget {
@@ -314,49 +341,45 @@ class _DateRangeButton extends StatelessWidget {
           context: context,
           firstDate: DateTime(2020),
           lastDate: now,
-          initialDateRange: from != null && to != null
-              ? DateTimeRange(start: from!, end: to!)
-              : null,
+          initialDateRange:
+              from != null && to != null
+                  ? DateTimeRange(start: from!, end: to!)
+                  : null,
         );
         if (result != null) {
           onPick(result.start, result.end);
         }
       },
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: hasRange
-              ? AppColors.info.withValues(alpha:0.08)
-              : AppColors.surface,
+          color:
+              hasRange
+                  ? AppColors.info.withValues(alpha: 0.08)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: hasRange
-                ? AppColors.info.withValues(alpha:0.4)
-                : AppColors.divider,
+            color:
+                hasRange
+                    ? AppColors.info.withValues(alpha: 0.4)
+                    : AppColors.divider,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.date_range_outlined,
-                size: 14,
-                color: hasRange
-                    ? AppColors.info
-                    : AppColors.textSecondary),
+            Icon(
+              Icons.date_range_outlined,
+              size: 14,
+              color: hasRange ? AppColors.info : AppColors.textSecondary,
+            ),
             const SizedBox(width: 4),
             Text(
-              hasRange
-                  ? '${_fmt(from!)} – ${_fmt(to!)}'
-                  : 'Date range',
+              hasRange ? '${_fmt(from!)} – ${_fmt(to!)}' : 'Date range',
               style: TextStyle(
                 fontSize: 12,
-                color: hasRange
-                    ? AppColors.info
-                    : AppColors.textSecondary,
-                fontWeight: hasRange
-                    ? FontWeight.w600
-                    : FontWeight.w500,
+                color: hasRange ? AppColors.info : AppColors.textSecondary,
+                fontWeight: hasRange ? FontWeight.w600 : FontWeight.w500,
               ),
             ),
           ],
@@ -384,66 +407,63 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
   bool _expanded = false;
 
   static const _actionColors = <String, Color>{
-    'void_item':         Color(0xFFE94560),
-    'void_order':        Color(0xFFE94560),
-    'discount_applied':  Color(0xFFF59E0B),
-    'manager_override':  Color(0xFFFF9800),
-    'price_override':    Color(0xFFFF9800),
-    'shift_open':        Color(0xFF10B981),
-    'shift_close':       Color(0xFF6366F1),
-    'staff_login':       Color(0xFF3B82F6),
-    'staff_logout':      Color(0xFF8B5CF6),
-    'settings_changed':  Color(0xFF6B7280),
-    'order_refund':      Color(0xFFE94560),
-    'inventory_adjust':  Color(0xFF3B82F6),
-    'credit_added':      Color(0xFF8B5CF6),
-    'credit_paid':       Color(0xFF10B981),
+    'void_item': Color(0xFFE94560),
+    'void_order': Color(0xFFE94560),
+    'discount_applied': Color(0xFFF59E0B),
+    'manager_override': Color(0xFFFF9800),
+    'price_override': Color(0xFFFF9800),
+    'shift_open': Color(0xFF10B981),
+    'shift_close': Color(0xFF6366F1),
+    'staff_login': Color(0xFF3B82F6),
+    'staff_logout': Color(0xFF8B5CF6),
+    'settings_changed': Color(0xFF6B7280),
+    'order_refund': Color(0xFFE94560),
+    'inventory_adjust': Color(0xFF3B82F6),
+    'credit_added': Color(0xFF8B5CF6),
+    'credit_paid': Color(0xFF10B981),
   };
 
   static const _actionLabels = <String, String>{
-    'void_item':         'Void item',
-    'void_order':        'Void order',
-    'discount_applied':  'Discount',
-    'manager_override':  'Override',
-    'price_override':    'Price override',
-    'shift_open':        'Shift open',
-    'shift_close':       'Shift close',
-    'staff_login':       'Login',
-    'staff_logout':      'Logout',
-    'settings_changed':  'Settings',
-    'order_refund':      'Refund',
-    'inventory_adjust':  'Inventory',
-    'credit_added':      'Credit added',
-    'credit_paid':       'Credit paid',
+    'void_item': 'Void item',
+    'void_order': 'Void order',
+    'discount_applied': 'Discount',
+    'manager_override': 'Override',
+    'price_override': 'Price override',
+    'shift_open': 'Shift open',
+    'shift_close': 'Shift close',
+    'staff_login': 'Login',
+    'staff_logout': 'Logout',
+    'settings_changed': 'Settings',
+    'order_refund': 'Refund',
+    'inventory_adjust': 'Inventory',
+    'credit_added': 'Credit added',
+    'credit_paid': 'Credit paid',
   };
 
   IconData _iconFor(String action) => switch (action) {
-        'void_item'         => Icons.remove_circle_outline,
-        'void_order'        => Icons.remove_shopping_cart_outlined,
-        'discount_applied'  => Icons.local_offer_outlined,
-        'manager_override'  => Icons.admin_panel_settings_outlined,
-        'price_override'    => Icons.edit_outlined,
-        'shift_open'        => Icons.login_rounded,
-        'shift_close'       => Icons.logout_rounded,
-        'staff_login'       => Icons.person_outline,
-        'staff_logout'      => Icons.person_off_outlined,
-        'settings_changed'  => Icons.settings_outlined,
-        'order_refund'      => Icons.replay_outlined,
-        'inventory_adjust'  => Icons.inventory_2_outlined,
-        'credit_added'      => Icons.receipt_long_outlined,
-        'credit_paid'       => Icons.payments_outlined,
-        _                   => Icons.history_rounded,
-      };
+    'void_item' => Icons.remove_circle_outline,
+    'void_order' => Icons.remove_shopping_cart_outlined,
+    'discount_applied' => Icons.local_offer_outlined,
+    'manager_override' => Icons.admin_panel_settings_outlined,
+    'price_override' => Icons.edit_outlined,
+    'shift_open' => Icons.login_rounded,
+    'shift_close' => Icons.logout_rounded,
+    'staff_login' => Icons.person_outline,
+    'staff_logout' => Icons.person_off_outlined,
+    'settings_changed' => Icons.settings_outlined,
+    'order_refund' => Icons.replay_outlined,
+    'inventory_adjust' => Icons.inventory_2_outlined,
+    'credit_added' => Icons.receipt_long_outlined,
+    'credit_paid' => Icons.payments_outlined,
+    _ => Icons.history_rounded,
+  };
 
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
-    final color =
-        _actionColors[entry.actionType] ?? AppColors.textSecondary;
-    final label =
-        _actionLabels[entry.actionType] ?? entry.actionType;
-    final hasMetadata =
-        entry.metadata != null && entry.metadata!.isNotEmpty;
+    final color = _actionColors[entry.actionType] ?? AppColors.textSecondary;
+    final label = _actionLabels[entry.actionType] ?? entry.actionType;
+    final hasMetadata = entry.metadata != null && entry.metadata!.isNotEmpty;
     final hasAuthoriser = entry.authorisedByName != null;
 
     return Container(
@@ -457,9 +477,10 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
         children: [
           // ── Main row ───────────────────────────────────────────────────
           GestureDetector(
-            onTap: hasMetadata
-                ? () => setState(() => _expanded = !_expanded)
-                : null,
+            onTap:
+                hasMetadata
+                    ? () => setState(() => _expanded = !_expanded)
+                    : null,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -470,11 +491,14 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha:0.1),
+                      color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(_iconFor(entry.actionType),
-                        size: 16, color: color),
+                    child: Icon(
+                      _iconFor(entry.actionType),
+                      size: 16,
+                      color: color,
+                    ),
                   ),
                   const SizedBox(width: 10),
 
@@ -487,63 +511,79 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: color.withValues(alpha:0.1),
+                                color: color.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(label,
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: color)),
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: color,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Text(
                               _timeAgo(entry.createdAt),
                               style: const TextStyle(
-                                  fontSize: 10,
-                                  color: AppColors.textSecondary),
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(entry.description,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w500)),
+                        Text(
+                          entry.description,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: 3),
                         Row(
                           children: [
                             Text(
                               entry.performedByName,
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary),
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                             Text(
                               ' · ${_roleLabel(entry.performedByRole)}',
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary),
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                             if (hasAuthoriser) ...[
-                              const Text(' · ',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary)),
+                              const Text(
+                                ' · ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
                               const Icon(
-                                  Icons.admin_panel_settings_outlined,
-                                  size: 11,
-                                  color: Color(0xFFFF9800)),
+                                Icons.admin_panel_settings_outlined,
+                                size: 11,
+                                color: Color(0xFFFF9800),
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 entry.authorisedByName!,
                                 style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFFFF9800),
-                                    fontWeight: FontWeight.w600),
+                                  fontSize: 11,
+                                  color: Color(0xFFFF9800),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ],
@@ -558,9 +598,10 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
                       turns: _expanded ? 0.5 : 0,
                       duration: const Duration(milliseconds: 200),
                       child: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 18,
-                          color: AppColors.textSecondary),
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                 ],
               ),
@@ -571,52 +612,56 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
-            child: _expanded && hasMetadata
-                ? Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: entry.metadata!.entries.map((e) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                SizedBox(
-                                  width: 110,
-                                  child: Text(
-                                    e.key,
-                                    style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w600),
+            child:
+                _expanded && hasMetadata
+                    ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children:
+                              entry.metadata!.entries.map((e) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        width: 110,
+                                        child: Text(
+                                          e.key,
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textSecondary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          '${e.value}',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    '${e.value}',
-                                    style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textPrimary),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                                );
+                              }).toList(),
+                        ),
                       ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
+                    )
+                    : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -633,10 +678,10 @@ class _AuditEntryCardState extends State<_AuditEntryCard> {
   }
 
   String _roleLabel(String role) => switch (role) {
-        'owner'   => 'Owner',
-        'manager' => 'Manager',
-        'cashier' => 'Cashier',
-        'kitchen' => 'Kitchen',
-        _         => role,
-      };
+    'owner' => 'Owner',
+    'manager' => 'Manager',
+    'cashier' => 'Cashier',
+    'kitchen' => 'Kitchen',
+    _ => role,
+  };
 }

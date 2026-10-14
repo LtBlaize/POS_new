@@ -35,30 +35,31 @@ class OfflineBanner extends ConsumerWidget {
         color: Colors.blue.shade700,
         icon: Icons.sync,
         spin: isSyncing,
-        message: isSyncing
-            ? 'Syncing $pendingCount item${pendingCount == 1 ? '' : 's'} to cloud...'
-            : '$pendingCount item${pendingCount == 1 ? '' : 's'} pending sync',
+        message:
+            isSyncing
+                ? 'Syncing $pendingCount item${pendingCount == 1 ? '' : 's'} to cloud...'
+                : '$pendingCount item${pendingCount == 1 ? '' : 's'} pending sync',
       );
     }
 
     final (color, icon, message) = switch (status) {
       ConnectivityStatus.lanOnly => (
-          Colors.orange.shade700,
-          Icons.cloud_off_outlined,
-          pendingCount > 0
-              ? 'No internet — $pendingCount item${pendingCount == 1 ? '' : 's'} will sync when reconnected'
-              : 'No internet — orders flowing locally only',
-        ),
+        Colors.orange.shade700,
+        Icons.cloud_off_outlined,
+        pendingCount > 0
+            ? 'No internet — $pendingCount item${pendingCount == 1 ? '' : 's'} will sync when reconnected'
+            : 'No internet — orders flowing locally only',
+      ),
       ConnectivityStatus.internetOnly => (
-          Colors.blue.shade600,
-          Icons.wifi_off_outlined,
-          'POS not found on local network — check both devices are on the same WiFi',
-        ),
+        Colors.blue.shade600,
+        Icons.wifi_off_outlined,
+        'POS not found on local network — check both devices are on the same WiFi',
+      ),
       ConnectivityStatus.none => (
-          Colors.red.shade700,
-          Icons.signal_wifi_statusbar_connected_no_internet_4_outlined,
-          'No internet and POS unreachable — orders cannot be sent to kitchen',
-        ),
+        Colors.red.shade700,
+        Icons.signal_wifi_statusbar_connected_no_internet_4_outlined,
+        'No internet and POS unreachable — orders cannot be sent to kitchen',
+      ),
       ConnectivityStatus.full => (Colors.transparent, Icons.check, ''),
     };
 
@@ -68,9 +69,10 @@ class OfflineBanner extends ConsumerWidget {
       message: message,
       // Only offer re-pair once we've given up on the current IP — avoids
       // flashing a "re-pair?" prompt during a normal few-second blip.
-      onRepair: needsRepair
-          ? () => Navigator.of(context).pushNamed('/ip-setup')
-          : null,
+      onRepair:
+          needsRepair
+              ? () => Navigator.of(context).pushNamed('/ip-setup')
+              : null,
     );
   }
 }
@@ -101,19 +103,23 @@ class _BannerContainer extends StatelessWidget {
         children: [
           spin
               ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
               : Icon(icon, size: 14, color: Colors.white),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (onRepair != null)
@@ -121,15 +127,21 @@ class _BannerContainer extends StatelessWidget {
               onPressed: onRepair,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 2,
+                ),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 backgroundColor: Colors.white.withValues(alpha: 0.15),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
-              child: const Text('Re-pair',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Re-pair',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
             ),
         ],
       ),

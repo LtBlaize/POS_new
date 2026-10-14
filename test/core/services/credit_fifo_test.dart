@@ -49,16 +49,19 @@ FifoResult applyFifo(List<CreditTx> unsettled, double payment) {
   for (final tx in unsettled) {
     if (remaining <= 0) break;
 
-    final applied = remaining >= tx.amountRemaining ? tx.amountRemaining : remaining;
+    final applied =
+        remaining >= tx.amountRemaining ? tx.amountRemaining : remaining;
     final newRemaining = tx.amountRemaining - applied;
     remaining -= applied;
 
-    settlements.add(Settlement(
-      creditTxId: tx.id,
-      amountApplied: applied,
-      newRemaining: newRemaining,
-      isSettled: newRemaining == 0,
-    ));
+    settlements.add(
+      Settlement(
+        creditTxId: tx.id,
+        amountApplied: applied,
+        newRemaining: newRemaining,
+        isSettled: newRemaining == 0,
+      ),
+    );
   }
 
   return FifoResult(settlements: settlements, leftover: remaining);
@@ -224,27 +227,32 @@ void main() {
       const payment = 250.0;
       final result = applyFifo(unsettled, payment);
 
-      final totalApplied = result.settlements
-          .fold(0.0, (sum, s) => sum + s.amountApplied);
+      final totalApplied = result.settlements.fold(
+        0.0,
+        (sum, s) => sum + s.amountApplied,
+      );
       expect(totalApplied + result.leftover, closeTo(payment, 0.001));
     });
 
-    test('amountApplied + newRemaining == original amountRemaining per credit', () {
-      final unsettled = [
-        CreditTx(id: 'c1', amountRemaining: 175),
-        CreditTx(id: 'c2', amountRemaining: 90),
-      ];
-      final result = applyFifo(unsettled, 200);
+    test(
+      'amountApplied + newRemaining == original amountRemaining per credit',
+      () {
+        final unsettled = [
+          CreditTx(id: 'c1', amountRemaining: 175),
+          CreditTx(id: 'c2', amountRemaining: 90),
+        ];
+        final result = applyFifo(unsettled, 200);
 
-      for (final s in result.settlements) {
-        final original = unsettled.firstWhere((t) => t.id == s.creditTxId);
-        expect(
-          s.amountApplied + s.newRemaining,
-          closeTo(original.amountRemaining, 0.001),
-          reason: 'conservation failed for ${s.creditTxId}',
-        );
-      }
-    });
+        for (final s in result.settlements) {
+          final original = unsettled.firstWhere((t) => t.id == s.creditTxId);
+          expect(
+            s.amountApplied + s.newRemaining,
+            closeTo(original.amountRemaining, 0.001),
+            reason: 'conservation failed for ${s.creditTxId}',
+          );
+        }
+      },
+    );
 
     test('credit with amountRemaining of 0.01 (rounding scenario)', () {
       final unsettled = [CreditTx(id: 'c1', amountRemaining: 0.01)];

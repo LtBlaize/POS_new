@@ -36,43 +36,46 @@ Future<VoidItemResult?> showVoidItemDialog({
   // Guard: check role before even opening the dialog
   final active = ref.read(activeStaffProvider);
   if (active == null) {
-    ScaffoldMessenger.of(context).showSnackBar(_errorSnack(
-      'No staff session active. Please log in.',
-    ));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(_errorSnack('No staff session active. Please log in.'));
     return Future.value(null);
   }
 
   final role = active.role;
   if (role != StaffRole.owner && role != StaffRole.manager) {
-    ScaffoldMessenger.of(context).showSnackBar(_errorSnack(
-      'Only a Manager or Owner can void items.',
-    ));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(_errorSnack('Only a Manager or Owner can void items.'));
     return Future.value(null);
   }
 
   return showDialog<VoidItemResult>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _VoidItemDialog(
-      orderId: orderId,
-      businessId: businessId,
-      item: item,
-      authorisedStaff: active,
-    ),
+    builder:
+        (_) => _VoidItemDialog(
+          orderId: orderId,
+          businessId: businessId,
+          item: item,
+          authorisedStaff: active,
+        ),
   );
 }
 
 SnackBar _errorSnack(String msg) => SnackBar(
-      content: Row(children: [
-        const Icon(Icons.lock_outline, color: Colors.white, size: 16),
-        const SizedBox(width: 8),
-        Expanded(child: Text(msg)),
-      ]),
-      backgroundColor: AppColors.danger,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    );
+  content: Row(
+    children: [
+      const Icon(Icons.lock_outline, color: Colors.white, size: 16),
+      const SizedBox(width: 8),
+      Expanded(child: Text(msg)),
+    ],
+  ),
+  backgroundColor: AppColors.danger,
+  behavior: SnackBarBehavior.floating,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  margin: const EdgeInsets.all(16),
+);
 
 // ── Dialog widget ─────────────────────────────────────────────────────────────
 
@@ -126,8 +129,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
   }
 
   void _verifyPin() {
-    final ok =
-        widget.authorisedStaff.checkPin(_enteredPin);
+    final ok = widget.authorisedStaff.checkPin(_enteredPin);
     if (!ok) {
       HapticFeedback.heavyImpact();
       setState(() {
@@ -147,7 +149,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
     setState(() => _voiding = true);
 
     try {
-      final record = await ref.read(orderServiceProvider).voidOrderItem(
+      final record = await ref
+          .read(orderServiceProvider)
+          .voidOrderItem(
             orderId: widget.orderId,
             productId: widget.item.product.id,
             productName: widget.item.product.name,
@@ -158,27 +162,31 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             voidedByStaffName: widget.authorisedStaff.name,
             businessId: widget.businessId,
             trackInventory: widget.item.product.trackInventory,
-            currentStock: widget.item.selectedVariant?.stockQuantity
-                ?? widget.item.product.stockQuantity,
+            currentStock:
+                widget.item.selectedVariant?.stockQuantity ??
+                widget.item.product.stockQuantity,
             variantId: widget.item.selectedVariant?.id,
           );
 
       // Audit log
-      await ref.read(auditServiceProvider).log(
-        actionType:  AuditAction.voidItem,
-        entityType:  'order_item',
-        entityId:    widget.orderId,
-        description: 'Voided ${widget.item.quantity}× ${widget.item.product.name}'
-            ' — reason: $_selectedReason',
-        authorisedBy: widget.authorisedStaff,
-        metadata: {
-          'product_name': widget.item.product.name,
-          'quantity':     widget.item.quantity,
-          'unit_price':   widget.item.product.price,
-          'reason':       _selectedReason,
-          'order_id':     widget.orderId,
-        },
-      );
+      await ref
+          .read(auditServiceProvider)
+          .log(
+            actionType: AuditAction.voidItem,
+            entityType: 'order_item',
+            entityId: widget.orderId,
+            description:
+                'Voided ${widget.item.quantity}× ${widget.item.product.name}'
+                ' — reason: $_selectedReason',
+            authorisedBy: widget.authorisedStaff,
+            metadata: {
+              'product_name': widget.item.product.name,
+              'quantity': widget.item.quantity,
+              'unit_price': widget.item.product.price,
+              'reason': _selectedReason,
+              'order_id': widget.orderId,
+            },
+          );
 
       // Invalidate so the orders screen refreshes
       ref.invalidate(ordersStreamProvider);
@@ -189,7 +197,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
     } catch (e) {
       if (mounted) {
         setState(() => _voiding = false);
-        ScaffoldMessenger.of(context).showSnackBar(_errorSnack('Void failed: $e'));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(_errorSnack('Void failed: $e'));
       }
     }
   }
@@ -206,10 +216,10 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A2E),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha:0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               blurRadius: 40,
               offset: const Offset(0, 16),
             ),
@@ -223,9 +233,7 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             const Divider(color: Color(0xFF2A2A3E), height: 1),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
-              child: _step == _Step.pin
-                  ? _buildPinStep()
-                  : _buildReasonStep(),
+              child: _step == _Step.pin ? _buildPinStep() : _buildReasonStep(),
             ),
           ],
         ),
@@ -245,30 +253,38 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.danger.withValues(alpha:0.12),
+              color: AppColors.danger.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: AppColors.danger.withValues(alpha:0.3)),
+              border: Border.all(
+                color: AppColors.danger.withValues(alpha: 0.3),
+              ),
             ),
-            child: Icon(Icons.remove_circle_outline,
-                color: AppColors.danger, size: 18),
+            child: Icon(
+              Icons.remove_circle_outline,
+              color: AppColors.danger,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Void Item',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Void Item',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               Text(
                 _step == _Step.pin
                     ? 'Manager / Owner PIN required'
                     : 'Select a void reason',
                 style: TextStyle(
-                    color: Colors.white.withValues(alpha:0.45),
-                    fontSize: 11),
+                  color: Colors.white.withValues(alpha: 0.45),
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -279,11 +295,14 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.close,
-                  color: Colors.white.withValues(alpha:0.4), size: 16),
+              child: Icon(
+                Icons.close,
+                color: Colors.white.withValues(alpha: 0.4),
+                size: 16,
+              ),
             ),
           ),
         ],
@@ -297,9 +316,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha:0.07),
+        color: AppColors.danger.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withValues(alpha:0.2)),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -307,31 +326,38 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: AppColors.danger.withValues(alpha:0.15),
+              color: AppColors.danger.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(7),
             ),
             child: Center(
-              child: Text('${item.quantity}',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.danger)),
+              child: Text(
+                '${item.quantity}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.danger,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(item.product.name,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              item.product.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           Text(
             '₱${item.total.toStringAsFixed(2)}',
             style: TextStyle(
-                color: Colors.white.withValues(alpha:0.6),
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -349,7 +375,9 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
           Text(
             'Enter PIN for ${widget.authorisedStaff.name}',
             style: TextStyle(
-                color: Colors.white.withValues(alpha:0.55), fontSize: 12),
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 16),
           // PIN dots
@@ -363,15 +391,17 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
                 height: 14,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: filled
-                      ? (_pinError != null
-                          ? AppColors.danger
-                          : AppColors.primary)
-                      : Colors.white.withValues(alpha:0.12),
+                  color:
+                      filled
+                          ? (_pinError != null
+                              ? AppColors.danger
+                              : AppColors.primary)
+                          : Colors.white.withValues(alpha: 0.12),
                   border: Border.all(
-                    color: filled
-                        ? Colors.transparent
-                        : Colors.white.withValues(alpha:0.2),
+                    color:
+                        filled
+                            ? Colors.transparent
+                            : Colors.white.withValues(alpha: 0.2),
                   ),
                 ),
               );
@@ -379,17 +409,17 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
           ),
           if (_pinError != null) ...[
             const SizedBox(height: 10),
-            Text(_pinError!,
-                style:
-                    TextStyle(color: AppColors.danger, fontSize: 11)),
+            Text(
+              _pinError!,
+              style: TextStyle(color: AppColors.danger, fontSize: 11),
+            ),
           ],
           const SizedBox(height: 18),
           // Numpad
           _PinNumpad(
             onKey: _onPinKey,
             onDelete: _onPinDelete,
-            onConfirm:
-                _enteredPin.length >= 4 ? _verifyPin : null,
+            onConfirm: _enteredPin.length >= 4 ? _verifyPin : null,
           ),
         ],
       ),
@@ -405,40 +435,48 @@ class _VoidItemDialogState extends ConsumerState<_VoidItemDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ...kVoidReasons.map((r) => _ReasonTile(
-                label: r,
-                selected: _selectedReason == r,
-                onTap: _voiding
-                    ? null
-                    : () => setState(() => _selectedReason = r),
-              )),
+          ...kVoidReasons.map(
+            (r) => _ReasonTile(
+              label: r,
+              selected: _selectedReason == r,
+              onTap:
+                  _voiding ? null : () => setState(() => _selectedReason = r),
+            ),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: (_selectedReason != null && !_voiding)
-                  ? _confirmVoid
-                  : null,
-              icon: _voiding
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.remove_circle_outline, size: 18),
+              onPressed:
+                  (_selectedReason != null && !_voiding) ? _confirmVoid : null,
+              icon:
+                  _voiding
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Icon(Icons.remove_circle_outline, size: 18),
               label: Text(
                 _voiding ? 'Voiding…' : 'Confirm Void',
                 style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 14),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.danger,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor:
-                    AppColors.danger.withValues(alpha:0.3),
+                disabledBackgroundColor: AppColors.danger.withValues(
+                  alpha: 0.3,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
@@ -455,11 +493,7 @@ class _ReasonTile extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
 
-  const _ReasonTile({
-    required this.label,
-    required this.selected,
-    this.onTap,
-  });
+  const _ReasonTile({required this.label, required this.selected, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -468,35 +502,37 @@ class _ReasonTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.only(bottom: 8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.danger.withValues(alpha:0.12)
-              : Colors.white.withValues(alpha:0.04),
+          color:
+              selected
+                  ? AppColors.danger.withValues(alpha: 0.12)
+                  : Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? AppColors.danger.withValues(alpha:0.45)
-                : Colors.white.withValues(alpha:0.08),
+            color:
+                selected
+                    ? AppColors.danger.withValues(alpha: 0.45)
+                    : Colors.white.withValues(alpha: 0.08),
           ),
         ),
         child: Row(
           children: [
             Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      color: selected
+              child: Text(
+                label,
+                style: TextStyle(
+                  color:
+                      selected
                           ? Colors.white
-                          : Colors.white.withValues(alpha:0.6),
-                      fontSize: 13,
-                      fontWeight: selected
-                          ? FontWeight.w700
-                          : FontWeight.w400)),
+                          : Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
             ),
             if (selected)
-              Icon(Icons.check_circle,
-                  color: AppColors.danger, size: 16),
+              Icon(Icons.check_circle, color: AppColors.danger, size: 16),
           ],
         ),
       ),
@@ -527,18 +563,18 @@ class _PinNumpad extends StatelessWidget {
 
     return Column(
       children: [
-        ...keys.map((row) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: row
-                    .map((k) => _PinKey(
-                          label: k,
-                          onTap: () => onKey(k),
-                        ))
-                    .toList(),
-              ),
-            )),
+        ...keys.map(
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children:
+                  row
+                      .map((k) => _PinKey(label: k, onTap: () => onKey(k)))
+                      .toList(),
+            ),
+          ),
+        ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -577,24 +613,27 @@ class _PinKey extends StatelessWidget {
     Color bg;
     Color fg;
     if (disabled) {
-      bg = Colors.white.withValues(alpha:0.04);
-      fg = Colors.white.withValues(alpha:0.2);
+      bg = Colors.white.withValues(alpha: 0.04);
+      fg = Colors.white.withValues(alpha: 0.2);
     } else if (primary) {
-      bg = AppColors.primary.withValues(alpha:0.15);
+      bg = AppColors.primary.withValues(alpha: 0.15);
       fg = AppColors.primary;
     } else if (secondary) {
-      bg = Colors.white.withValues(alpha:0.06);
-      fg = Colors.white.withValues(alpha:0.5);
+      bg = Colors.white.withValues(alpha: 0.06);
+      fg = Colors.white.withValues(alpha: 0.5);
     } else {
-      bg = Colors.white.withValues(alpha:0.07);
+      bg = Colors.white.withValues(alpha: 0.07);
       fg = Colors.white;
     }
 
     return GestureDetector(
-      onTap: disabled ? null : () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
+      onTap:
+          disabled
+              ? null
+              : () {
+                HapticFeedback.selectionClick();
+                onTap();
+              },
       child: Container(
         width: 72,
         height: 52,
@@ -602,14 +641,17 @@ class _PinKey extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha:0.07)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
         ),
         child: Center(
-          child: Text(label,
-              style: TextStyle(
-                  color: fg,
-                  fontSize: label.length == 1 ? 20 : 16,
-                  fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: label.length == 1 ? 20 : 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );

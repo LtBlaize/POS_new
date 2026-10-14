@@ -44,9 +44,10 @@ final promoListProvider = StreamProvider<List<Promo>>((ref) async* {
         .eq('business_id', businessId)
         .order('created_at', ascending: false);
 
-    final promos = (promoRows as List)
-        .map((m) => Promo.fromMap(m as Map<String, dynamic>))
-        .toList();
+    final promos =
+        (promoRows as List)
+            .map((m) => Promo.fromMap(m as Map<String, dynamic>))
+            .toList();
 
     if (promos.isEmpty) {
       await local.replacePromos(businessId, []);
@@ -61,7 +62,8 @@ final promoListProvider = StreamProvider<List<Promo>>((ref) async* {
     final itemRows = await client
         .from('promo_items')
         .select(
-            '*, products(name, price, track_inventory, send_to_kitchen), product_variants(name, price_delta)')
+          '*, products(name, price, track_inventory, send_to_kitchen), product_variants(name, price_delta)',
+        )
         .inFilter('promo_id', promoIds);
 
     final itemsByPromo = <String, List<PromoItem>>{};
@@ -78,7 +80,8 @@ final promoListProvider = StreamProvider<List<Promo>>((ref) async* {
       // of each recomputing it differently.
       final basePrice = (productMap?['price'] as num?)?.toDouble() ?? 0;
       final delta = (variantMap?['price_delta'] as num?)?.toDouble() ?? 0;
-      final effectivePrice = map['variant_id'] != null ? basePrice + delta : basePrice;
+      final effectivePrice =
+          map['variant_id'] != null ? basePrice + delta : basePrice;
 
       final item = PromoItem.fromMap({
         ...map,
@@ -91,24 +94,27 @@ final promoListProvider = StreamProvider<List<Promo>>((ref) async* {
       itemsByPromo.putIfAbsent(item.promoId, () => []).add(item);
     }
 
-    final withItems = promos
-        .map((p) => Promo(
-              id: p.id,
-              businessId: p.businessId,
-              name: p.name,
-              description: p.description,
-              imageUrl: p.imageUrl,
-              promoType: p.promoType,
-              bundlePrice: p.bundlePrice,
-              buyQuantity: p.buyQuantity,
-              getQuantity: p.getQuantity,
-              getDiscountPercent: p.getDiscountPercent,
-              isActive: p.isActive,
-              startDate: p.startDate,
-              endDate: p.endDate,
-              items: itemsByPromo[p.id] ?? [],
-            ))
-        .toList();
+    final withItems =
+        promos
+            .map(
+              (p) => Promo(
+                id: p.id,
+                businessId: p.businessId,
+                name: p.name,
+                description: p.description,
+                imageUrl: p.imageUrl,
+                promoType: p.promoType,
+                bundlePrice: p.bundlePrice,
+                buyQuantity: p.buyQuantity,
+                getQuantity: p.getQuantity,
+                getDiscountPercent: p.getDiscountPercent,
+                isActive: p.isActive,
+                startDate: p.startDate,
+                endDate: p.endDate,
+                items: itemsByPromo[p.id] ?? [],
+              ),
+            )
+            .toList();
 
     await local.replacePromos(businessId, withItems);
     return withItems;
@@ -124,26 +130,27 @@ final promoListProvider = StreamProvider<List<Promo>>((ref) async* {
 
   yield await fetchAll();
 
-  final channel = client
-      .channel('pos_promos_$businessId')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'promos',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'business_id',
-          value: businessId,
-        ),
-        callback: (_) => reload(),
-      )
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'promo_items',
-        callback: (_) => reload(),
-      )
-      .subscribe();
+  final channel =
+      client
+          .channel('pos_promos_$businessId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'promos',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'business_id',
+              value: businessId,
+            ),
+            callback: (_) => reload(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'promo_items',
+            callback: (_) => reload(),
+          )
+          .subscribe();
 
   ref.onDispose(() {
     client.removeChannel(channel);
@@ -170,12 +177,17 @@ class PromoRepository {
   PromoRepository(this._client);
 
   Future<Promo> create(Promo promo) async {
-    final row = await _client.from('promos').insert(promo.toMap()).select().single();
+    final row =
+        await _client.from('promos').insert(promo.toMap()).select().single();
     final promoId = row['id'] as String;
 
     if (promo.items.isNotEmpty) {
-      await _client.from('promo_items').insert(
-            promo.items.map((i) => {...i.toMap(), 'promo_id': promoId}).toList(),
+      await _client
+          .from('promo_items')
+          .insert(
+            promo.items
+                .map((i) => {...i.toMap(), 'promo_id': promoId})
+                .toList(),
           );
     }
     return Promo.fromMap(row, items: promo.items);
@@ -189,8 +201,12 @@ class PromoRepository {
     // avoids diffing logic that could silently drop a row.
     await _client.from('promo_items').delete().eq('promo_id', promo.id);
     if (promo.items.isNotEmpty) {
-      await _client.from('promo_items').insert(
-            promo.items.map((i) => {...i.toMap(), 'promo_id': promo.id}).toList(),
+      await _client
+          .from('promo_items')
+          .insert(
+            promo.items
+                .map((i) => {...i.toMap(), 'promo_id': promo.id})
+                .toList(),
           );
     }
   }
@@ -205,11 +221,15 @@ class PromoRepository {
         maxActivePromos != null &&
         (currentActiveCount ?? 0) >= maxActivePromos) {
       throw Exception(
-          'Active promo limit reached for your plan ($maxActivePromos max). Deactivate another promo first.');
+        'Active promo limit reached for your plan ($maxActivePromos max). Deactivate another promo first.',
+      );
     }
     await _client
         .from('promos')
-        .update({'is_active': isActive, 'updated_at': DateTime.now().toIso8601String()})
+        .update({
+          'is_active': isActive,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
         .eq('id', promoId);
   }
 
@@ -245,7 +265,8 @@ class PromoRepository {
       buyQuantity: promo.buyQuantity,
       getQuantity: promo.getQuantity,
       getDiscountPercent: promo.getDiscountPercent,
-      isActive: false, // duplicates start inactive — owner reviews before enabling
+      isActive:
+          false, // duplicates start inactive — owner reviews before enabling
       startDate: promo.startDate,
       endDate: promo.endDate,
       items: promo.items,
@@ -260,16 +281,18 @@ class PromoRepository {
 /// first insufficient component — mirrors CheckoutService's per-item stock
 /// check style so the UX is consistent.
 String? checkPromoStock(Promo promo, {required int cartQuantity}) {
-  final itemsToCheck = promo.promoType == PromoType.bundle
-      ? promo.bundleItems
-      : [...promo.buyItems, ...promo.getItems];
+  final itemsToCheck =
+      promo.promoType == PromoType.bundle
+          ? promo.bundleItems
+          : [...promo.buyItems, ...promo.getItems];
 
   for (final item in itemsToCheck) {
     if (item.productTrackInventory != true) continue;
     // We only have the *catalog* stock here (from the join); the caller
     // should still re-validate against live productListProvider/local
     // cache at actual checkout time, same as CheckoutService does today.
-    final neededPerUnit = item.quantity *
+    final neededPerUnit =
+        item.quantity *
         (promo.promoType == PromoType.buyXGetY
             ? (item.role == PromoItemRole.buy
                 ? (promo.buyQuantity ?? 1)

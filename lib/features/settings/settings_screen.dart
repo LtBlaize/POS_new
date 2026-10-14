@@ -17,9 +17,11 @@ import '../../main.dart';
 import '../../shared/widgets/app_colors.dart';
 
 import 'widgets/general_settings_section.dart';
+import 'widgets/kitchen_sound_section.dart';
 import 'widgets/lan_settings_section.dart';
 import 'widgets/printer_settings_section.dart';
-import 'widgets/staff_settings_section.dart' show StaffSettingsSection, OwnerPinSection;
+import 'widgets/staff_settings_section.dart'
+    show StaffSettingsSection, OwnerPinSection;
 import 'widgets/sync_issues_section.dart';
 import 'widgets/table_settings_section.dart';
 
@@ -38,18 +40,20 @@ class SettingsScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFFF4F5F7),
         appBar: _appBar(),
         body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _SectionCard(child: const LanSettingsSection()),
-          const SizedBox(height: 16),
-          _SectionCard(child: const PrinterSettingsSection()),
-          const SizedBox(height: 16),
-          _SectionCard(child: _ChangeRoleSection()),
-          const SizedBox(height: 16),
-          _LogoutSection(),
-          const SizedBox(height: 32),
-        ], 
-      ),
+          padding: const EdgeInsets.all(16),
+          children: [
+            _SectionCard(child: const LanSettingsSection()),
+            const SizedBox(height: 16),
+            _SectionCard(child: const KitchenSoundSection()),
+            const SizedBox(height: 16),
+            _SectionCard(child: const PrinterSettingsSection()),
+            const SizedBox(height: 16),
+            _SectionCard(child: _ChangeRoleSection()),
+            const SizedBox(height: 16),
+            _LogoutSection(),
+            const SizedBox(height: 32),
+          ],
+        ),
       );
     }
 
@@ -57,14 +61,14 @@ class SettingsScreen extends ConsumerWidget {
     final profileAsync = ref.watch(profileProvider);
 
     return profileAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading:
+          () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (profile) {
         final business = profile?.business;
         if (business == null) {
-          return const Scaffold(
-              body: Center(child: Text('No business found')));
+          return const Scaffold(body: Center(child: Text('No business found')));
         }
 
         final isRestaurant = business.businessType.isRestaurant;
@@ -93,6 +97,12 @@ class SettingsScreen extends ConsumerWidget {
                 _SectionCard(child: const TableSettingsSection()),
               ],
 
+              // ── Kitchen sound — restaurant only ───────────────────────
+              if (isRestaurant) ...[
+                const SizedBox(height: 16),
+                _SectionCard(child: const KitchenSoundSection()),
+              ],
+
               // ── Printer — all POS roles ───────────────────────────────
               const SizedBox(height: 16),
               _SectionCard(child: const PrinterSettingsSection()),
@@ -108,7 +118,6 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 _SectionCard(child: const StaffSettingsSection()),
               ],
-
 
               // ── Sync issues — managers+ only, POS device only ─────────
               if (isManager) ...[
@@ -140,8 +149,10 @@ class SettingsScreen extends ConsumerWidget {
 
   PreferredSizeWidget _appBar() {
     return AppBar(
-      title: const Text('Settings',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+      title: const Text(
+        'Settings',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      ),
       backgroundColor: Colors.white,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
@@ -165,16 +176,20 @@ class _ChangeRoleSection extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.devices_rounded,
-                size: 15, color: AppColors.primary),
+            const Icon(
+              Icons.devices_rounded,
+              size: 15,
+              color: AppColors.primary,
+            ),
             const SizedBox(width: 6),
             const Text(
               'DEVICE ROLE',
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.3),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.3,
+              ),
             ),
           ],
         ),
@@ -186,8 +201,7 @@ class _ChangeRoleSection extends ConsumerWidget {
             border: Border.all(color: AppColors.divider),
           ),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 Icon(
@@ -207,16 +221,18 @@ class _ChangeRoleSection extends ConsumerWidget {
                             ? 'POS / Cashier'
                             : 'Kitchen Display',
                         style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       const Text(
                         'Tap to change this device\'s role',
                         style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary),
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -224,9 +240,9 @@ class _ChangeRoleSection extends ConsumerWidget {
                 TextButton(
                   onPressed: () => _confirmRoleChange(context, ref),
                   style: TextButton.styleFrom(
-                      foregroundColor: Colors.red.shade600),
-                  child: const Text('Change',
-                      style: TextStyle(fontSize: 13)),
+                    foregroundColor: Colors.red.shade600,
+                  ),
+                  child: const Text('Change', style: TextStyle(fontSize: 13)),
                 ),
               ],
             ),
@@ -236,27 +252,29 @@ class _ChangeRoleSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmRoleChange(
-      BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRoleChange(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Change device role?'),
-        content: const Text(
-            'This will restart the app setup. You will need to choose POS or Kitchen again.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Change device role?'),
+            content: const Text(
+              'This will restart the app setup. You will need to choose POS or Kitchen again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade600,
+                ),
+                child: const Text('Change role'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style:
-                TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-            child: const Text('Change role'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true) return;
@@ -265,8 +283,7 @@ class _ChangeRoleSection extends ConsumerWidget {
     await prefs.remove('device_role');
 
     if (context.mounted) {
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/role-select', (_) => false);
+      Navigator.pushNamedAndRemoveUntil(context, '/role-select', (_) => false);
     }
   }
 }
@@ -288,23 +305,24 @@ class _LogoutSection extends ConsumerWidget {
         onTap: () async {
           final confirmed = await showDialog<bool>(
             context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Log out?'),
-              content:
-                  const Text('You will be returned to the login screen.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel'),
+            builder:
+                (ctx) => AlertDialog(
+                  title: const Text('Log out?'),
+                  content: const Text(
+                    'You will be returned to the login screen.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('Log out'),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: TextButton.styleFrom(
-                      foregroundColor: Colors.red),
-                  child: const Text('Log out'),
-                ),
-              ],
-            ),
           );
           if (confirmed != true) return;
 
@@ -318,13 +336,15 @@ class _LogoutSection extends ConsumerWidget {
             debugPrint('[Settings logout] error: $e');
             if (context.mounted) {
               Navigator.pushNamedAndRemoveUntil(
-                  context, '/login', (_) => false);
+                context,
+                '/login',
+                (_) => false,
+              );
             }
           }
         },
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Container(
@@ -334,8 +354,11 @@ class _LogoutSection extends ConsumerWidget {
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.logout_rounded,
-                    size: 18, color: Colors.red.shade600),
+                child: Icon(
+                  Icons.logout_rounded,
+                  size: 18,
+                  color: Colors.red.shade600,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -348,8 +371,11 @@ class _LogoutSection extends ConsumerWidget {
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right_rounded,
-                  size: 18, color: Colors.red.shade300),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Colors.red.shade300,
+              ),
             ],
           ),
         ),
@@ -406,13 +432,13 @@ class _SubscriptionSection extends ConsumerWidget {
     final String statusSub;
 
     if (isOnTrial) {
-      statusColor = daysLeft <= 2
-          ? Colors.orange.shade700
-          : Colors.blue.shade700;
+      statusColor =
+          daysLeft <= 2 ? Colors.orange.shade700 : Colors.blue.shade700;
       statusLabel = '${plan.displayName} Trial';
-      statusSub = daysLeft == 0
-          ? 'Expires today'
-          : '$daysLeft day${daysLeft == 1 ? '' : 's'} remaining';
+      statusSub =
+          daysLeft == 0
+              ? 'Expires today'
+              : '$daysLeft day${daysLeft == 1 ? '' : 's'} remaining';
     } else if (plan.isPaid) {
       statusColor = Colors.green.shade600;
       statusLabel = plan.displayName;
@@ -424,11 +450,14 @@ class _SubscriptionSection extends ConsumerWidget {
     }
 
     // Plans are Starter → Growth → Pro. Pro has nothing above it.
-    final nextPlanLabel = kStoreBuild ? null : switch (plan) {   
-      SubscriptionPlan.starter => 'Growth',
-      SubscriptionPlan.growth => 'Pro',
-      SubscriptionPlan.pro => null,
-    };
+    final nextPlanLabel =
+        kStoreBuild
+            ? null
+            : switch (plan) {
+              SubscriptionPlan.starter => 'Growth',
+              SubscriptionPlan.growth => 'Pro',
+              SubscriptionPlan.pro => null,
+            };
     final nextPlanIncludes = switch (plan) {
       SubscriptionPlan.starter => _growthIncludes,
       SubscriptionPlan.growth => _proIncludes,
@@ -448,8 +477,11 @@ class _SubscriptionSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.workspace_premium_rounded,
-                  size: 15, color: AppColors.primary),
+              const Icon(
+                Icons.workspace_premium_rounded,
+                size: 15,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 6),
               const Text(
                 'SUBSCRIPTION',
@@ -476,8 +508,8 @@ class _SubscriptionSection extends ConsumerWidget {
                   trialExpired
                       ? Icons.lock_outline_rounded
                       : isOnTrial
-                          ? Icons.hourglass_top_rounded
-                          : Icons.verified_rounded,
+                      ? Icons.hourglass_top_rounded
+                      : Icons.verified_rounded,
                   size: 20,
                   color: statusColor,
                 ),
@@ -515,12 +547,13 @@ class _SubscriptionSection extends ConsumerWidget {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.support_agent_rounded, size: 16),
                 label: const Text('Contact support'),
-                onPressed: () => _showContactDialog(
-                  context,
-                  ref,
-                  currentPlan: plan.displayName,
-                  targetPlan: plan.displayName,
-                ),
+                onPressed:
+                    () => _showContactDialog(
+                      context,
+                      ref,
+                      currentPlan: plan.displayName,
+                      targetPlan: plan.displayName,
+                    ),
               ),
             ),
           ],
@@ -539,32 +572,41 @@ class _SubscriptionSection extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...nextPlanIncludes.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          size: 14, color: Colors.green.shade600),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(f,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textPrimary)),
+            ...nextPlanIncludes.map(
+              (f) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 14,
+                      color: Colors.green.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        f,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => _showContactDialog(
-                  context,
-                  ref,
-                  currentPlan: plan.displayName,
-                  targetPlan: nextPlanLabel,
-                ),
+                onPressed:
+                    () => _showContactDialog(
+                      context,
+                      ref,
+                      currentPlan: plan.displayName,
+                      targetPlan: nextPlanLabel,
+                    ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -578,7 +620,9 @@ class _SubscriptionSection extends ConsumerWidget {
                       ? 'Contact Us to Reactivate'
                       : 'Upgrade to $nextPlanLabel',
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -600,12 +644,13 @@ class _SubscriptionSection extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (_) => _ContactUpgradeDialog(
-        businessName: businessName,
-        businessId: businessId,
-        currentPlan: currentPlan,
-        targetPlan: targetPlan,
-      ),
+      builder:
+          (_) => _ContactUpgradeDialog(
+            businessName: businessName,
+            businessId: businessId,
+            currentPlan: currentPlan,
+            targetPlan: targetPlan,
+          ),
     );
   }
 }
@@ -630,17 +675,16 @@ class _ContactUpgradeDialog extends StatelessWidget {
   Future<void> _launch(BuildContext context, Uri uri) async {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open ${uri.scheme}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open ${uri.scheme}')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(kStoreBuild ? 'Contact support' : 'Upgrade to $targetPlan'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -652,35 +696,41 @@ class _ContactUpgradeDialog extends StatelessWidget {
                 : 'We don\'t have automatic billing yet — reach out and we\'ll '
                     'get "$businessName" upgraded manually.',
             style: const TextStyle(
-                fontSize: 13, color: AppColors.textSecondary),
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 16),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.call_rounded, color: AppColors.primary),
-            title: const Text('Call or text',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text(
+              'Call or text',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: const Text(_upgradePhone),
-            onTap: () =>
-                _launch(context, Uri(scheme: 'tel', path: _upgradePhone)),
+            onTap:
+                () => _launch(context, Uri(scheme: 'tel', path: _upgradePhone)),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading:
-                const Icon(Icons.email_outlined, color: AppColors.primary),
-            title: const Text('Email',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text(_upgradeEmail),
-            onTap: () => _launch(
-              context,
-              Uri(
-                scheme: 'mailto',
-                path: _upgradeEmail,
-                query:
-                    'subject=${Uri.encodeComponent('Upgrade request — $businessName')}'
-                    '&body=${Uri.encodeComponent(_message)}',
-              ),
+            leading: const Icon(Icons.email_outlined, color: AppColors.primary),
+            title: const Text(
+              'Email',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
+            subtitle: const Text(_upgradeEmail),
+            onTap:
+                () => _launch(
+                  context,
+                  Uri(
+                    scheme: 'mailto',
+                    path: _upgradeEmail,
+                    query:
+                        'subject=${Uri.encodeComponent('Upgrade request — $businessName')}'
+                        '&body=${Uri.encodeComponent(_message)}',
+                  ),
+                ),
           ),
         ],
       ),
@@ -693,6 +743,7 @@ class _ContactUpgradeDialog extends StatelessWidget {
     );
   }
 }
+
 class _SectionCard extends StatelessWidget {
   final Widget child;
   const _SectionCard({required this.child});

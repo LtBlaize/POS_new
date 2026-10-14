@@ -64,9 +64,10 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
     final all = ref.read(creditCustomersProvider).value ?? [];
     if (query.isEmpty) return all;
     return all
-        .where((c) =>
-            c.name.toLowerCase().contains(query) ||
-            c.phone.contains(query))
+        .where(
+          (c) =>
+              c.name.toLowerCase().contains(query) || c.phone.contains(query),
+        )
         .toList();
   }
 
@@ -107,8 +108,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
     try {
       final notifier = ref.read(creditCustomersProvider.notifier);
       final customer = await notifier.findOrCreate(name: name, phone: phone);
-      final note =
-          _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
+      final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
       if (!widget.deferCredit) {
         await notifier.addCredit(
           customerId: customer.id,
@@ -155,42 +155,58 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: _accent.withValues(alpha:0.15),
+                          color: _accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.receipt_long_outlined,
-                            color: _accent, size: 20),
+                        child: const Icon(
+                          Icons.receipt_long_outlined,
+                          color: _accent,
+                          size: 20,
+                        ),
                       ),
                       const SizedBox(width: 12),
-                      const Text('Record Utang',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700)),
+                      const Text(
+                        'Record Utang',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
-                      color: _accent.withValues(alpha:0.08),
+                      color: _accent.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _accent.withValues(alpha:0.25)),
+                      border: Border.all(
+                        color: _accent.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Amount to Credit',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.55),
-                                fontSize: 13)),
-                        Text('₱${widget.amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                color: _accent,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800)),
+                        Text(
+                          'Amount to Credit',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          '₱${widget.amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: _accent,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -205,11 +221,14 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Search Customer',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
+                    const Text(
+                      'Search Customer',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 6),
 
                     if (_selected != null)
@@ -224,28 +243,41 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                             controller: _searchCtrl,
                             focusNode: _searchFocus,
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 14),
-                            onChanged: (v) => setState(
-                                () => _showDropdown = v.isNotEmpty),
-                            onTap: () =>
-                                setState(() => _showDropdown = true),
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            onChanged:
+                                (v) => setState(
+                                  () => _showDropdown = v.isNotEmpty,
+                                ),
+                            onTap: () => setState(() => _showDropdown = true),
                             decoration: InputDecoration(
                               hintText: 'Search by name or phone…',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha:0.3),
-                                  fontSize: 13),
-                              prefixIcon: Icon(Icons.search,
-                                  color: Colors.white.withValues(alpha:0.3),
-                                  size: 18),
-                              suffixIcon: _searchCtrl.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: Icon(Icons.close,
-                                          color: Colors.white.withValues(alpha:0.3),
-                                          size: 16),
-                                      onPressed: () =>
-                                          setState(() => _searchCtrl.clear()),
-                                    )
-                                  : null,
+                                color: Colors.white.withValues(alpha: 0.3),
+                                fontSize: 13,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: Colors.white.withValues(alpha: 0.3),
+                                size: 18,
+                              ),
+                              suffixIcon:
+                                  _searchCtrl.text.isNotEmpty
+                                      ? IconButton(
+                                        icon: Icon(
+                                          Icons.close,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          size: 16,
+                                        ),
+                                        onPressed:
+                                            () => setState(
+                                              () => _searchCtrl.clear(),
+                                            ),
+                                      )
+                                      : null,
                               filled: true,
                               fillColor: _card,
                               border: OutlineInputBorder(
@@ -255,32 +287,40 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                    color: _accent, width: 1.5),
+                                  color: _accent,
+                                  width: 1.5,
+                                ),
                               ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
                             ),
                           ),
 
                           if (_showDropdown && filtered.isNotEmpty)
                             Container(
-                              constraints:
-                                  const BoxConstraints(maxHeight: 180),
+                              constraints: const BoxConstraints(maxHeight: 180),
                               margin: const EdgeInsets.only(top: 4),
                               decoration: BoxDecoration(
                                 color: _card,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                    color: Colors.white.withValues(alpha:0.08)),
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                ),
                               ),
                               child: ListView.separated(
                                 shrinkWrap: true,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
                                 itemCount: filtered.length,
-                                separatorBuilder: (_, _) => Divider(
-                                    height: 1,
-                                    color: Colors.white.withValues(alpha:0.06)),
+                                separatorBuilder:
+                                    (_, _) => Divider(
+                                      height: 1,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.06,
+                                      ),
+                                    ),
                                 itemBuilder: (_, i) {
                                   final c = filtered[i];
                                   return InkWell(
@@ -288,19 +328,23 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                     borderRadius: BorderRadius.circular(8),
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 14, vertical: 10),
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
                                       child: Row(
                                         children: [
                                           CircleAvatar(
                                             radius: 16,
-                                            backgroundColor:
-                                                _accent.withValues(alpha:0.15),
+                                            backgroundColor: _accent.withValues(
+                                              alpha: 0.15,
+                                            ),
                                             child: Text(
                                               c.name[0].toUpperCase(),
                                               style: const TextStyle(
-                                                  color: _accent,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w800),
+                                                color: _accent,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(width: 10),
@@ -309,17 +353,24 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Text(c.name,
-                                                    style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 13,
-                                                        fontWeight:
-                                                            FontWeight.w600)),
-                                                Text(c.phone,
-                                                    style: TextStyle(
-                                                        color: Colors.white
-                                                            .withValues(alpha:0.35),
-                                                        fontSize: 11)),
+                                                Text(
+                                                  c.name,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  c.phone,
+                                                  style: TextStyle(
+                                                    color: Colors.white
+                                                        .withValues(
+                                                          alpha: 0.35,
+                                                        ),
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),
@@ -327,13 +378,17 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                             Text(
                                               '₱${c.totalOwed.toStringAsFixed(2)}',
                                               style: const TextStyle(
-                                                  color: _accent,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700),
+                                                color: _accent,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             )
                                           else
-                                            const Icon(Icons.check_circle,
-                                                color: _green, size: 14),
+                                            const Icon(
+                                              Icons.check_circle,
+                                              color: _green,
+                                              size: 14,
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -347,8 +402,7 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                               _searchCtrl.text.isNotEmpty)
                             Container(
                               margin: const EdgeInsets.only(top: 4),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               decoration: BoxDecoration(
                                 color: _card,
                                 borderRadius: BorderRadius.circular(12),
@@ -357,8 +411,9 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                                 child: Text(
                                   'No customer found — fill in below to create new',
                                   style: TextStyle(
-                                      color: Colors.white.withValues(alpha:0.3),
-                                      fontSize: 12),
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ),
@@ -368,18 +423,21 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                     const SizedBox(height: 14),
 
                     if (_selected == null) ...[
-                      const Text('Or enter new customer',
-                          style: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Or enter new customer',
+                        style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       _Field(
                         controller: _phoneCtrl,
                         label: 'Phone Number',
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly
+                          FilteringTextInputFormatter.digitsOnly,
                         ],
                         onChanged: (_) => setState(() => _error = null),
                       ),
@@ -392,16 +450,14 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       const SizedBox(height: 10),
                     ],
 
-                    _Field(
-                      controller: _noteCtrl,
-                      label: 'Note (optional)',
-                    ),
+                    _Field(controller: _noteCtrl, label: 'Note (optional)'),
 
                     if (_error != null) ...[
                       const SizedBox(height: 8),
-                      Text(_error!,
-                          style: const TextStyle(
-                              color: _accent, fontSize: 12)),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: _accent, fontSize: 12),
+                      ),
                     ],
 
                     const SizedBox(height: 8),
@@ -421,11 +477,12 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white54,
                         side: BorderSide(
-                            color: Colors.white.withValues(alpha:0.12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                          color: Colors.white.withValues(alpha: 0.12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: const Text('Cancel'),
                     ),
@@ -437,20 +494,25 @@ class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _accent,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Text('Confirm Utang',
-                              style:
-                                  TextStyle(fontWeight: FontWeight.w700)),
+                      child:
+                          _loading
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Text(
+                                'Confirm Utang',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
                     ),
                   ),
                 ],
@@ -481,19 +543,20 @@ class _SelectedChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1F35),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _accent.withValues(alpha:0.35)),
+        border: Border.all(color: _accent.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: _accent.withValues(alpha:0.15),
+            backgroundColor: _accent.withValues(alpha: 0.15),
             child: Text(
               customer.name[0].toUpperCase(),
               style: const TextStyle(
-                  color: _accent,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800),
+                color: _accent,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -501,15 +564,21 @@ class _SelectedChip extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(customer.name,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                Text(customer.phone,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.35),
-                        fontSize: 11)),
+                Text(
+                  customer.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  customer.phone,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
           ),
@@ -517,15 +586,21 @@ class _SelectedChip extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('Current balance',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.35),
-                        fontSize: 10)),
-                Text('₱${customer.totalOwed.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: _accent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  'Current balance',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 10,
+                  ),
+                ),
+                Text(
+                  '₱${customer.totalOwed.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: _accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ] else
@@ -533,8 +608,11 @@ class _SelectedChip extends StatelessWidget {
           const SizedBox(width: 8),
           IconButton(
             onPressed: onClear,
-            icon: Icon(Icons.close,
-                color: Colors.white.withValues(alpha:0.3), size: 16),
+            icon: Icon(
+              Icons.close,
+              color: Colors.white.withValues(alpha: 0.3),
+              size: 16,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -571,7 +649,7 @@ class _Field extends StatelessWidget {
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.4)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
         filled: true,
         fillColor: const Color(0xFF1A1F35),
         border: OutlineInputBorder(

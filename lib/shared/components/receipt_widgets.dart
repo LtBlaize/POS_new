@@ -57,22 +57,27 @@ class DashedDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      const dashWidth = 5.0;
-      const dashSpace = 4.0;
-      final count =
-          (constraints.constrainWidth() / (dashWidth + dashSpace)).floor();
-      return Row(
-        children: List.generate(
-          count,
-          (_) => Padding(
-            padding: const EdgeInsets.only(right: dashSpace),
-            child: Container(
-                width: dashWidth, height: 1, color: AppColors.divider),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const dashWidth = 5.0;
+        const dashSpace = 4.0;
+        final count =
+            (constraints.constrainWidth() / (dashWidth + dashSpace)).floor();
+        return Row(
+          children: List.generate(
+            count,
+            (_) => Padding(
+              padding: const EdgeInsets.only(right: dashSpace),
+              child: Container(
+                width: dashWidth,
+                height: 1,
+                color: AppColors.divider,
+              ),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -93,20 +98,20 @@ class PayMethodChip extends StatelessWidget {
   });
 
   String get _label => switch (method) {
-        PaymentMethod.cash => 'Cash',
-        PaymentMethod.card => 'Card',
-        PaymentMethod.gcash => 'GCash',
-        PaymentMethod.maya => 'Maya',
-        PaymentMethod.credit => 'Utang',
-      };
+    PaymentMethod.cash => 'Cash',
+    PaymentMethod.card => 'Card',
+    PaymentMethod.gcash => 'GCash',
+    PaymentMethod.maya => 'Maya',
+    PaymentMethod.credit => 'Utang',
+  };
 
   IconData get _icon => switch (method) {
-        PaymentMethod.cash => Icons.payments_outlined,
-        PaymentMethod.card => Icons.credit_card_outlined,
-        PaymentMethod.gcash => Icons.phone_android_outlined,
-        PaymentMethod.maya => Icons.account_balance_wallet_outlined,
-        PaymentMethod.credit => Icons.receipt_long_outlined,
-      };
+    PaymentMethod.cash => Icons.payments_outlined,
+    PaymentMethod.card => Icons.credit_card_outlined,
+    PaymentMethod.gcash => Icons.phone_android_outlined,
+    PaymentMethod.maya => Icons.account_balance_wallet_outlined,
+    PaymentMethod.credit => Icons.receipt_long_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +122,9 @@ class PayMethodChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color:
-              selected ? accentColor.withValues(alpha:0.08) : AppColors.surface,
+              selected
+                  ? accentColor.withValues(alpha: 0.08)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? accentColor : AppColors.divider,
@@ -127,9 +134,11 @@ class PayMethodChip extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(_icon,
-                size: 18,
-                color: selected ? accentColor : AppColors.textSecondary),
+            Icon(
+              _icon,
+              size: 18,
+              color: selected ? accentColor : AppColors.textSecondary,
+            ),
             const SizedBox(height: 3),
             Text(
               _label,
@@ -164,38 +173,48 @@ class QuickAmounts extends StatelessWidget {
     final r50 = (subtotal / 50).ceil() * 50.0;
     final r100 = (subtotal / 100).ceil() * 100.0;
     final r500 = (subtotal / 500).ceil() * 500.0;
-    return {subtotal, r50, r100, r500}
-        .where((v) => v >= subtotal)
-        .take(4)
-        .toList();
+    return {
+      subtotal,
+      r50,
+      r100,
+      r500,
+    }.where((v) => v >= subtotal).take(4).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: _amounts
-          .map((amt) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: OutlinedButton(
-                  onPressed: () => onSelect(amt),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: accentColor,
-                    side: BorderSide(color: accentColor),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    '₱${amt.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
+      children:
+          _amounts
+              .map(
+                (amt) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: OutlinedButton(
+                    onPressed: () => onSelect(amt),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: accentColor,
+                      side: BorderSide(color: accentColor),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      '₱${amt.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-              ))
-          .toList(),
+              )
+              .toList(),
     );
   }
 }
@@ -203,22 +222,37 @@ class QuickAmounts extends StatelessWidget {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 String formatDateTime(DateTime dt) {
-  final h = dt.hour > 12 ? dt.hour - 12 : dt.hour == 0 ? 12 : dt.hour;
+  final h =
+      dt.hour > 12
+          ? dt.hour - 12
+          : dt.hour == 0
+          ? 12
+          : dt.hour;
   final m = dt.minute.toString().padLeft(2, '0');
   final period = dt.hour >= 12 ? 'PM' : 'AM';
   const months = [
     '',
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${months[dt.month]} ${dt.day}, ${dt.year}  $h:$m $period';
 }
 
 String paymentLabel(PaymentMethod? method) => switch (method) {
-      PaymentMethod.cash => 'Cash',
-      PaymentMethod.card => 'Card / POS',
-      PaymentMethod.gcash => 'GCash',
-      PaymentMethod.maya => 'Maya',
-      PaymentMethod.credit => 'Utang (Credit)',
-      null => 'Unknown',
-    };
+  PaymentMethod.cash => 'Cash',
+  PaymentMethod.card => 'Card / POS',
+  PaymentMethod.gcash => 'GCash',
+  PaymentMethod.maya => 'Maya',
+  PaymentMethod.credit => 'Utang (Credit)',
+  null => 'Unknown',
+};

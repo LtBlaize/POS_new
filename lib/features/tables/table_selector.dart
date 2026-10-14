@@ -22,36 +22,41 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (sheetCtx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(sheetCtx).height * 0.6,
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 8),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder:
+          (sheetCtx) => SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(sheetCtx).height * 0.6,
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 8),
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Select table',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: FloorPlanView(
+                      onSelectTable: (_) => Navigator.pop(sheetCtx),
+                    ),
+                  ),
+                ],
               ),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text('Select table',
-                    style:
-                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: FloorPlanView(
-                  onSelectTable: (_) => Navigator.pop(sheetCtx),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -59,8 +64,9 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final compact = size.width < 600 || size.height < 500;
-    final selected =
-        ref.watch(tableProvider.select((s) => s.selectedTableName));
+    final selected = ref.watch(
+      tableProvider.select((s) => s.selectedTableName),
+    );
     final panelHeight = (size.height * 0.28).clamp(140.0, 260.0);
     final showPlan = !compact && _expanded;
 
@@ -73,24 +79,29 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
-            onTap: compact
-                ? _openSheet
-                : () => setState(() => _expanded = !_expanded),
+            onTap:
+                compact
+                    ? _openSheet
+                    : () => setState(() => _expanded = !_expanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.table_restaurant_outlined,
-                      size: 16, color: AppColors.primary),
+                  const Icon(
+                    Icons.table_restaurant_outlined,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     selected == null ? 'Select table' : 'Table $selected',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: selected == null
-                          ? AppColors.textSecondary
-                          : AppColors.primary,
+                      color:
+                          selected == null
+                              ? AppColors.textSecondary
+                              : AppColors.primary,
                     ),
                   ),
                   if (selected != null) ...[
@@ -100,8 +111,11 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
                         ref.read(tableProvider.notifier).clearSelection();
                         if (!compact) setState(() => _expanded = true);
                       },
-                      child: const Icon(Icons.close,
-                          size: 16, color: AppColors.textSecondary),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                   const Spacer(),
@@ -119,14 +133,15 @@ class _TableSelectorState extends ConsumerState<TableSelector> {
           AnimatedSize(
             duration: const Duration(milliseconds: 180),
             alignment: Alignment.topCenter,
-            child: showPlan
-                ? SizedBox(
-                    height: panelHeight,
-                    child: FloorPlanView(
-                      onSelectTable: (_) => setState(() => _expanded = false),
-                    ),
-                  )
-                : const SizedBox(width: double.infinity, height: 0),
+            child:
+                showPlan
+                    ? SizedBox(
+                      height: panelHeight,
+                      child: FloorPlanView(
+                        onSelectTable: (_) => setState(() => _expanded = false),
+                      ),
+                    )
+                    : const SizedBox(width: double.infinity, height: 0),
           ),
         ],
       ),

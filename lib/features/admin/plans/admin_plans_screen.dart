@@ -18,20 +18,28 @@ class AdminPlansScreen extends ConsumerWidget {
         backgroundColor: AdminColors.primary,
         icon: const Icon(Icons.add),
         label: const Text('New plan'),
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => const _PlanFormDialog(plan: null),
-        ),
+        onPressed:
+            () => showDialog(
+              context: context,
+              builder: (_) => const _PlanFormDialog(plan: null),
+            ),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(
-          child: Text('Could not load plans', style: TextStyle(color: AdminColors.textMuted)),
-        ),
+        error:
+            (_, __) => const Center(
+              child: Text(
+                'Could not load plans',
+                style: TextStyle(color: AdminColors.textMuted),
+              ),
+            ),
         data: (plans) {
           if (plans.isEmpty) {
             return const Center(
-              child: Text('No plans configured yet', style: TextStyle(color: AdminColors.textMuted)),
+              child: Text(
+                'No plans configured yet',
+                style: TextStyle(color: AdminColors.textMuted),
+              ),
             );
           }
           return ListView.builder(
@@ -51,7 +59,9 @@ class _PlanCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (bg, fg) = AdminColors.statusPillColors(plan.isActive ? 'active' : 'suspended');
+    final (bg, fg) = AdminColors.statusPillColors(
+      plan.isActive ? 'active' : 'suspended',
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -67,37 +77,63 @@ class _PlanCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(plan.name,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
+                Text(
+                  plan.name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('₱${plan.price.toStringAsFixed(2)} / ${plan.billingInterval}',
-                    style: const TextStyle(fontSize: 13, color: AdminColors.textSecondary)),
+                Text(
+                  '₱${plan.price.toStringAsFixed(2)} / ${plan.billingInterval}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AdminColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
           Expanded(
             flex: 3,
             child: Text(
-              plan.features.isEmpty ? 'No features set' : jsonEncode(plan.features),
-              style: const TextStyle(fontSize: 12, color: AdminColors.textMuted),
+              plan.features.isEmpty
+                  ? 'No features set'
+                  : jsonEncode(plan.features),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AdminColors.textMuted,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-            child: Text(plan.isActive ? 'Active' : 'Inactive',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              plan.isActive ? 'Active' : 'Inactive',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),
             color: AdminColors.textSecondary,
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => _PlanFormDialog(plan: plan),
-            ),
+            onPressed:
+                () => showDialog(
+                  context: context,
+                  builder: (_) => _PlanFormDialog(plan: plan),
+                ),
           ),
           Switch(
             value: plan.isActive,
@@ -109,7 +145,10 @@ class _PlanCard extends ConsumerWidget {
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed: $e'), backgroundColor: AdminColors.danger),
+                    SnackBar(
+                      content: Text('Failed: $e'),
+                      backgroundColor: AdminColors.danger,
+                    ),
                   );
                 }
               }
@@ -145,11 +184,14 @@ class _PlanFormDialogState extends ConsumerState<_PlanFormDialog> {
     super.initState();
     final p = widget.plan;
     _nameCtrl = TextEditingController(text: p?.name ?? '');
-    _priceCtrl = TextEditingController(text: p?.price.toStringAsFixed(2) ?? '0.00');
+    _priceCtrl = TextEditingController(
+      text: p?.price.toStringAsFixed(2) ?? '0.00',
+    );
     _featuresCtrl = TextEditingController(
-      text: p != null && p.features.isNotEmpty
-          ? const JsonEncoder.withIndent('  ').convert(p.features)
-          : '{}',
+      text:
+          p != null && p.features.isNotEmpty
+              ? const JsonEncoder.withIndent('  ').convert(p.features)
+              : '{}',
     );
     _interval = p?.billingInterval ?? 'monthly';
     _isActive = p?.isActive ?? true;
@@ -233,17 +275,24 @@ class _PlanFormDialogState extends ConsumerState<_PlanFormDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Plan name')),
+              TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: 'Plan name'),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _priceCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: 'Price (PHP)'),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _interval,
-                decoration: const InputDecoration(labelText: 'Billing interval'),
+                decoration: const InputDecoration(
+                  labelText: 'Billing interval',
+                ),
                 items: const [
                   DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
                   DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
@@ -271,19 +320,33 @@ class _PlanFormDialogState extends ConsumerState<_PlanFormDialog> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: AdminColors.danger, fontSize: 12)),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: AdminColors.danger,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _submitting ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(_isEdit ? 'Save' : 'Create'),
+          child:
+              _submitting
+                  ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : Text(_isEdit ? 'Save' : 'Create'),
         ),
       ],
     );

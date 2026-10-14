@@ -21,7 +21,11 @@ class AdminShell extends StatelessWidget {
   final String currentRoute;
   final Widget child;
 
-  const AdminShell({super.key, required this.currentRoute, required this.child});
+  const AdminShell({
+    super.key,
+    required this.currentRoute,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +33,16 @@ class AdminShell extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final isMobile = width < kAdminTabletBreakpoint;
-        final isTablet = width >= kAdminTabletBreakpoint && width < kAdminDesktopBreakpoint;
+        final isTablet =
+            width >= kAdminTabletBreakpoint && width < kAdminDesktopBreakpoint;
 
         if (isMobile) {
           return Scaffold(
             backgroundColor: AdminColors.background,
-            appBar: AdminTopBar(currentRoute: currentRoute, showMenuButton: true),
+            appBar: AdminTopBar(
+              currentRoute: currentRoute,
+              showMenuButton: true,
+            ),
             drawer: Drawer(
               child: AdminSidebar(currentRoute: currentRoute, collapsed: false),
             ),

@@ -14,7 +14,9 @@ enum PairingIssue { none, unreachable, authFailed }
 /// Set to authFailed the moment a request comes back 403 (wrong/stale key).
 /// Unlike plain unreachability, a wrong key won't fix itself on retry, so
 /// this is surfaced immediately rather than waiting for a failure count.
-final pairingIssueProvider = StateProvider<PairingIssue>((ref) => PairingIssue.none);
+final pairingIssueProvider = StateProvider<PairingIssue>(
+  (ref) => PairingIssue.none,
+);
 
 /// True once this device has successfully fetched orders at least once —
 /// i.e. actually reached the POS *and* had its key accepted. Gates the
@@ -100,9 +102,11 @@ class LanClientService {
     try {
       final res = await http
           .patch(
-            Uri.parse(round == null
-                ? '$base/orders/$orderId/status'
-                : '$base/orders/$orderId/rounds/$round/status'),
+            Uri.parse(
+              round == null
+                  ? '$base/orders/$orderId/status'
+                  : '$base/orders/$orderId/rounds/$round/status',
+            ),
             headers: {
               'content-type': 'application/json',
               'x-pos-key': _posKey ?? '',
@@ -111,7 +115,8 @@ class LanClientService {
           )
           .timeout(const Duration(seconds: 4));
       if (res.statusCode == 403) {
-        _ref.read(pairingIssueProvider.notifier).state = PairingIssue.authFailed;
+        _ref.read(pairingIssueProvider.notifier).state =
+            PairingIssue.authFailed;
       } else if (res.statusCode == 200 &&
           _ref.read(pairingIssueProvider) == PairingIssue.authFailed) {
         _ref.read(pairingIssueProvider.notifier).state = PairingIssue.none;
@@ -131,10 +136,7 @@ class LanClientService {
     if (base == null) return LanPingResult.unreachable;
     try {
       final res = await http
-          .get(
-            Uri.parse('$base/ping'),
-            headers: {'x-pos-key': _posKey ?? ''},
-          )
+          .get(Uri.parse('$base/ping'), headers: {'x-pos-key': _posKey ?? ''})
           .timeout(const Duration(seconds: 2));
       if (res.statusCode == 200) return LanPingResult.ok;
       if (res.statusCode == 403) return LanPingResult.unauthorized;
@@ -173,7 +175,8 @@ class LanClientService {
       _onEvent?.call(msg);
 
       // On any order change, re-fetch the full list so UI is in sync
-      if (msg['type'] == 'order_placed' || msg['type'] == 'order_status_changed') {
+      if (msg['type'] == 'order_placed' ||
+          msg['type'] == 'order_status_changed') {
         _fetchOrders(businessId);
       }
       // Parked order events are handled by ParkedOrderNotifier via onEvent
@@ -214,7 +217,8 @@ class LanClientService {
           )
           .timeout(const Duration(seconds: 3));
       if (res.statusCode == 200) {
-        final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+        final list =
+            (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
         _onOrders?.call(list);
 
         // A 200 here proves both reachability and a correct key — clear any
@@ -232,7 +236,8 @@ class LanClientService {
         // Wrong/stale key — reachability isn't the problem, so flag this
         // immediately rather than waiting on the sustained-failure timer
         // connectivity_service uses for plain unreachability.
-        _ref.read(pairingIssueProvider.notifier).state = PairingIssue.authFailed;
+        _ref.read(pairingIssueProvider.notifier).state =
+            PairingIssue.authFailed;
       }
     } catch (_) {
       // POS unreachable on LAN — connectivity_service's needsRepairProvider

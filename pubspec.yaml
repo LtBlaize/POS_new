@@ -57,6 +57,7 @@ dependencies:
 
   file_picker: ^8.0.0
   file_saver: ^0.2.14
+  audioplayers: ^6.1.0     # kitchen alert sounds (Windows/Android/iOS)
 
   printing: ^5.13.1        # PDF generation + print dialog
   pdf: ^3.10.8             # Build the thermal receipt PDF
@@ -84,6 +85,7 @@ flutter:
   assets:
     - assets/POS_Report_Template.xlsx
     - assets/.env
+    - assets/sounds/
   uses-material-design: true
   # fonts:
   #   - family: Inter

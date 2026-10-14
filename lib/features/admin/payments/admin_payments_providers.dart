@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 const int kPaymentsPageSize = 20;
 
 class PaymentFilter {
-  final String? status;   // null = all
+  final String? status; // null = all
   final String? provider; // null = all
   final String businessSearch;
 
@@ -15,12 +15,11 @@ class PaymentFilter {
     Object? status = _sentinel,
     Object? provider = _sentinel,
     String? businessSearch,
-  }) =>
-      PaymentFilter(
-        status: status == _sentinel ? this.status : status as String?,
-        provider: provider == _sentinel ? this.provider : provider as String?,
-        businessSearch: businessSearch ?? this.businessSearch,
-      );
+  }) => PaymentFilter(
+    status: status == _sentinel ? this.status : status as String?,
+    provider: provider == _sentinel ? this.provider : provider as String?,
+    businessSearch: businessSearch ?? this.businessSearch,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -35,7 +34,9 @@ class PaymentFilter {
 
 const _sentinel = Object();
 
-final paymentFilterProvider = StateProvider<PaymentFilter>((_) => const PaymentFilter());
+final paymentFilterProvider = StateProvider<PaymentFilter>(
+  (_) => const PaymentFilter(),
+);
 final paymentPageProvider = StateProvider<int>((_) => 0);
 
 class PaymentListItem {
@@ -67,10 +68,13 @@ class PaymentListPage {
   final int totalCount;
   const PaymentListPage({required this.items, required this.totalCount});
   static const empty = PaymentListPage(items: [], totalCount: 0);
-  int get totalPages => (totalCount / kPaymentsPageSize).ceil().clamp(1, 1 << 30);
+  int get totalPages =>
+      (totalCount / kPaymentsPageSize).ceil().clamp(1, 1 << 30);
 }
 
-final paymentListProvider = FutureProvider.autoDispose<PaymentListPage>((ref) async {
+final paymentListProvider = FutureProvider.autoDispose<PaymentListPage>((
+  ref,
+) async {
   final filter = ref.watch(paymentFilterProvider);
   final page = ref.watch(paymentPageProvider);
 
@@ -81,12 +85,17 @@ final paymentListProvider = FutureProvider.autoDispose<PaymentListPage>((ref) as
     // filtering on an embedded resource's column directly.
     var query = client
         .from('payments')
-        .select('id, business_id, amount, currency, status, provider, reference, created_at, businesses!inner(name)');
+        .select(
+          'id, business_id, amount, currency, status, provider, reference, created_at, businesses!inner(name)',
+        );
 
     if (filter.status != null) query = query.eq('status', filter.status!);
     if (filter.provider != null) query = query.eq('provider', filter.provider!);
     if (filter.businessSearch.trim().isNotEmpty) {
-      query = query.ilike('businesses.name', '%${filter.businessSearch.trim()}%');
+      query = query.ilike(
+        'businesses.name',
+        '%${filter.businessSearch.trim()}%',
+      );
     }
 
     final from = page * kPaymentsPageSize;
@@ -98,20 +107,21 @@ final paymentListProvider = FutureProvider.autoDispose<PaymentListPage>((ref) as
         .count(CountOption.exact);
 
     final rows = (response.data as List).cast<Map<String, dynamic>>();
-    final items = rows.map((r) {
-      final biz = r['businesses'] as Map<String, dynamic>?;
-      return PaymentListItem(
-        id: r['id'] as String,
-        businessId: r['business_id'] as String,
-        businessName: biz?['name'] as String? ?? 'Unknown',
-        amount: (r['amount'] as num?)?.toDouble() ?? 0,
-        currency: r['currency'] as String? ?? 'PHP',
-        status: r['status'] as String? ?? 'pending',
-        provider: r['provider'] as String? ?? 'manual',
-        reference: r['reference'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-      );
-    }).toList();
+    final items =
+        rows.map((r) {
+          final biz = r['businesses'] as Map<String, dynamic>?;
+          return PaymentListItem(
+            id: r['id'] as String,
+            businessId: r['business_id'] as String,
+            businessName: biz?['name'] as String? ?? 'Unknown',
+            amount: (r['amount'] as num?)?.toDouble() ?? 0,
+            currency: r['currency'] as String? ?? 'PHP',
+            status: r['status'] as String? ?? 'pending',
+            provider: r['provider'] as String? ?? 'manual',
+            reference: r['reference'] as String?,
+            createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+          );
+        }).toList();
 
     return PaymentListPage(items: items, totalCount: response.count);
   } catch (_) {
@@ -132,14 +142,18 @@ class BusinessOption {
   const BusinessOption(this.id, this.name);
 }
 
-final allBusinessOptionsProvider = FutureProvider.autoDispose<List<BusinessOption>>((ref) async {
-  try {
-    final client = Supabase.instance.client;
-    final rows = await client.from('businesses').select('id, name').order('name');
-    return (rows as List)
-        .map((r) => BusinessOption(r['id'] as String, r['name'] as String))
-        .toList();
-  } catch (_) {
-    return [];
-  }
-});
+final allBusinessOptionsProvider =
+    FutureProvider.autoDispose<List<BusinessOption>>((ref) async {
+      try {
+        final client = Supabase.instance.client;
+        final rows = await client
+            .from('businesses')
+            .select('id, name')
+            .order('name');
+        return (rows as List)
+            .map((r) => BusinessOption(r['id'] as String, r['name'] as String))
+            .toList();
+      } catch (_) {
+        return [];
+      }
+    });

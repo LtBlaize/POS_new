@@ -43,7 +43,7 @@ class HourlySale {
 
 class HeatmapCell {
   final int weekday; // 1=Mon … 7=Sun
-  final int hour;    // 0–23
+  final int hour; // 0–23
   final double amount;
   final int orderCount;
   const HeatmapCell({
@@ -230,8 +230,10 @@ final dateRangeProvider = StateProvider<DateRange>((ref) {
 });
 
 // ── Heatmap provider ──────────────────────────────────────────────────────────
-final heatmapProvider =
-    FutureProvider.family<WeeklyHeatmap, DateRange>((ref, range) async {
+final heatmapProvider = FutureProvider.family<WeeklyHeatmap, DateRange>((
+  ref,
+  range,
+) async {
   if (range.isSingleDay) return WeeklyHeatmap.empty;
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return WeeklyHeatmap.empty;
@@ -240,10 +242,21 @@ final heatmapProvider =
 
   try {
     final client = ref.watch(supabaseClientProvider);
-    final start = DateTime(range.start.year, range.start.month, range.start.day)
-        .toUtc().toIso8601String();
-    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59)
-        .toUtc().toIso8601String();
+    final start =
+        DateTime(
+          range.start.year,
+          range.start.month,
+          range.start.day,
+        ).toUtc().toIso8601String();
+    final end =
+        DateTime(
+          range.end.year,
+          range.end.month,
+          range.end.day,
+          23,
+          59,
+          59,
+        ).toUtc().toIso8601String();
 
     final rows = await client
         .from('orders')
@@ -273,12 +286,14 @@ final heatmapProvider =
         final key = wd * 100 + h;
         final amt = amountMap[key] ?? 0;
         if (amt > maxAmount) maxAmount = amt;
-        cells.add(HeatmapCell(
-          weekday: wd,
-          hour: h,
-          amount: amt,
-          orderCount: countMap[key] ?? 0,
-        ));
+        cells.add(
+          HeatmapCell(
+            weekday: wd,
+            hour: h,
+            amount: amt,
+            orderCount: countMap[key] ?? 0,
+          ),
+        );
       }
     }
 
@@ -293,9 +308,10 @@ final slowMoverThresholdProvider = StateProvider<int>((ref) => 3);
 
 // All products with their sales data for the selected date/range
 // Returns products from inventory that had zero or low sales
-final slowMoversProvider =
-    FutureProvider.family<List<TopProduct>, ({DateRange range, int threshold})>(
-        (ref, args) async {
+final slowMoversProvider = FutureProvider.family<
+  List<TopProduct>,
+  ({DateRange range, int threshold})
+>((ref, args) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return [];
   final isOnline = ref.read(isOnlineProvider);
@@ -304,13 +320,20 @@ final slowMoversProvider =
   try {
     final client = ref.watch(supabaseClientProvider);
     final start =
-        DateTime(args.range.start.year, args.range.start.month, args.range.start.day)
-            .toUtc()
-            .toIso8601String();
-    final end = DateTime(args.range.end.year, args.range.end.month,
-            args.range.end.day, 23, 59, 59)
-        .toUtc()
-        .toIso8601String();
+        DateTime(
+          args.range.start.year,
+          args.range.start.month,
+          args.range.start.day,
+        ).toUtc().toIso8601String();
+    final end =
+        DateTime(
+          args.range.end.year,
+          args.range.end.month,
+          args.range.end.day,
+          23,
+          59,
+          59,
+        ).toUtc().toIso8601String();
 
     // Fetch all active products
     final products = await client
@@ -324,7 +347,9 @@ final slowMoversProvider =
     // Fetch sales in range
     final orders = await client
         .from('orders')
-        .select('order_items(product_id, product_name, quantity, subtotal, cost_at_sale)')
+        .select(
+          'order_items(product_id, product_name, quantity, subtotal, cost_at_sale)',
+        )
         .eq('business_id', businessId)
         .not('paid_at', 'is', null)
         .gte('created_at', start)
@@ -339,12 +364,18 @@ final slowMoversProvider =
         final name = item['product_name'] as String? ?? '';
         final qty = item['quantity'] as int? ?? 0;
         final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
-        final cost =
-            ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
+        final cost = ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
         final acc = soldMap[pid];
-        soldMap[pid] = acc != null
-            ? _ProductAccum(name, acc.qty + qty, acc.revenue + sub, acc.cogs + cost, '')
-            : _ProductAccum(name, qty, sub, cost, '');
+        soldMap[pid] =
+            acc != null
+                ? _ProductAccum(
+                  name,
+                  acc.qty + qty,
+                  acc.revenue + sub,
+                  acc.cogs + cost,
+                  '',
+                )
+                : _ProductAccum(name, qty, sub, cost, '');
       }
     }
 
@@ -358,15 +389,17 @@ final slowMoversProvider =
         final revenue = acc?.revenue ?? 0.0;
         final cogs = acc?.cogs ?? 0.0;
         final gp = revenue - cogs;
-        result.add(TopProduct(
-          p['name'] as String,
-          qtySold,
-          revenue,
-          cogs: cogs,
-          grossProfit: gp,
-          marginPct: revenue > 0 ? (gp / revenue * 100) : 0,
-          category: (p['category_name'] as String?) ?? '',
-        ));
+        result.add(
+          TopProduct(
+            p['name'] as String,
+            qtySold,
+            revenue,
+            cogs: cogs,
+            grossProfit: gp,
+            marginPct: revenue > 0 ? (gp / revenue * 100) : 0,
+            category: (p['category_name'] as String?) ?? '',
+          ),
+        );
       }
     }
 
@@ -377,8 +410,10 @@ final slowMoversProvider =
   }
 });
 
-final periodReportProvider =
-    FutureProvider.family<DailyReport, DateRange>((ref, range) async {
+final periodReportProvider = FutureProvider.family<DailyReport, DateRange>((
+  ref,
+  range,
+) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return DailyReport.empty;
   final isOnline = ref.read(isOnlineProvider);
@@ -400,18 +435,21 @@ final periodReportProvider =
     for (final row in cached) {
       totalRevenue += (row['total_sales'] as num?)?.toDouble() ?? 0;
       totalOrders += (row['order_count'] as int?) ?? 0;
-      final rawTop = (row['top_products'] as List? ?? []).cast<Map<String, dynamic>>();
+      final rawTop =
+          (row['top_products'] as List? ?? []).cast<Map<String, dynamic>>();
       for (final p in rawTop) {
         totalCogs += (p['cogs'] as num?)?.toDouble() ?? 0;
-        topProducts.add(TopProduct(
-          p['name'] as String,
-          (p['qty'] as num).toInt(),
-          (p['revenue'] as num).toDouble(),
-          cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
-          grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
-          marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
-          category: p['category'] as String? ?? '',
-        ));
+        topProducts.add(
+          TopProduct(
+            p['name'] as String,
+            (p['qty'] as num).toInt(),
+            (p['revenue'] as num).toDouble(),
+            cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
+            grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
+            marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
+            category: p['category'] as String? ?? '',
+          ),
+        );
       }
     }
     return DailyReport(
@@ -430,17 +468,27 @@ final periodReportProvider =
   }
   try {
     final client = ref.watch(supabaseClientProvider);
-    final start = DateTime(range.start.year, range.start.month, range.start.day)
-        .toUtc()
-        .toIso8601String();
-    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59)
-        .toUtc()
-        .toIso8601String();
+    final start =
+        DateTime(
+          range.start.year,
+          range.start.month,
+          range.start.day,
+        ).toUtc().toIso8601String();
+    final end =
+        DateTime(
+          range.end.year,
+          range.end.month,
+          range.end.day,
+          23,
+          59,
+          59,
+        ).toUtc().toIso8601String();
 
     final rows = await client
         .from('orders')
         .select(
-            '*, order_items(product_name, quantity, subtotal, cost_at_sale, products(category_name)), staff_members(name)')
+          '*, order_items(product_name, quantity, subtotal, cost_at_sale, products(category_name)), staff_members(name)',
+        )
         .eq('business_id', businessId)
         .gte('created_at', start)
         .lte('created_at', end)
@@ -452,8 +500,10 @@ final periodReportProvider =
   }
 });
 
-final dailyReportProvider =
-    FutureProvider.family<DailyReport, DateTime>((ref, date) async {
+final dailyReportProvider = FutureProvider.family<DailyReport, DateTime>((
+  ref,
+  date,
+) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return DailyReport.empty;
   final isOnline = ref.read(isOnlineProvider);
@@ -467,13 +517,21 @@ final dailyReportProvider =
     final client = ref.watch(supabaseClientProvider);
     final dayStart =
         DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59)
-        .toUtc()
-        .toIso8601String();
+    final dayEnd =
+        DateTime(
+          date.year,
+          date.month,
+          date.day,
+          23,
+          59,
+          59,
+        ).toUtc().toIso8601String();
 
     final rows = await client
         .from('orders')
-        .select('*, order_items(product_name, quantity, subtotal, cost_at_sale), staff_members(name)')
+        .select(
+          '*, order_items(product_name, quantity, subtotal, cost_at_sale), staff_members(name)',
+        )
         .eq('business_id', businessId)
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd)
@@ -487,17 +545,20 @@ final dailyReportProvider =
       totalSales: report.totalRevenue,
       orderCount: report.totalOrders,
       avgOrderValue: report.avgOrderValue,
-      topProducts: report.topProducts
-          .map((p) => {
-                'name': p.name,
-                'qty': p.qty,
-                'revenue': p.revenue,
-                'cogs': p.cogs,
-                'gross_profit': p.grossProfit,
-                'margin_pct': p.marginPct,
-                'category': p.category,
-              })
-          .toList(),
+      topProducts:
+          report.topProducts
+              .map(
+                (p) => {
+                  'name': p.name,
+                  'qty': p.qty,
+                  'revenue': p.revenue,
+                  'cogs': p.cogs,
+                  'gross_profit': p.grossProfit,
+                  'margin_pct': p.marginPct,
+                  'category': p.category,
+                },
+              )
+              .toList(),
     );
 
     return report;
@@ -506,8 +567,10 @@ final dailyReportProvider =
   }
 });
 
-final shiftReportProvider =
-    FutureProvider.autoDispose.family<List<ShiftEntry>, DateTime>((ref, date) async {
+final shiftReportProvider = FutureProvider.autoDispose.family<
+  List<ShiftEntry>,
+  DateTime
+>((ref, date) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return [];
 
@@ -571,36 +634,47 @@ final shiftReportProvider =
               .from('order_items')
               .select('quantity')
               .inFilter('order_id', ids);
-          itemsSold =
-              (items as List).fold(0, (s, i) => s + (i['quantity'] as int));
+          itemsSold = (items as List).fold(
+            0,
+            (s, i) => s + (i['quantity'] as int),
+          );
         }
       } catch (_) {
         final r = await _localOrderCounts(
-          local, businessId, shift.staffId,
-          shift.openedAt.toUtc(), shiftEnd,
+          local,
+          businessId,
+          shift.staffId,
+          shift.openedAt.toUtc(),
+          shiftEnd,
         );
         orderCount = r.$1;
         itemsSold = r.$2;
       }
     } else {
       final r = await _localOrderCounts(
-        local, businessId, shift.staffId,
-        shift.openedAt.toUtc(), shiftEnd,
+        local,
+        businessId,
+        shift.staffId,
+        shift.openedAt.toUtc(),
+        shiftEnd,
       );
       orderCount = r.$1;
       itemsSold = r.$2;
     }
 
     // ── BUG FIX: use liveShift (not raw shift) when shift is open ──────────
-    final liveShift = shift.status == ShiftStatus.open
-        ? await shiftService.withLiveTotals(shift)
-        : shift;
+    final liveShift =
+        shift.status == ShiftStatus.open
+            ? await shiftService.withLiveTotals(shift)
+            : shift;
 
-    entries.add(ShiftEntry(
-      shift: liveShift, // ← was `shift` before; now correctly uses live data
-      orderCount: orderCount,
-      itemsSold: itemsSold,
-    ));
+    entries.add(
+      ShiftEntry(
+        shift: liveShift, // ← was `shift` before; now correctly uses live data
+        orderCount: orderCount,
+        itemsSold: itemsSold,
+      ),
+    );
   }
 
   return entries;
@@ -615,17 +689,21 @@ Future<DailyReport> _loadFromCache(
   String businessId,
   String dateKey,
 ) async {
-  final cached =
-      await local.getReports(businessId, fromDate: dateKey, toDate: dateKey);
+  final cached = await local.getReports(
+    businessId,
+    fromDate: dateKey,
+    toDate: dateKey,
+  );
 
   if (cached.isEmpty) {
     return DailyReport.empty.copyWith(isFromCache: true);
   }
 
   final row = cached.first;
-  final syncedAt = row['synced_at'] != null
-      ? DateTime.tryParse(row['synced_at'] as String)
-      : null;
+  final syncedAt =
+      row['synced_at'] != null
+          ? DateTime.tryParse(row['synced_at'] as String)
+          : null;
   final rawTopProducts =
       (row['top_products'] as List? ?? []).cast<Map<String, dynamic>>();
 
@@ -634,17 +712,20 @@ Future<DailyReport> _loadFromCache(
     totalOrders: (row['order_count'] as int?) ?? 0,
     avgOrderValue: (row['avg_order_value'] as num?)?.toDouble() ?? 0,
     revenueByPayment: const {},
-    topProducts: rawTopProducts
-        .map((p) => TopProduct(
-              p['name'] as String,
-              (p['qty'] as num).toInt(),
-              (p['revenue'] as num).toDouble(),
-              cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
-              grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
-              marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
-              category: p['category'] as String? ?? '',
-            ))
-        .toList(),
+    topProducts:
+        rawTopProducts
+            .map(
+              (p) => TopProduct(
+                p['name'] as String,
+                (p['qty'] as num).toInt(),
+                (p['revenue'] as num).toDouble(),
+                cogs: (p['cogs'] as num?)?.toDouble() ?? 0,
+                grossProfit: (p['gross_profit'] as num?)?.toDouble() ?? 0,
+                marginPct: (p['margin_pct'] as num?)?.toDouble() ?? 0,
+                category: p['category'] as String? ?? '',
+              ),
+            )
+            .toList(),
     hourlySales: List.generate(24, (h) => HourlySale(h, 0)),
     completedOrders: (row['order_count'] as int?) ?? 0,
     cancelledOrders: 0,
@@ -688,10 +769,11 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
       totalDiscount += disc;
       if (disc > 0) {
         final staffRow = row['staff_members'] as Map<String, dynamic>?;
-        final cashier = staffRow?['name'] as String? ??
-            row['cashier_id'] as String? ?? 'Unknown';
-        discountByStaff[cashier] =
-            (discountByStaff[cashier] ?? 0) + disc;
+        final cashier =
+            staffRow?['name'] as String? ??
+            row['cashier_id'] as String? ??
+            'Unknown';
+        discountByStaff[cashier] = (discountByStaff[cashier] ?? 0) + disc;
       }
     }
 
@@ -701,37 +783,45 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
     }
 
     final items = isPaid ? (row['order_items'] as List? ?? []) : const [];
-      for (final item in items) {
-        final name = item['product_name'] as String? ?? 'Unknown';
-        final qty = item['quantity'] as int? ?? 0;
-        final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
-        final itemCost = ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
-        final categoryRow = item['products'] as Map<String, dynamic>?;
-        final category = categoryRow?['category_name'] as String? ?? '';
-        if (isPaid) totalCogs += itemCost;
-        final acc = productAccum[name];
-        productAccum[name] = acc != null
-            ? _ProductAccum(name, acc.qty + qty, acc.revenue + sub,
-                acc.cogs + itemCost, acc.category)
-            : _ProductAccum(name, qty, sub, itemCost, category);
-      }
+    for (final item in items) {
+      final name = item['product_name'] as String? ?? 'Unknown';
+      final qty = item['quantity'] as int? ?? 0;
+      final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
+      final itemCost =
+          ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
+      final categoryRow = item['products'] as Map<String, dynamic>?;
+      final category = categoryRow?['category_name'] as String? ?? '';
+      if (isPaid) totalCogs += itemCost;
+      final acc = productAccum[name];
+      productAccum[name] =
+          acc != null
+              ? _ProductAccum(
+                name,
+                acc.qty + qty,
+                acc.revenue + sub,
+                acc.cogs + itemCost,
+                acc.category,
+              )
+              : _ProductAccum(name, qty, sub, itemCost, category);
+    }
   }
 
   final grossProfit = totalRevenue - totalCogs;
 
-  final topProducts = productAccum.values.map((a) {
-    final gp = a.revenue - a.cogs;
-    return TopProduct(
-      a.name,
-      a.qty,
-      a.revenue,
-      cogs: a.cogs,
-      grossProfit: gp,
-      marginPct: a.revenue > 0 ? (gp / a.revenue * 100) : 0,
-      category: a.category,
-    );
-  }).toList()
-    ..sort((a, b) => b.qty.compareTo(a.qty));
+  final topProducts =
+      productAccum.values.map((a) {
+          final gp = a.revenue - a.cogs;
+          return TopProduct(
+            a.name,
+            a.qty,
+            a.revenue,
+            cogs: a.cogs,
+            grossProfit: gp,
+            marginPct: a.revenue > 0 ? (gp / a.revenue * 100) : 0,
+            category: a.category,
+          );
+        }).toList()
+        ..sort((a, b) => b.qty.compareTo(a.qty));
 
   return DailyReport(
     totalRevenue: totalRevenue,
@@ -758,7 +848,12 @@ class _ProductAccum {
   final double cogs;
   final String category;
   const _ProductAccum(
-      this.name, this.qty, this.revenue, this.cogs, this.category);
+    this.name,
+    this.qty,
+    this.revenue,
+    this.cogs,
+    this.category,
+  );
 }
 
 Future<List<Map<String, dynamic>>> _localShiftRows(
@@ -784,49 +879,56 @@ Future<(int, int)> _localOrderCounts(
   DateTime from,
   DateTime to,
 ) async {
-    final db = await local.db;
-    final orders = await db.query(
-      'orders',
-      columns: ['id'],
-      where: 'business_id = ? AND cashier_id = ? AND status = ? '
-            'AND created_at >= ? AND created_at <= ?',
-      whereArgs: [businessId, staffId, 'completed',
-                  from.toIso8601String(), to.toIso8601String()],
-    );
-    if (orders.isEmpty) return (0, 0);
+  final db = await local.db;
+  final orders = await db.query(
+    'orders',
+    columns: ['id'],
+    where:
+        'business_id = ? AND cashier_id = ? AND status = ? '
+        'AND created_at >= ? AND created_at <= ?',
+    whereArgs: [
+      businessId,
+      staffId,
+      'completed',
+      from.toIso8601String(),
+      to.toIso8601String(),
+    ],
+  );
+  if (orders.isEmpty) return (0, 0);
 
-    // Parameterized IN clause — no string interpolation
-    final ids = orders.map((o) => o['id'] as String).toList();
-    final placeholders = List.filled(ids.length, '?').join(',');
-    final items = await db.rawQuery(
-      'SELECT SUM(quantity) as total FROM order_items '
-      'WHERE order_id IN ($placeholders)',
-      ids, // passed as args, not interpolated
-    );
-    return (orders.length, (items.first['total'] as num?)?.toInt() ?? 0);
-  }
+  // Parameterized IN clause — no string interpolation
+  final ids = orders.map((o) => o['id'] as String).toList();
+  final placeholders = List.filled(ids.length, '?').join(',');
+  final items = await db.rawQuery(
+    'SELECT SUM(quantity) as total FROM order_items '
+    'WHERE order_id IN ($placeholders)',
+    ids, // passed as args, not interpolated
+  );
+  return (orders.length, (items.first['total'] as num?)?.toInt() ?? 0);
+}
 
 /// Public so shift widgets can call it directly if needed.
 CashierShift shiftFromRow(Map<String, dynamic> r) => CashierShift(
-      id: r['id'] as String,
-      businessId: r['business_id'] as String,
-      staffId: r['staff_id'] as String,
-      staffName: r['staff_name'] as String,
-      openingCash: (r['opening_cash'] as num).toDouble(),
-      openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
-      status: r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
-      closedAt: r['closed_at'] != null
+  id: r['id'] as String,
+  businessId: r['business_id'] as String,
+  staffId: r['staff_id'] as String,
+  staffName: r['staff_name'] as String,
+  openingCash: (r['opening_cash'] as num).toDouble(),
+  openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
+  status: r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
+  closedAt:
+      r['closed_at'] != null
           ? DateTime.parse(r['closed_at'] as String).toLocal()
           : null,
-      actualCashCount: (r['actual_cash_count'] as num?)?.toDouble(),
-      notes: r['notes'] as String?,
-      totalSales: (r['total_sales'] as num? ?? 0).toDouble(),
-      cashSales: (r['cash_sales'] as num? ?? 0).toDouble(),
-      gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
-      otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
-      creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
-      expenses: (r['expenses'] as num? ?? 0).toDouble(),
-    );
+  actualCashCount: (r['actual_cash_count'] as num?)?.toDouble(),
+  notes: r['notes'] as String?,
+  totalSales: (r['total_sales'] as num? ?? 0).toDouble(),
+  cashSales: (r['cash_sales'] as num? ?? 0).toDouble(),
+  gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
+  otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
+  creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
+  expenses: (r['expenses'] as num? ?? 0).toDouble(),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // copyWith extension for DailyReport (needed for cache helper)
@@ -849,24 +951,23 @@ extension DailyReportCopyWith on DailyReport {
     Map<String, double>? discountByStaff,
     bool? isFromCache,
     DateTime? cachedAt,
-  }) =>
-      DailyReport(
-        totalRevenue: totalRevenue ?? this.totalRevenue,
-        totalOrders: totalOrders ?? this.totalOrders,
-        avgOrderValue: avgOrderValue ?? this.avgOrderValue,
-        revenueByPayment: revenueByPayment ?? this.revenueByPayment,
-        topProducts: topProducts ?? this.topProducts,
-        hourlySales: hourlySales ?? this.hourlySales,
-        completedOrders: completedOrders ?? this.completedOrders,
-        cancelledOrders: cancelledOrders ?? this.cancelledOrders,
-        totalCogs: totalCogs ?? this.totalCogs,
-        grossProfit: grossProfit ?? this.grossProfit,
-        totalTaxCollected: totalTaxCollected ?? this.totalTaxCollected,
-        totalDiscount: totalDiscount ?? this.totalDiscount,
-        discountByStaff: discountByStaff ?? this.discountByStaff,
-        isFromCache: isFromCache ?? this.isFromCache,
-        cachedAt: cachedAt ?? this.cachedAt,
-      );
+  }) => DailyReport(
+    totalRevenue: totalRevenue ?? this.totalRevenue,
+    totalOrders: totalOrders ?? this.totalOrders,
+    avgOrderValue: avgOrderValue ?? this.avgOrderValue,
+    revenueByPayment: revenueByPayment ?? this.revenueByPayment,
+    topProducts: topProducts ?? this.topProducts,
+    hourlySales: hourlySales ?? this.hourlySales,
+    completedOrders: completedOrders ?? this.completedOrders,
+    cancelledOrders: cancelledOrders ?? this.cancelledOrders,
+    totalCogs: totalCogs ?? this.totalCogs,
+    grossProfit: grossProfit ?? this.grossProfit,
+    totalTaxCollected: totalTaxCollected ?? this.totalTaxCollected,
+    totalDiscount: totalDiscount ?? this.totalDiscount,
+    discountByStaff: discountByStaff ?? this.discountByStaff,
+    isFromCache: isFromCache ?? this.isFromCache,
+    cachedAt: cachedAt ?? this.cachedAt,
+  );
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // AUDIT LOG MODELS + PROVIDER
@@ -898,17 +999,17 @@ class AuditLogEntry {
   });
 
   factory AuditLogEntry.fromMap(Map<String, dynamic> m) => AuditLogEntry(
-        id:                m['id'] as String,
-        performedByName:   m['performed_by_staff_name'] as String,
-        performedByRole:   m['performed_by_role'] as String,
-        authorisedByName:  m['authorised_by_staff_name'] as String?,
-        actionType:        m['action_type'] as String,
-        entityType:        m['entity_type'] as String?,
-        entityId:          m['entity_id'] as String?,
-        description:       m['description'] as String,
-        metadata:          m['metadata'] as Map<String, dynamic>?,
-        createdAt:         DateTime.parse(m['created_at'] as String).toLocal(),
-      );
+    id: m['id'] as String,
+    performedByName: m['performed_by_staff_name'] as String,
+    performedByRole: m['performed_by_role'] as String,
+    authorisedByName: m['authorised_by_staff_name'] as String?,
+    actionType: m['action_type'] as String,
+    entityType: m['entity_type'] as String?,
+    entityId: m['entity_id'] as String?,
+    description: m['description'] as String,
+    metadata: m['metadata'] as Map<String, dynamic>?,
+    createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
+  );
 }
 
 // Filter state for the audit log viewer
@@ -918,28 +1019,20 @@ class AuditFilter {
   final DateTime? from;
   final DateTime? to;
 
-  const AuditFilter({
-    this.actionType,
-    this.staffName,
-    this.from,
-    this.to,
-  });
+  const AuditFilter({this.actionType, this.staffName, this.from, this.to});
 
   AuditFilter copyWith({
     Object? actionType = _sentinel,
     Object? staffName = _sentinel,
     Object? from = _sentinel,
     Object? to = _sentinel,
-  }) =>
-      AuditFilter(
-        actionType: actionType == _sentinel
-            ? this.actionType
-            : actionType as String?,
-        staffName:
-            staffName == _sentinel ? this.staffName : staffName as String?,
-        from: from == _sentinel ? this.from : from as DateTime?,
-        to: to == _sentinel ? this.to : to as DateTime?,
-      );
+  }) => AuditFilter(
+    actionType:
+        actionType == _sentinel ? this.actionType : actionType as String?,
+    staffName: staffName == _sentinel ? this.staffName : staffName as String?,
+    from: from == _sentinel ? this.from : from as DateTime?,
+    to: to == _sentinel ? this.to : to as DateTime?,
+  );
 }
 
 const _sentinel = Object();
@@ -948,9 +1041,10 @@ final auditFilterProvider = StateProvider<AuditFilter>(
   (_) => const AuditFilter(),
 );
 
-final auditLogProvider =
-    FutureProvider.family<List<AuditLogEntry>, AuditFilter>(
-        (ref, filter) async {
+final auditLogProvider = FutureProvider.family<
+  List<AuditLogEntry>,
+  AuditFilter
+>((ref, filter) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return [];
   final isOnline = ref.read(isOnlineProvider);
@@ -967,25 +1061,26 @@ final auditLogProvider =
       query = query.eq('action_type', filter.actionType!);
     }
     if (filter.staffName != null && filter.staffName!.isNotEmpty) {
-      query = query.ilike(
-          'performed_by_staff_name', '%${filter.staffName}%');
+      query = query.ilike('performed_by_staff_name', '%${filter.staffName}%');
     }
     if (filter.from != null) {
-      query = query.gte('created_at',
-          filter.from!.toUtc().toIso8601String());
+      query = query.gte('created_at', filter.from!.toUtc().toIso8601String());
     }
     if (filter.to != null) {
       query = query.lte(
-          'created_at',
-          DateTime(filter.to!.year, filter.to!.month, filter.to!.day,
-                  23, 59, 59)
-              .toUtc()
-              .toIso8601String());
+        'created_at',
+        DateTime(
+          filter.to!.year,
+          filter.to!.month,
+          filter.to!.day,
+          23,
+          59,
+          59,
+        ).toUtc().toIso8601String(),
+      );
     }
 
-    final rows = await query
-        .order('created_at', ascending: false)
-        .limit(200);
+    final rows = await query.order('created_at', ascending: false).limit(200);
 
     return (rows as List)
         .map((r) => AuditLogEntry.fromMap(r as Map<String, dynamic>))

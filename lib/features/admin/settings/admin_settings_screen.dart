@@ -25,35 +25,54 @@ class AdminSettingsScreen extends ConsumerWidget {
         backgroundColor: AdminColors.primary,
         icon: const Icon(Icons.person_add_alt_1_rounded),
         label: const Text('Add admin'),
-        onPressed: () => showDialog(context: context, builder: (_) => const _InviteAdminDialog()),
+        onPressed:
+            () => showDialog(
+              context: context,
+              builder: (_) => const _InviteAdminDialog(),
+            ),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, __) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline_rounded, size: 40, color: AdminColors.textMuted),
-                const SizedBox(height: 12),
-                const Text('Restricted to platform administrators',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
-                const SizedBox(height: 6),
-                Text(
-                  'Your admin account doesn\'t have platform_admin access.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12.5, color: AdminColors.textMuted),
+        error:
+            (e, __) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.lock_outline_rounded,
+                      size: 40,
+                      color: AdminColors.textMuted,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Restricted to platform administrators',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Your admin account doesn\'t have platform_admin access.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AdminColors.textMuted,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        data: (admins) => ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: admins.length,
-          itemBuilder: (context, i) => _AdminRow(admin: admins[i]),
-        ),
+        data:
+            (admins) => ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: admins.length,
+              itemBuilder: (context, i) => _AdminRow(admin: admins[i]),
+            ),
       ),
     );
   }
@@ -67,7 +86,9 @@ class _AdminRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentAdminId = ref.watch(currentAdminIdProvider);
     final isSelf = admin.id == currentAdminId;
-    final (bg, fg) = AdminColors.statusPillColors(admin.isActive ? 'active' : 'suspended');
+    final (bg, fg) = AdminColors.statusPillColors(
+      admin.isActive ? 'active' : 'suspended',
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -82,7 +103,11 @@ class _AdminRow extends ConsumerWidget {
           const CircleAvatar(
             radius: 18,
             backgroundColor: AdminColors.neutralBg,
-            child: Icon(Icons.person, size: 18, color: AdminColors.textSecondary),
+            child: Icon(
+              Icons.person,
+              size: 18,
+              color: AdminColors.textSecondary,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -90,17 +115,36 @@ class _AdminRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text(admin.email,
-                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
-                  if (isSelf) ...[
-                    const SizedBox(width: 6),
-                    const Text('(you)', style: TextStyle(fontSize: 11.5, color: AdminColors.textMuted)),
+                Row(
+                  children: [
+                    Text(
+                      admin.email,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
+                    if (isSelf) ...[
+                      const SizedBox(width: 6),
+                      const Text(
+                        '(you)',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AdminColors.textMuted,
+                        ),
+                      ),
+                    ],
                   ],
-                ]),
+                ),
                 const SizedBox(height: 2),
-                Text('Added ${admin.createdAt.toLocal().toString().split(' ').first}',
-                    style: const TextStyle(fontSize: 11.5, color: AdminColors.textMuted)),
+                Text(
+                  'Added ${admin.createdAt.toLocal().toString().split(' ').first}',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AdminColors.textMuted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -111,19 +155,33 @@ class _AdminRow extends ConsumerWidget {
               isDense: true,
               underline: const SizedBox.shrink(),
               items: const [
-                DropdownMenuItem(value: 'platform_admin', child: Text('Platform Admin')),
-                DropdownMenuItem(value: 'platform_support', child: Text('Platform Support')),
-                DropdownMenuItem(value: 'platform_viewer', child: Text('Platform Viewer')),
+                DropdownMenuItem(
+                  value: 'platform_admin',
+                  child: Text('Platform Admin'),
+                ),
+                DropdownMenuItem(
+                  value: 'platform_support',
+                  child: Text('Platform Support'),
+                ),
+                DropdownMenuItem(
+                  value: 'platform_viewer',
+                  child: Text('Platform Viewer'),
+                ),
               ],
               onChanged: (newRole) async {
                 if (newRole == null || newRole == admin.role) return;
                 try {
-                  await ref.read(adminSettingsServiceProvider).setRole(admin.id, newRole);
+                  await ref
+                      .read(adminSettingsServiceProvider)
+                      .setRole(admin.id, newRole);
                   ref.invalidate(adminUsersListProvider);
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$e'), backgroundColor: AdminColors.danger),
+                      SnackBar(
+                        content: Text('$e'),
+                        backgroundColor: AdminColors.danger,
+                      ),
                     );
                   }
                 }
@@ -132,54 +190,83 @@ class _AdminRow extends ConsumerWidget {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-            child: Text(admin.isActive ? 'Active' : 'Inactive',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              admin.isActive ? 'Active' : 'Inactive',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           TextButton(
-            onPressed: isSelf
-                ? null
-                : () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text('${admin.isActive ? "Deactivate" : "Reactivate"} ${admin.email}?'),
-                        content: Text(admin.isActive
-                            ? 'They will immediately lose access to /admin.'
-                            : 'They will regain access to /admin.'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: TextButton.styleFrom(
-                              foregroundColor: admin.isActive ? AdminColors.danger : AdminColors.primary,
+            onPressed:
+                isSelf
+                    ? null
+                    : () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (ctx) => AlertDialog(
+                              title: Text(
+                                '${admin.isActive ? "Deactivate" : "Reactivate"} ${admin.email}?',
+                              ),
+                              content: Text(
+                                admin.isActive
+                                    ? 'They will immediately lose access to /admin.'
+                                    : 'They will regain access to /admin.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor:
+                                        admin.isActive
+                                            ? AdminColors.danger
+                                            : AdminColors.primary,
+                                  ),
+                                  child: Text(
+                                    admin.isActive
+                                        ? 'Deactivate'
+                                        : 'Reactivate',
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: Text(admin.isActive ? 'Deactivate' : 'Reactivate'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true) return;
+                      );
+                      if (confirmed != true) return;
 
-                    try {
-                      final service = ref.read(adminSettingsServiceProvider);
-                      if (admin.isActive) {
-                        await service.deactivate(admin.id);
-                      } else {
-                        await service.reactivate(admin.id);
+                      try {
+                        final service = ref.read(adminSettingsServiceProvider);
+                        if (admin.isActive) {
+                          await service.deactivate(admin.id);
+                        } else {
+                          await service.reactivate(admin.id);
+                        }
+                        ref.invalidate(adminUsersListProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('$e'),
+                              backgroundColor: AdminColors.danger,
+                            ),
+                          );
+                        }
                       }
-                      ref.invalidate(adminUsersListProvider);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$e'), backgroundColor: AdminColors.danger),
-                        );
-                      }
-                    }
-                  },
+                    },
             style: TextButton.styleFrom(
-              foregroundColor: admin.isActive ? AdminColors.danger : AdminColors.primary,
+              foregroundColor:
+                  admin.isActive ? AdminColors.danger : AdminColors.primary,
             ),
             child: Text(admin.isActive ? 'Deactivate' : 'Reactivate'),
           ),
@@ -248,18 +335,29 @@ class _InviteAdminDialogState extends ConsumerState<_InviteAdminDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: AdminColors.danger, fontSize: 12)),
+              Text(
+                _error!,
+                style: const TextStyle(color: AdminColors.danger, fontSize: 12),
+              ),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: _submitting ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Send invite'),
+          child:
+              _submitting
+                  ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Send invite'),
         ),
       ],
     );

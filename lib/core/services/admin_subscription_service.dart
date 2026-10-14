@@ -38,32 +38,35 @@ class AdminSubscriptionService {
     int? durationMonths,
     String? reason,
   }) => _invoke({
-        'action': 'change_plan',
-        'business_id': businessId,
-        'new_plan': newPlan,
-        if (trialEndsAt != null) 'trial_ends_at': trialEndsAt.toUtc().toIso8601String(),
-        if (durationMonths != null) 'duration_months': durationMonths,
-        if (reason != null) 'reason': reason,
-      });
+    'action': 'change_plan',
+    'business_id': businessId,
+    'new_plan': newPlan,
+    if (trialEndsAt != null)
+      'trial_ends_at': trialEndsAt.toUtc().toIso8601String(),
+    if (durationMonths != null) 'duration_months': durationMonths,
+    if (reason != null) 'reason': reason,
+  });
 
   Future<void> extendTrial({
     required String businessId,
     required DateTime trialEndsAt,
     String? reason,
   }) => _invoke({
-        'action': 'extend',
-        'business_id': businessId,
-        'trial_ends_at': trialEndsAt.toUtc().toIso8601String(),
-        if (reason != null) 'reason': reason,
-      });
+    'action': 'extend',
+    'business_id': businessId,
+    'trial_ends_at': trialEndsAt.toUtc().toIso8601String(),
+    if (reason != null) 'reason': reason,
+  });
 
-  Future<void> suspend({required String businessId, String? reason}) => _invoke({
+  Future<void> suspend({required String businessId, String? reason}) =>
+      _invoke({
         'action': 'suspend',
         'business_id': businessId,
         if (reason != null) 'reason': reason,
       });
 
-  Future<void> reactivate({required String businessId, String? reason}) => _invoke({
+  Future<void> reactivate({required String businessId, String? reason}) =>
+      _invoke({
         'action': 'reactivate',
         'business_id': businessId,
         if (reason != null) 'reason': reason,
@@ -80,6 +83,8 @@ class AdminSubscriptionService {
       suspend(businessId: businessId, reason: reason);
 }
 
-final adminSubscriptionServiceProvider = Provider<AdminSubscriptionService>((ref) {
+final adminSubscriptionServiceProvider = Provider<AdminSubscriptionService>((
+  ref,
+) {
   return AdminSubscriptionService();
 });

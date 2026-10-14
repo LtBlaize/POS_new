@@ -19,10 +19,7 @@ class CreditsScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFF0B0E1A),
       body: Row(
         children: [
-          Sidebar(
-            featureManager: featureManager,
-            currentRoute: '/credits',
-          ),
+          Sidebar(featureManager: featureManager, currentRoute: '/credits'),
           const Expanded(child: _CreditsBody()),
         ],
       ),
@@ -50,23 +47,33 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
     final customersAsync = ref.watch(creditCustomersProvider);
 
     return customersAsync.when(
-      loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE94560))),
-      error: (e, _) =>
-          Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white))),
+      loading:
+          () => const Center(
+            child: CircularProgressIndicator(color: Color(0xFFE94560)),
+          ),
+      error:
+          (e, _) => Center(
+            child: Text(
+              'Error: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
       data: (customers) {
-        final filtered = _search.isEmpty
-            ? customers
-            : customers
-                .where((c) =>
-                    c.name.toLowerCase().contains(_search.toLowerCase()) ||
-                    c.phone.contains(_search))
-                .toList();
+        final filtered =
+            _search.isEmpty
+                ? customers
+                : customers
+                    .where(
+                      (c) =>
+                          c.name.toLowerCase().contains(
+                            _search.toLowerCase(),
+                          ) ||
+                          c.phone.contains(_search),
+                    )
+                    .toList();
 
-        final totalOwed =
-            customers.fold<double>(0, (s, c) => s + c.totalOwed);
-        final withBalance =
-            customers.where((c) => c.totalOwed > 0).length;
+        final totalOwed = customers.fold<double>(0, (s, c) => s + c.totalOwed);
+        final withBalance = customers.where((c) => c.totalOwed > 0).length;
 
         return Row(
           children: [
@@ -83,45 +90,54 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Utang / Credit',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800)),
+                          const Text(
+                            'Utang / Credit',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             '${customers.length} customers · $withBalance with balance',
                             style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.4),
-                                fontSize: 12),
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 16),
 
                           // Total owed summary chip
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                             decoration: BoxDecoration(
-                              color: _accent.withValues(alpha:0.08),
+                              color: _accent.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                  color: _accent.withValues(alpha:0.2)),
+                                color: _accent.withValues(alpha: 0.2),
+                              ),
                             ),
                             child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Total Outstanding',
-                                    style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha:0.55),
-                                        fontSize: 12)),
+                                Text(
+                                  'Total Outstanding',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 Text(
                                   '₱${_fmt(totalOwed)}',
                                   style: const TextStyle(
-                                      color: _accent,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800),
+                                    color: _accent,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ],
                             ),
@@ -130,22 +146,27 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
 
                           // Search
                           TextField(
-                            onChanged: (v) =>
-                                setState(() => _search = v),
+                            onChanged: (v) => setState(() => _search = v),
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 13),
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
                             decoration: InputDecoration(
                               hintText: 'Search name or phone…',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha:0.25),
-                                  fontSize: 13),
-                              prefixIcon: Icon(Icons.search,
-                                  color: Colors.white.withValues(alpha:0.3),
-                                  size: 18),
+                                color: Colors.white.withValues(alpha: 0.25),
+                                fontSize: 13,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: Colors.white.withValues(alpha: 0.3),
+                                size: 18,
+                              ),
                               filled: true,
                               fillColor: _card,
                               contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 10),
+                                vertical: 10,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none,
@@ -159,36 +180,40 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
 
                     // Customer list
                     Expanded(
-                      child: filtered.isEmpty
-                          ? Center(
-                              child: Text(
-                                _search.isEmpty
-                                    ? 'No customers yet.\nAdd utang at checkout.'
-                                    : 'No results',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: Colors.white.withValues(alpha:0.25),
-                                    fontSize: 13),
+                      child:
+                          filtered.isEmpty
+                              ? Center(
+                                child: Text(
+                                  _search.isEmpty
+                                      ? 'No customers yet.\nAdd utang at checkout.'
+                                      : 'No results',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                              : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  12,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder:
+                                    (_, _) => const SizedBox(height: 4),
+                                itemBuilder: (_, i) {
+                                  final c = filtered[i];
+                                  final isSelected = _selected?.id == c.id;
+                                  return _CustomerTile(
+                                    customer: c,
+                                    selected: isSelected,
+                                    onTap: () => setState(() => _selected = c),
+                                  );
+                                },
                               ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(
-                                  12, 0, 12, 12),
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 4),
-                              itemBuilder: (_, i) {
-                                final c = filtered[i];
-                                final isSelected =
-                                    _selected?.id == c.id;
-                                return _CustomerTile(
-                                  customer: c,
-                                  selected: isSelected,
-                                  onTap: () =>
-                                      setState(() => _selected = c),
-                                );
-                              },
-                            ),
                     ),
                   ],
                 ),
@@ -197,28 +222,34 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
 
             // ── RIGHT: Customer detail ───────────────────────────────────
             Expanded(
-              child: _selected == null
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.person_search_outlined,
+              child:
+                  _selected == null
+                      ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person_search_outlined,
                               size: 48,
-                              color: Colors.white.withValues(alpha:0.1)),
-                          const SizedBox(height: 12),
-                          Text('Select a customer to view details',
+                              color: Colors.white.withValues(alpha: 0.1),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Select a customer to view details',
                               style: TextStyle(
-                                  color: Colors.white.withValues(alpha:0.2),
-                                  fontSize: 13)),
-                        ],
+                                color: Colors.white.withValues(alpha: 0.2),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                      : _CustomerDetail(
+                        key: ValueKey(_selected!.id),
+                        customer: _selected!,
+                        onUpdated:
+                            (updated) => setState(() => _selected = updated),
                       ),
-                    )
-                  : _CustomerDetail(
-                      key: ValueKey(_selected!.id),
-                      customer: _selected!,
-                      onUpdated: (updated) =>
-                          setState(() => _selected = updated),
-                    ),
             ),
           ],
         );
@@ -226,8 +257,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
     );
   }
 
-  String _fmt(double v) =>
-      NumberFormat('#,##0.00', 'en_PH').format(v);
+  String _fmt(double v) => NumberFormat('#,##0.00', 'en_PH').format(v);
 }
 
 // ── Customer tile ─────────────────────────────────────────────────────────────
@@ -250,32 +280,35 @@ class _CustomerTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFE94560).withValues(alpha:0.12)
-              : const Color(0xFF1A1F35),
+          color:
+              selected
+                  ? const Color(0xFFE94560).withValues(alpha: 0.12)
+                  : const Color(0xFF1A1F35),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? const Color(0xFFE94560).withValues(alpha:0.4)
-                : Colors.transparent,
+            color:
+                selected
+                    ? const Color(0xFFE94560).withValues(alpha: 0.4)
+                    : Colors.transparent,
           ),
         ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 20,
-              backgroundColor: hasBalance
-                  ? const Color(0xFFE94560).withValues(alpha:0.15)
-                  : const Color(0xFF10B981).withValues(alpha:0.15),
+              backgroundColor:
+                  hasBalance
+                      ? const Color(0xFFE94560).withValues(alpha: 0.15)
+                      : const Color(0xFF10B981).withValues(alpha: 0.15),
               child: Text(
                 customer.name[0].toUpperCase(),
                 style: TextStyle(
-                  color: hasBalance
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFF10B981),
+                  color:
+                      hasBalance
+                          ? const Color(0xFFE94560)
+                          : const Color(0xFF10B981),
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
                 ),
@@ -286,15 +319,21 @@ class _CustomerTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customer.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                  Text(customer.phone,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.35),
-                          fontSize: 11)),
+                  Text(
+                    customer.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    customer.phone,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -302,13 +341,17 @@ class _CustomerTile extends StatelessWidget {
               Text(
                 '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
                 style: const TextStyle(
-                    color: Color(0xFFE94560),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700),
+                  color: Color(0xFFE94560),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               )
             else
-              const Icon(Icons.check_circle,
-                  color: Color(0xFF10B981), size: 16),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF10B981),
+                size: 16,
+              ),
           ],
         ),
       ),
@@ -333,8 +376,7 @@ class _CustomerDetail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final txAsync =
-        ref.watch(creditTransactionsProvider(customer.id));
+    final txAsync = ref.watch(creditTransactionsProvider(customer.id));
 
     return Container(
       color: const Color(0xFF0B0E1A),
@@ -347,21 +389,21 @@ class _CustomerDetail extends ConsumerWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF141827),
               border: Border(
-                bottom: BorderSide(
-                    color: Colors.white.withValues(alpha:0.06)),
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
               ),
             ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: _accent.withValues(alpha:0.15),
+                  backgroundColor: _accent.withValues(alpha: 0.15),
                   child: Text(
                     customer.name[0].toUpperCase(),
                     style: const TextStyle(
-                        color: _accent,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800),
+                      color: _accent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -369,15 +411,21 @@ class _CustomerDetail extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(customer.name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800)),
-                      Text(customer.phone,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.4),
-                              fontSize: 13)),
+                      Text(
+                        customer.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        customer.phone,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -386,16 +434,17 @@ class _CustomerDetail extends ConsumerWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('Balance',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha:0.4),
-                            fontSize: 11)),
+                    Text(
+                      'Balance',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 11,
+                      ),
+                    ),
                     Text(
                       '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
                       style: TextStyle(
-                        color: customer.totalOwed > 0
-                            ? _accent
-                            : _green,
+                        color: customer.totalOwed > 0 ? _accent : _green,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
@@ -410,8 +459,7 @@ class _CustomerDetail extends ConsumerWidget {
                     onPressed: () async {
                       final result = await showDialog<bool>(
                         context: context,
-                        builder: (_) =>
-                            PayCreditDialog(customer: customer),
+                        builder: (_) => PayCreditDialog(customer: customer),
                       );
                       if (result == true) {
                         // refresh the customers list to get updated balance
@@ -421,8 +469,10 @@ class _CustomerDetail extends ConsumerWidget {
                         final updated = ref
                             .read(creditCustomersProvider)
                             .value
-                            ?.firstWhere((c) => c.id == customer.id,
-                                orElse: () => customer);
+                            ?.firstWhere(
+                              (c) => c.id == customer.id,
+                              orElse: () => customer,
+                            );
                         if (updated != null) onUpdated(updated);
                       }
                     },
@@ -432,9 +482,12 @@ class _CustomerDetail extends ConsumerWidget {
                       backgroundColor: _green,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12),
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
               ],
@@ -444,37 +497,49 @@ class _CustomerDetail extends ConsumerWidget {
           // ── Transaction list ─────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
-            child: Text('Transaction History',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha:0.5),
-                    fontSize: 11,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              'Transaction History',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
 
           Expanded(
             child: txAsync.when(
-              loading: () => const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFFE94560))),
-              error: (e, _) => Center(
-                  child: Text('$e',
-                      style: const TextStyle(color: Colors.white))),
-              data: (txs) => txs.isEmpty
-                  ? Center(
-                      child: Text('No transactions yet',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.2),
-                              fontSize: 13)))
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(
-                          28, 0, 28, 24),
-                      itemCount: txs.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 6),
-                      itemBuilder: (_, i) =>
-                          _TxTile(tx: txs[i]),
+              loading:
+                  () => const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFE94560)),
+                  ),
+              error:
+                  (e, _) => Center(
+                    child: Text(
+                      '$e',
+                      style: const TextStyle(color: Colors.white),
                     ),
+                  ),
+              data:
+                  (txs) =>
+                      txs.isEmpty
+                          ? Center(
+                            child: Text(
+                              'No transactions yet',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                fontSize: 13,
+                              ),
+                            ),
+                          )
+                          : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+                            itemCount: txs.length,
+                            separatorBuilder:
+                                (_, _) => const SizedBox(height: 6),
+                            itemBuilder: (_, i) => _TxTile(tx: txs[i]),
+                          ),
             ),
           ),
         ],
@@ -492,12 +557,10 @@ class _TxTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = tx.type == CreditTxType.credit;
-    final color =
-        isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
+    final color = isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
     final sign = isCredit ? '+' : '-';
-    final icon = isCredit
-        ? Icons.arrow_upward_rounded
-        : Icons.arrow_downward_rounded;
+    final icon =
+        isCredit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -511,7 +574,7 @@ class _TxTile extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: color.withValues(alpha:0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -524,20 +587,25 @@ class _TxTile extends StatelessWidget {
                 Text(
                   isCredit ? 'Utang' : 'Payment',
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 if (tx.note != null)
-                  Text(tx.note!,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.35),
-                          fontSize: 11)),
+                  Text(
+                    tx.note!,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 11,
+                    ),
+                  ),
                 Text(
                   DateFormat('MMM d, y · h:mm a').format(tx.createdAt),
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.25),
-                      fontSize: 10),
+                    color: Colors.white.withValues(alpha: 0.25),
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
@@ -545,9 +613,10 @@ class _TxTile extends StatelessWidget {
           Text(
             '$sign₱${NumberFormat('#,##0.00').format(tx.amount)}',
             style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w700),
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

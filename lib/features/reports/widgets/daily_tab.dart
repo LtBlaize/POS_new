@@ -27,8 +27,7 @@ class DailyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
+    final accent = isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
     final isPhone = layout == ReportLayout.phone;
     final pad = isPhone ? 16.0 : 24.0;
 
@@ -37,16 +36,19 @@ class DailyTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.bar_chart_outlined,
-                size: 56,
-                color: AppColors.textSecondary.withValues(alpha:0.2)),
+            Icon(
+              Icons.bar_chart_outlined,
+              size: 56,
+              color: AppColors.textSecondary.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: 16),
             const Text(
               'No orders for this day',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -54,7 +56,9 @@ class DailyTab extends StatelessWidget {
                   ? 'No cached data available for this date'
                   : 'Select a different date to view reports',
               style: const TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary),
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -70,18 +74,21 @@ class DailyTab extends StatelessWidget {
           if (dateRange != null && !dateRange!.isSingleDay)
             Container(
               margin: const EdgeInsets.only(bottom: 16),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha:0.08),
+                color: AppColors.info.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
-                border:
-                    Border.all(color: AppColors.info.withValues(alpha:0.3)),
+                border: Border.all(
+                  color: AppColors.info.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.date_range_outlined,
-                      size: 14, color: AppColors.info),
+                  Icon(
+                    Icons.date_range_outlined,
+                    size: 14,
+                    color: AppColors.info,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     '${dateRange!.dayCount}-day summary: '
@@ -101,8 +108,7 @@ class DailyTab extends StatelessWidget {
           if (isToday && !report.isFromCache)
             Container(
               margin: const EdgeInsets.only(bottom: 16),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(10),
@@ -135,8 +141,7 @@ class DailyTab extends StatelessWidget {
           if (report.isFromCache)
             Container(
               margin: const EdgeInsets.only(bottom: 16),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF8E1),
                 borderRadius: BorderRadius.circular(10),
@@ -144,8 +149,11 @@ class DailyTab extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.history_rounded,
-                      size: 15, color: Color(0xFFF9A825)),
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 15,
+                    color: Color(0xFFF9A825),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -178,52 +186,60 @@ class DailyTab extends StatelessWidget {
           // ── Charts row ──────────────────────────────────────────────────
           isPhone
               ? Column(
-                  children: [
-                    ReportCard(
+                children: [
+                  ReportCard(
+                    title: 'Sales by Hour',
+                    icon: Icons.access_time_rounded,
+                    child: HourlyChart(
+                      sales: report.hourlySales,
+                      accent: accent,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ReportCard(
+                    title: 'Payment Methods',
+                    icon: Icons.credit_card_outlined,
+                    child:
+                        report.isFromCache
+                            ? _offlinePaymentNote()
+                            : PaymentBreakdown(
+                              data: report.revenueByPayment,
+                              accent: accent,
+                            ),
+                  ),
+                ],
+              )
+              : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: ReportCard(
                       title: 'Sales by Hour',
                       icon: Icons.access_time_rounded,
                       child: HourlyChart(
-                          sales: report.hourlySales, accent: accent),
+                        sales: report.hourlySales,
+                        accent: accent,
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    ReportCard(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ReportCard(
                       title: 'Payment Methods',
                       icon: Icons.credit_card_outlined,
-                      child: report.isFromCache
-                          ? _offlinePaymentNote()
-                          : PaymentBreakdown(
-                              data: report.revenueByPayment,
-                              accent: accent),
-                    ),
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: ReportCard(
-                        title: 'Sales by Hour',
-                        icon: Icons.access_time_rounded,
-                        child: HourlyChart(
-                            sales: report.hourlySales, accent: accent),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ReportCard(
-                        title: 'Payment Methods',
-                        icon: Icons.credit_card_outlined,
-                        child: report.isFromCache
-                            ? _offlinePaymentNote()
-                            : PaymentBreakdown(
+                      child:
+                          report.isFromCache
+                              ? _offlinePaymentNote()
+                              : PaymentBreakdown(
                                 data: report.revenueByPayment,
-                                accent: accent),
-                      ),
+                                accent: accent,
+                              ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
 
           SizedBox(height: isPhone ? 12 : 20),
 
@@ -239,7 +255,10 @@ class DailyTab extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(bottom: isPhone ? 12 : 20),
               child: _TaxDiscountCard(
-                  report: report, accent: accent, isPhone: isPhone),
+                report: report,
+                accent: accent,
+                isPhone: isPhone,
+              ),
             ),
 
           // ── Discount breakdown ───────────────────────────────────────────
@@ -247,7 +266,10 @@ class DailyTab extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(bottom: isPhone ? 12 : 20),
               child: _DiscountCard(
-                  report: report, accent: accent, isPhone: isPhone),
+                report: report,
+                accent: accent,
+                isPhone: isPhone,
+              ),
             ),
 
           // ── Top products ─────────────────────────────────────────────────
@@ -284,8 +306,7 @@ class DailyTab extends StatelessWidget {
     return '${diff.inDays}d ago';
   }
 
-  static String _fmtShortDate(DateTime d) =>
-      '${d.month}/${d.day}/${d.year}';
+  static String _fmtShortDate(DateTime d) => '${d.month}/${d.day}/${d.year}';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -333,9 +354,10 @@ class _PhoneKpiGrid extends StatelessWidget {
               value: '${report.completedOrders}',
               icon: Icons.check_circle_outline,
               color: AppColors.success,
-              sub: report.cancelledOrders > 0
-                  ? '${report.cancelledOrders} cancelled'
-                  : null,
+              sub:
+                  report.cancelledOrders > 0
+                      ? '${report.cancelledOrders} cancelled'
+                      : null,
               subColor: AppColors.danger,
             ),
           ],
@@ -383,9 +405,10 @@ class _WideKpiRow extends StatelessWidget {
           value: '${report.totalOrders}',
           icon: Icons.receipt_long_outlined,
           color: accent,
-          sub: report.cancelledOrders > 0
-              ? '${report.cancelledOrders} cancelled'
-              : null,
+          sub:
+              report.cancelledOrders > 0
+                  ? '${report.cancelledOrders} cancelled'
+                  : null,
           subColor: AppColors.danger,
         ),
       ],
@@ -404,55 +427,60 @@ class HourlyChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final max =
-        sales.map((s) => s.amount).fold(0.0, (a, b) => a > b ? a : b);
-    final visible =
-        sales.where((s) => s.hour >= 6 && s.hour <= 23).toList();
+    final max = sales.map((s) => s.amount).fold(0.0, (a, b) => a > b ? a : b);
+    final visible = sales.where((s) => s.hour >= 6 && s.hour <= 23).toList();
 
     return SizedBox(
       height: 160,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: visible.map((s) {
-          final ratio = max > 0 ? s.amount / max : 0.0;
-          final hasData = s.amount > 0;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (hasData)
-                    Text(
-                      s.amount >= 1000
-                          ? '${(s.amount / 1000).toStringAsFixed(1)}k'
-                          : s.amount.toStringAsFixed(0),
-                      style: TextStyle(
-                          fontSize: 7,
-                          color: accent,
-                          fontWeight: FontWeight.w600),
-                      textAlign: TextAlign.center,
-                    ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOut,
-                    height: (ratio * 110).clamp(2.0, 110.0),
-                    decoration: BoxDecoration(
-                      color: hasData
-                          ? accent.withValues(alpha:0.8)
-                          : AppColors.divider,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+        children:
+            visible.map((s) {
+              final ratio = max > 0 ? s.amount / max : 0.0;
+              final hasData = s.amount > 0;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (hasData)
+                        Text(
+                          s.amount >= 1000
+                              ? '${(s.amount / 1000).toStringAsFixed(1)}k'
+                              : s.amount.toStringAsFixed(0),
+                          style: TextStyle(
+                            fontSize: 7,
+                            color: accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOut,
+                        height: (ratio * 110).clamp(2.0, 110.0),
+                        decoration: BoxDecoration(
+                          color:
+                              hasData
+                                  ? accent.withValues(alpha: 0.8)
+                                  : AppColors.divider,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _hourLabel(s.hour),
+                        style: const TextStyle(
+                          fontSize: 8,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(_hourLabel(s.hour),
-                      style: const TextStyle(
-                          fontSize: 8, color: AppColors.textSecondary)),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
+                ),
+              );
+            }).toList(),
       ),
     );
   }
@@ -472,8 +500,7 @@ class HourlyChart extends StatelessWidget {
 class PaymentBreakdown extends StatelessWidget {
   final Map<String, double> data;
   final Color accent;
-  const PaymentBreakdown(
-      {super.key, required this.data, required this.accent});
+  const PaymentBreakdown({super.key, required this.data, required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -481,19 +508,23 @@ class PaymentBreakdown extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Text('No payment data',
-              style:
-                  TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          child: Text(
+            'No payment data',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
         ),
       );
     }
 
     final total = data.values.fold(0.0, (a, b) => a + b);
     final colors = [
-      accent, AppColors.success, AppColors.info, AppColors.warning,
+      accent,
+      AppColors.success,
+      AppColors.info,
+      AppColors.warning,
     ];
-    final entries = data.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final entries =
+        data.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
     return Column(
       children: [
@@ -502,20 +533,20 @@ class PaymentBreakdown extends StatelessWidget {
           child: SizedBox(
             height: 10,
             child: Row(
-              children: entries.asMap().entries.map((e) {
-                final ratio = e.value.value / total;
-                return Expanded(
-                  flex: (ratio * 100).round(),
-                  child: Container(color: colors[e.key % colors.length]),
-                );
-              }).toList(),
+              children:
+                  entries.asMap().entries.map((e) {
+                    final ratio = e.value.value / total;
+                    return Expanded(
+                      flex: (ratio * 100).round(),
+                      child: Container(color: colors[e.key % colors.length]),
+                    );
+                  }).toList(),
             ),
           ),
         ),
         const SizedBox(height: 16),
         ...entries.asMap().entries.map((e) {
-          final pct =
-              (e.value.value / total * 100).toStringAsFixed(1);
+          final pct = (e.value.value / total * 100).toStringAsFixed(1);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -529,19 +560,30 @@ class PaymentBreakdown extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(_methodLabel(e.value.key),
-                    style: const TextStyle(
-                        fontSize: 13, color: AppColors.textPrimary)),
+                Text(
+                  _methodLabel(e.value.key),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const Spacer(),
-                Text('₱${e.value.value.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                Text(
+                  '₱${e.value.value.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Text('$pct%',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary)),
+                Text(
+                  '$pct%',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           );
@@ -551,12 +593,12 @@ class PaymentBreakdown extends StatelessWidget {
   }
 
   String _methodLabel(String key) => switch (key) {
-        'cash' => 'Cash',
-        'card' => 'Card',
-        'gcash' => 'GCash',
-        'maya' => 'Maya',
-        _ => key,
-      };
+    'cash' => 'Cash',
+    'card' => 'Card',
+    'gcash' => 'GCash',
+    'maya' => 'Maya',
+    _ => key,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -571,13 +613,17 @@ class _DiscountCard extends StatelessWidget {
   final DailyReport report;
   final Color accent;
   final bool isPhone;
-  const _DiscountCard(
-      {required this.report, required this.accent, required this.isPhone});
+  const _DiscountCard({
+    required this.report,
+    required this.accent,
+    required this.isPhone,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final entries = report.discountByStaff.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final entries =
+        report.discountByStaff.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     final total = report.totalDiscount;
 
     return ReportCard(
@@ -589,23 +635,31 @@ class _DiscountCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha:0.06),
+              color: AppColors.warning.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.warning.withValues(alpha:0.2)),
+              border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.2),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total Discounts Given',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                Text('₱${total.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.warning)),
+                const Text(
+                  'Total Discounts Given',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₱${total.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.warning,
+                  ),
+                ),
               ],
             ),
           ),
@@ -618,32 +672,41 @@ class _DiscountCard extends StatelessWidget {
               child: Row(
                 children: const [
                   Expanded(
-                    child: Text('CASHIER',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5)),
+                    child: Text(
+                      'CASHIER',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                   SizedBox(
                     width: 90,
-                    child: Text('AMOUNT',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5)),
+                    child: Text(
+                      'AMOUNT',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                   SizedBox(
                     width: 60,
-                    child: Text('SHARE',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5)),
+                    child: Text(
+                      'SHARE',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -655,8 +718,8 @@ class _DiscountCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 9),
                 decoration: const BoxDecoration(
                   border: Border(
-                      top: BorderSide(
-                          color: AppColors.divider, width: 0.5)),
+                    top: BorderSide(color: AppColors.divider, width: 0.5),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,55 +727,67 @@ class _DiscountCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(e.key,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            e.key,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         SizedBox(
                           width: 90,
-                          child: Text('₱${e.value.toStringAsFixed(2)}',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.warning)),
+                          child: Text(
+                            '₱${e.value.toStringAsFixed(2)}',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.warning,
+                            ),
+                          ),
                         ),
                         SizedBox(
                           width: 60,
                           child: Text(
-                              '${(pct * 100).toStringAsFixed(1)}%',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary)),
+                            '${(pct * 100).toStringAsFixed(1)}%',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 5),
-                    LayoutBuilder(builder: (ctx, constraints) {
-                      return Stack(children: [
-                        Container(
-                          height: 3,
-                          width: constraints.maxWidth,
-                          decoration: BoxDecoration(
-                            color: AppColors.divider,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        Container(
-                          height: 3,
-                          width: constraints.maxWidth * pct,
-                          decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha:0.7),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ]);
-                    }),
+                    LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        return Stack(
+                          children: [
+                            Container(
+                              height: 3,
+                              width: constraints.maxWidth,
+                              decoration: BoxDecoration(
+                                color: AppColors.divider,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            Container(
+                              height: 3,
+                              width: constraints.maxWidth * pct,
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               );
@@ -732,68 +807,74 @@ class _TaxDiscountCard extends StatelessWidget {
   final DailyReport report;
   final Color accent;
   final bool isPhone;
-  const _TaxDiscountCard(
-      {required this.report, required this.accent, required this.isPhone});
+  const _TaxDiscountCard({
+    required this.report,
+    required this.accent,
+    required this.isPhone,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final taxRate = report.totalRevenue > 0
-        ? (report.totalTaxCollected / report.totalRevenue * 100)
-        : 0.0;
-    final discountRate = report.totalRevenue > 0
-        ? (report.totalDiscount /
+    final taxRate =
+        report.totalRevenue > 0
+            ? (report.totalTaxCollected / report.totalRevenue * 100)
+            : 0.0;
+    final discountRate =
+        report.totalRevenue > 0
+            ? (report.totalDiscount /
                 (report.totalRevenue + report.totalDiscount) *
                 100)
-        : 0.0;
+            : 0.0;
 
     return ReportCard(
       title: 'Tax & Discounts',
       icon: Icons.receipt_outlined,
-      child: isPhone
-          ? Column(
-              children: [
-                _TaxRow(
-                  label: 'Tax Collected',
-                  value: report.totalTaxCollected,
-                  sub: '${taxRate.toStringAsFixed(1)}% of revenue',
-                  color: AppColors.info,
-                  icon: Icons.account_balance_outlined,
-                ),
-                const SizedBox(height: 12),
-                _TaxRow(
-                  label: 'Discounts Given',
-                  value: report.totalDiscount,
-                  sub: '${discountRate.toStringAsFixed(1)}% of gross sales',
-                  color: AppColors.warning,
-                  icon: Icons.local_offer_outlined,
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: _TaxRow(
+      child:
+          isPhone
+              ? Column(
+                children: [
+                  _TaxRow(
                     label: 'Tax Collected',
                     value: report.totalTaxCollected,
                     sub: '${taxRate.toStringAsFixed(1)}% of revenue',
                     color: AppColors.info,
                     icon: Icons.account_balance_outlined,
                   ),
-                ),
-                const SizedBox(width: 12),
-                Container(width: 1, height: 48, color: AppColors.divider),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _TaxRow(
+                  const SizedBox(height: 12),
+                  _TaxRow(
                     label: 'Discounts Given',
                     value: report.totalDiscount,
                     sub: '${discountRate.toStringAsFixed(1)}% of gross sales',
                     color: AppColors.warning,
                     icon: Icons.local_offer_outlined,
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+              : Row(
+                children: [
+                  Expanded(
+                    child: _TaxRow(
+                      label: 'Tax Collected',
+                      value: report.totalTaxCollected,
+                      sub: '${taxRate.toStringAsFixed(1)}% of revenue',
+                      color: AppColors.info,
+                      icon: Icons.account_balance_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 48, color: AppColors.divider),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _TaxRow(
+                      label: 'Discounts Given',
+                      value: report.totalDiscount,
+                      sub: '${discountRate.toStringAsFixed(1)}% of gross sales',
+                      color: AppColors.warning,
+                      icon: Icons.local_offer_outlined,
+                    ),
+                  ),
+                ],
+              ),
     );
   }
 }
@@ -819,7 +900,7 @@ class _TaxRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withValues(alpha:0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 16, color: color),
@@ -829,20 +910,30 @@ class _TaxRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text('₱${value.toStringAsFixed(2)}',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: color)),
-              Text(sub,
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textSecondary)),
+              Text(
+                '₱${value.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+              Text(
+                sub,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -859,8 +950,11 @@ class _PLSummaryCard extends StatelessWidget {
   final DailyReport report;
   final Color accent;
   final bool isPhone;
-  const _PLSummaryCard(
-      {required this.report, required this.accent, required this.isPhone});
+  const _PLSummaryCard({
+    required this.report,
+    required this.accent,
+    required this.isPhone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -881,7 +975,10 @@ class _PLSummaryCard extends StatelessWidget {
             label: 'Cost of Goods Sold',
             value: -report.totalCogs,
             isTotal: false,
-            color: report.totalCogs > 0 ? AppColors.danger : AppColors.textSecondary,
+            color:
+                report.totalCogs > 0
+                    ? AppColors.danger
+                    : AppColors.textSecondary,
             note: hasCogsData ? null : 'Add cost prices in Inventory',
           ),
           const Divider(height: 20, thickness: 0.5),
@@ -889,7 +986,8 @@ class _PLSummaryCard extends StatelessWidget {
             label: 'Gross Profit',
             value: report.grossProfit,
             isTotal: true,
-            color: report.grossProfit >= 0 ? AppColors.success : AppColors.danger,
+            color:
+                report.grossProfit >= 0 ? AppColors.success : AppColors.danger,
           ),
           if (hasCogsData) ...[
             const SizedBox(height: 8),
@@ -899,27 +997,31 @@ class _PLSummaryCard extends StatelessWidget {
                 color: (report.marginPct >= 30
                         ? AppColors.success
                         : report.marginPct >= 10
-                            ? AppColors.warning
-                            : AppColors.danger)
-                    .withValues(alpha:0.08),
+                        ? AppColors.warning
+                        : AppColors.danger)
+                    .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Gross Margin',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500)),
+                  const Text(
+                    'Gross Margin',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   Text(
                     '${report.marginPct.toStringAsFixed(1)}%',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: report.marginPct >= 30
-                          ? AppColors.success
-                          : report.marginPct >= 10
+                      color:
+                          report.marginPct >= 30
+                              ? AppColors.success
+                              : report.marginPct >= 10
                               ? AppColors.warning
                               : AppColors.danger,
                     ),
@@ -933,17 +1035,24 @@ class _PLSummaryCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.divider.withValues(alpha:0.5),
+                color: AppColors.divider.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
+                  Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: AppColors.textSecondary,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Set cost prices in Inventory to see COGS and gross profit.',
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -973,9 +1082,10 @@ class _PLRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final display = value < 0
-        ? '−₱${(-value).toStringAsFixed(0)}'
-        : '₱${value.toStringAsFixed(0)}';
+    final display =
+        value < 0
+            ? '−₱${(-value).toStringAsFixed(0)}'
+            : '₱${value.toStringAsFixed(0)}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -985,23 +1095,36 @@ class _PLRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: isTotal ? 14 : 13,
-                        fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
-                        color: isTotal ? AppColors.textPrimary : AppColors.textSecondary)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: isTotal ? 14 : 13,
+                    fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
+                    color:
+                        isTotal
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                  ),
+                ),
                 if (note != null)
-                  Text(note!,
-                      style: const TextStyle(
-                          fontSize: 10, color: AppColors.textSecondary)),
+                  Text(
+                    note!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
               ],
             ),
           ),
-          Text(display,
-              style: TextStyle(
-                  fontSize: isTotal ? 15 : 13,
-                  fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
-                  color: color)),
+          Text(
+            display,
+            style: TextStyle(
+              fontSize: isTotal ? 15 : 13,
+              fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -1041,26 +1164,30 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
     final threshold = ref.watch(slowMoverThresholdProvider);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final range = widget.dateRange ??
+    final range =
+        widget.dateRange ??
         DateRange(start: today, end: today, preset: RangePreset.day);
 
     final slowAsync = ref.watch(
-        slowMoversProvider((range: range, threshold: threshold)));
+      slowMoversProvider((range: range, threshold: threshold)),
+    );
 
     // All categories from top products
-    final allCategories = widget.report.topProducts
-        .map((p) => p.category)
-        .where((c) => c.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final allCategories =
+        widget.report.topProducts
+            .map((p) => p.category)
+            .where((c) => c.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     // Filtered top products
-    final filtered = _selectedCategory == null
-        ? widget.report.topProducts
-        : widget.report.topProducts
-            .where((p) => p.category == _selectedCategory)
-            .toList();
+    final filtered =
+        _selectedCategory == null
+            ? widget.report.topProducts
+            : widget.report.topProducts
+                .where((p) => p.category == _selectedCategory)
+                .toList();
 
     final visible = filtered.take(_topPageSize).toList();
     final hasMore = filtered.length > _topPageSize;
@@ -1077,18 +1204,18 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
                 _CategoryChip(
                   label: 'All',
                   active: _selectedCategory == null,
-                  onTap: () =>
-                      setState(() => _selectedCategory = null),
+                  onTap: () => setState(() => _selectedCategory = null),
                 ),
-                ...allCategories.map((c) => Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: _CategoryChip(
-                        label: c,
-                        active: _selectedCategory == c,
-                        onTap: () =>
-                            setState(() => _selectedCategory = c),
-                      ),
-                    )),
+                ...allCategories.map(
+                  (c) => Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: _CategoryChip(
+                      label: c,
+                      active: _selectedCategory == c,
+                      onTap: () => setState(() => _selectedCategory = c),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1098,9 +1225,10 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
         // ── Top sellers card ───────────────────────────────────────────────
         ReportCard(
           title: widget.isRestaurant ? 'Top Dishes' : 'Top Products',
-          icon: widget.isRestaurant
-              ? Icons.restaurant_menu_outlined
-              : Icons.inventory_2_outlined,
+          icon:
+              widget.isRestaurant
+                  ? Icons.restaurant_menu_outlined
+                  : Icons.inventory_2_outlined,
           child: Column(
             children: [
               TopProductsTable(
@@ -1111,15 +1239,14 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
               if (hasMore) ...[
                 const SizedBox(height: 12),
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _topPageSize += _pageStep),
+                  onTap: () => setState(() => _topPageSize += _pageStep),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       border: Border(
-                          top: BorderSide(
-                              color: AppColors.divider, width: 0.5)),
+                        top: BorderSide(color: AppColors.divider, width: 0.5),
+                      ),
                     ),
                     child: Text(
                       'Show more (${filtered.length - _topPageSize} remaining)',
@@ -1136,15 +1263,14 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
               if (!hasMore && _topPageSize > _pageStep) ...[
                 const SizedBox(height: 12),
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _topPageSize = _pageStep),
+                  onTap: () => setState(() => _topPageSize = _pageStep),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       border: Border(
-                          top: BorderSide(
-                              color: AppColors.divider, width: 0.5)),
+                        top: BorderSide(color: AppColors.divider, width: 0.5),
+                      ),
                     ),
                     child: Text(
                       'Show less',
@@ -1174,47 +1300,59 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
               // Threshold control
               Row(
                 children: [
-                  const Text('Threshold:',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary)),
+                  const Text(
+                    'Threshold:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   _ThresholdStepper(
                     value: threshold,
-                    onChanged: (v) => ref
-                        .read(slowMoverThresholdProvider.notifier)
-                        .state = v,
+                    onChanged:
+                        (v) =>
+                            ref
+                                .read(slowMoverThresholdProvider.notifier)
+                                .state = v,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     '≤ $threshold unit${threshold == 1 ? '' : 's'} sold',
                     style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               slowAsync.when(
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-                error: (_, _) => const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'Slow movers require an internet connection.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ),
+                loading:
+                    () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                error:
+                    (_, _) => const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Slow movers require an internet connection.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
                 data: (items) {
-                  final filtered2 = _selectedCategory == null
-                      ? items
-                      : items
-                          .where(
-                              (p) => p.category == _selectedCategory)
-                          .toList();
+                  final filtered2 =
+                      _selectedCategory == null
+                          ? items
+                          : items
+                              .where((p) => p.category == _selectedCategory)
+                              .toList();
                   if (filtered2.isEmpty) {
                     return const Center(
                       child: Padding(
@@ -1222,8 +1360,9 @@ class _ProductSectionState extends ConsumerState<_ProductSection> {
                         child: Text(
                           'No slow movers for this period',
                           style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary),
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     );
@@ -1249,8 +1388,11 @@ class _CategoryChip extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _CategoryChip(
-      {required this.label, required this.active, required this.onTap});
+  const _CategoryChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1258,17 +1400,18 @@ class _CategoryChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active
-              ? AppColors.primary.withValues(alpha:0.1)
-              : AppColors.surface,
+          color:
+              active
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: active
-                ? AppColors.primary.withValues(alpha:0.4)
-                : AppColors.divider,
+            color:
+                active
+                    ? AppColors.primary.withValues(alpha: 0.4)
+                    : AppColors.divider,
           ),
         ),
         child: Text(
@@ -1276,8 +1419,7 @@ class _CategoryChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            color:
-                active ? AppColors.primary : AppColors.textSecondary,
+            color: active ? AppColors.primary : AppColors.textSecondary,
           ),
         ),
       ),
@@ -1288,8 +1430,7 @@ class _CategoryChip extends StatelessWidget {
 class _ThresholdStepper extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
-  const _ThresholdStepper(
-      {required this.value, required this.onChanged});
+  const _ThresholdStepper({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1303,9 +1444,10 @@ class _ThresholdStepper extends StatelessWidget {
         Container(
           width: 36,
           alignment: Alignment.center,
-          child: Text('$value',
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700)),
+          child: Text(
+            '$value',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
         ),
         _StepBtn(
           icon: Icons.add,
@@ -1333,11 +1475,14 @@ class _StepBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
           color: onTap == null ? AppColors.surface : Colors.white,
         ),
-        child: Icon(icon,
-            size: 14,
-            color: onTap == null
-                ? AppColors.textSecondary.withValues(alpha:0.3)
-                : AppColors.textSecondary),
+        child: Icon(
+          icon,
+          size: 14,
+          color:
+              onTap == null
+                  ? AppColors.textSecondary.withValues(alpha: 0.3)
+                  : AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -1373,36 +1518,50 @@ class SalesHeatmap extends ConsumerWidget {
       title: 'Sales Heatmap',
       icon: Icons.grid_view_rounded,
       child: heatmapAsync.when(
-        loading: () => const SizedBox(
-          height: 120,
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-        error: (_, _) => const SizedBox(
-          height: 60,
-          child: Center(
-            child: Text('Could not load heatmap',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ),
-        ),
+        loading:
+            () => const SizedBox(
+              height: 120,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+        error:
+            (_, _) => const SizedBox(
+              height: 60,
+              child: Center(
+                child: Text(
+                  'Could not load heatmap',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
         data: (heatmap) {
           if (heatmap.maxAmount == 0) {
             return const SizedBox(
               height: 60,
               child: Center(
-                child: Text('No data for this range',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
+                child: Text(
+                  'No data for this range',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
             );
           }
 
           final hours = List.generate(
-              _endHour - _startHour + 1, (i) => _startHour + i);
+            _endHour - _startHour + 1,
+            (i) => _startHour + i,
+          );
 
           // Build lookup: weekday → hour → cell
           final Map<int, Map<int, HeatmapCell>> lookup = {};
           for (final c in heatmap.cells) {
-            lookup.putIfAbsent(c.weekday, () => <int, HeatmapCell>{})[c.hour] = c;
+            lookup.putIfAbsent(c.weekday, () => <int, HeatmapCell>{})[c.hour] =
+                c;
           }
 
           return Column(
@@ -1412,18 +1571,20 @@ class SalesHeatmap extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 36),
                 child: Row(
-                  children: hours.map((h) {
-                    final show = h % 3 == 0;
-                    return Expanded(
-                      child: Text(
-                        show ? _hourLabel(h) : '',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 8,
-                            color: AppColors.textSecondary),
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      hours.map((h) {
+                        final show = h % 3 == 0;
+                        return Expanded(
+                          child: Text(
+                            show ? _hourLabel(h) : '',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
               const SizedBox(height: 4),
@@ -1441,32 +1602,42 @@ class SalesHeatmap extends ConsumerWidget {
                         child: Text(
                           _days[wdIdx],
                           style: const TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600),
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       // Cells
                       ...hours.map((h) {
                         final cell = lookup[wd]?[h];
-                        final intensity = (heatmap.maxAmount > 0 && cell != null)
-                            ? (cell.amount / heatmap.maxAmount).clamp(0.0, 1.0)
-                            : 0.0;
+                        final intensity =
+                            (heatmap.maxAmount > 0 && cell != null)
+                                ? (cell.amount / heatmap.maxAmount).clamp(
+                                  0.0,
+                                  1.0,
+                                )
+                                : 0.0;
                         return Expanded(
                           child: Tooltip(
-                            message: cell != null && cell.amount > 0
-                                ? '${_days[wdIdx]} ${_hourLabel(h)}\n'
-                                  '₱${cell.amount.toStringAsFixed(0)}'
-                                  ' · ${cell.orderCount} order${cell.orderCount == 1 ? '' : 's'}'
-                                : '',
+                            message:
+                                cell != null && cell.amount > 0
+                                    ? '${_days[wdIdx]} ${_hourLabel(h)}\n'
+                                        '₱${cell.amount.toStringAsFixed(0)}'
+                                        ' · ${cell.orderCount} order${cell.orderCount == 1 ? '' : 's'}'
+                                    : '',
                             child: Container(
                               height: 20,
                               margin: const EdgeInsets.symmetric(horizontal: 1),
                               decoration: BoxDecoration(
-                                color: intensity == 0
-                                    ? AppColors.divider.withValues(alpha:0.5)
-                                    : accent.withValues(alpha:
-                                        0.12 + intensity * 0.85),
+                                color:
+                                    intensity == 0
+                                        ? AppColors.divider.withValues(
+                                          alpha: 0.5,
+                                        )
+                                        : accent.withValues(
+                                          alpha: 0.12 + intensity * 0.85,
+                                        ),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -1483,9 +1654,13 @@ class SalesHeatmap extends ConsumerWidget {
               // ── Legend ───────────────────────────────────────────────
               Row(
                 children: [
-                  const Text('Low',
-                      style: TextStyle(
-                          fontSize: 9, color: AppColors.textSecondary)),
+                  const Text(
+                    'Low',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   ...List.generate(5, (i) {
                     final intensity = (i + 1) / 5;
@@ -1494,15 +1669,21 @@ class SalesHeatmap extends ConsumerWidget {
                       height: 10,
                       margin: const EdgeInsets.only(right: 2),
                       decoration: BoxDecoration(
-                        color: accent.withValues(alpha:0.12 + intensity * 0.85),
+                        color: accent.withValues(
+                          alpha: 0.12 + intensity * 0.85,
+                        ),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     );
                   }),
                   const SizedBox(width: 6),
-                  const Text('High',
-                      style: TextStyle(
-                          fontSize: 9, color: AppColors.textSecondary)),
+                  const Text(
+                    'High',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1519,6 +1700,7 @@ class SalesHeatmap extends ConsumerWidget {
     return '${h - 12}p';
   }
 }
+
 class TopProductsTable extends StatelessWidget {
   final List<TopProduct> products;
   final Color accent;
@@ -1541,15 +1723,15 @@ class TopProductsTable extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Text('No product data',
-              style: TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary)),
+          child: Text(
+            'No product data',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
         ),
       );
     }
 
-    final maxQty =
-        products.map((p) => p.qty).fold(0, (a, b) => a > b ? a : b);
+    final maxQty = products.map((p) => p.qty).fold(0, (a, b) => a > b ? a : b);
 
     return Column(
       children: [
@@ -1559,43 +1741,55 @@ class TopProductsTable extends StatelessWidget {
             children: [
               if (showRank) const SizedBox(width: 24),
               const Expanded(
-                child: Text('PRODUCT',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.5)),
+                child: Text(
+                  'PRODUCT',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
               const SizedBox(
                 width: 64,
-                child: Text('QTY',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.5)),
+                child: Text(
+                  'QTY',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
               if (!isPhone) ...[
                 const SizedBox(
                   width: 100,
-                  child: Text('REVENUE',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 0.5)),
+                  child: Text(
+                    'REVENUE',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
                 const SizedBox(
                   width: 72,
-                  child: Text('MARGIN',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 0.5)),
+                  child: Text(
+                    'MARGIN',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -1604,67 +1798,78 @@ class TopProductsTable extends StatelessWidget {
         ...products.asMap().entries.map((e) {
           final i = e.key;
           final p = e.value;
-          final barRatio =
-              maxQty > 0 ? p.qty / maxQty : 0.0;
+          final barRatio = maxQty > 0 ? p.qty / maxQty : 0.0;
 
           return Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               border: Border(
-                  top: BorderSide(
-                      color: AppColors.divider, width: 0.5)),
+                top: BorderSide(color: AppColors.divider, width: 0.5),
+              ),
             ),
             child: Row(
               children: [
                 if (showRank)
                   SizedBox(
                     width: 24,
-                    child: Text('${i + 1}',
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: i == 0
-                                ? accent
-                                : AppColors.textSecondary)),
+                    child: Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: i == 0 ? accent : AppColors.textSecondary,
+                      ),
+                    ),
                   ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        p.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       if (p.category.isNotEmpty)
-                        Text(p.category,
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textSecondary)),
+                        Text(
+                          p.category,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       const SizedBox(height: 4),
-                      LayoutBuilder(builder: (ctx, constraints) {
-                        return Stack(children: [
-                          Container(
-                            height: 4,
-                            width: constraints.maxWidth,
-                            decoration: BoxDecoration(
-                              color: AppColors.divider,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          Container(
-                            height: 4,
-                            width: constraints.maxWidth * barRatio,
-                            decoration: BoxDecoration(
-                              color: (emptyBarColor ?? accent)
-                                  .withValues(alpha:0.6),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ]);
-                      }),
+                      LayoutBuilder(
+                        builder: (ctx, constraints) {
+                          return Stack(
+                            children: [
+                              Container(
+                                height: 4,
+                                width: constraints.maxWidth,
+                                decoration: BoxDecoration(
+                                  color: AppColors.divider,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              Container(
+                                height: 4,
+                                width: constraints.maxWidth * barRatio,
+                                decoration: BoxDecoration(
+                                  color: (emptyBarColor ?? accent).withValues(
+                                    alpha: 0.6,
+                                  ),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1674,46 +1879,44 @@ class TopProductsTable extends StatelessWidget {
                     p.qty == 0 ? '—' : '${p.qty}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: p.qty == 0
-                            ? AppColors.textSecondary
-                            : AppColors.textPrimary),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          p.qty == 0
+                              ? AppColors.textSecondary
+                              : AppColors.textPrimary,
+                    ),
                   ),
                 ),
                 if (!isPhone) ...[
                   SizedBox(
                     width: 100,
                     child: Text(
-                      p.revenue > 0
-                          ? '₱${p.revenue.toStringAsFixed(0)}'
-                          : '—',
+                      p.revenue > 0 ? '₱${p.revenue.toStringAsFixed(0)}' : '—',
                       textAlign: TextAlign.right,
                       style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: p.revenue > 0
-                              ? accent
-                              : AppColors.textSecondary),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: p.revenue > 0 ? accent : AppColors.textSecondary,
+                      ),
                     ),
                   ),
                   SizedBox(
                     width: 72,
                     child: Text(
-                      p.cogs > 0
-                          ? '${p.marginPct.toStringAsFixed(1)}%'
-                          : '—',
+                      p.cogs > 0 ? '${p.marginPct.toStringAsFixed(1)}%' : '—',
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: p.cogs > 0
-                            ? (p.marginPct >= 30
-                                ? AppColors.success
-                                : p.marginPct >= 10
+                        color:
+                            p.cogs > 0
+                                ? (p.marginPct >= 30
+                                    ? AppColors.success
+                                    : p.marginPct >= 10
                                     ? AppColors.warning
                                     : AppColors.danger)
-                            : AppColors.textSecondary,
+                                : AppColors.textSecondary,
                       ),
                     ),
                   ),

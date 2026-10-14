@@ -7,7 +7,6 @@ import 'widgets/auth_text_field.dart';
 import 'widgets/auth_theme.dart';
 import 'widgets/auth_components.dart';
 
-
 // ── FIX: Removed import of main.dart ─────────────────────────────────────────
 // login_screen.dart previously imported main.dart to access DeviceRole and
 // deviceRoleProvider so it could navigate manually. That import is now gone
@@ -68,15 +67,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // MyApp's ref.listen(authStateProvider) catches it, loads the profile,
       // saves business_id to SharedPreferences, and navigates to the correct
       // route. No race, no double-navigation, no redirect loop.
-      await ref.read(authServiceProvider).login(
-            email: _emailCtrl.text.trim(),
-            password: _passCtrl.text,
-          );
+      await ref
+          .read(authServiceProvider)
+          .login(email: _emailCtrl.text.trim(), password: _passCtrl.text);
 
       // Login succeeded. Navigation is handled by MyApp's auth listener.
       // If navigation takes a moment, keep the button disabled.
       if (!mounted) return;
-
     } catch (e) {
       // login() throws if credentials are wrong or network fails.
       // Show the error and reset the loading state so user can retry.
@@ -110,16 +107,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: AuthColors.accent,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: const Icon(Icons.point_of_sale_rounded,
-                    color: Colors.white, size: 32),
+                child: const Icon(
+                  Icons.point_of_sale_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Welcome back',
-                textAlign: TextAlign.center, style: AuthText.title),
+            const Text(
+              'Welcome back',
+              textAlign: TextAlign.center,
+              style: AuthText.title,
+            ),
             const SizedBox(height: 6),
-            const Text('Sign in to your POS account',
-                textAlign: TextAlign.center, style: AuthText.subtitle),
+            const Text(
+              'Sign in to your POS account',
+              textAlign: TextAlign.center,
+              style: AuthText.subtitle,
+            ),
             const SizedBox(height: 28),
 
             AuthTextField(
@@ -129,8 +135,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.mail_outline_rounded,
-              validator: (v) =>
-                  (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+              validator:
+                  (v) =>
+                      (v == null || !v.contains('@'))
+                          ? 'Enter a valid email'
+                          : null,
             ),
             const SizedBox(height: 16),
             AuthTextField(
@@ -143,8 +152,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 if (!_isLoading) _submit();
               },
               prefixIcon: Icons.lock_outline_rounded,
-              validator: (v) =>
-                  (v == null || v.length < 6) ? 'Min 6 characters' : null,
+              validator:
+                  (v) =>
+                      (v == null || v.length < 6) ? 'Min 6 characters' : null,
             ),
 
             AuthErrorSlot(_error),
@@ -153,9 +163,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
+                onPressed:
+                    () => Navigator.pushNamed(context, '/forgot-password'),
                 style: TextButton.styleFrom(
-                    foregroundColor: AuthColors.accentLight),
+                  foregroundColor: AuthColors.accentLight,
+                ),
                 child: const Text('Forgot password?'),
               ),
             ),
@@ -174,12 +186,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 const Text("Don't have an account?", style: AuthText.subtitle),
                 TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                  ),
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RegisterScreen(),
+                        ),
+                      ),
                   style: TextButton.styleFrom(
-                      foregroundColor: AuthColors.accentLight),
+                    foregroundColor: AuthColors.accentLight,
+                  ),
                   child: const Text('Register'),
                 ),
               ],

@@ -49,7 +49,9 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
       _error = null;
     });
     try {
-      await ref.read(creditCustomersProvider.notifier).recordPayment(
+      await ref
+          .read(creditCustomersProvider.notifier)
+          .recordPayment(
             customerId: widget.customer.id,
             amount: amount,
             note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
@@ -82,25 +84,34 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _green.withValues(alpha:0.15),
+                    color: _green.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.payments_outlined,
-                      color: _green, size: 20),
+                  child: const Icon(
+                    Icons.payments_outlined,
+                    color: _green,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Record Payment',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
-                    Text(widget.customer.name,
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha:0.45),
-                            fontSize: 12)),
+                    const Text(
+                      'Record Payment',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      widget.customer.name,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -109,8 +120,7 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
 
             // Balance chip
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: _surface,
                 borderRadius: BorderRadius.circular(12),
@@ -118,14 +128,21 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Current Balance',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.5), fontSize: 13)),
-                  Text('₱${owed.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          color: Color(0xFFE94560),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800)),
+                  Text(
+                    'Current Balance',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '₱${owed.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Color(0xFFE94560),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -136,10 +153,11 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
               controller: _amountCtrl,
               label: 'Payment Amount',
               prefix: '₱',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
               onChanged: (_) => setState(() => _error = null),
             ),
@@ -147,21 +165,21 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: _setFull,
-                child: Text('Pay full ₱${owed.toStringAsFixed(2)}',
-                    style: const TextStyle(color: _green, fontSize: 12)),
+                child: Text(
+                  'Pay full ₱${owed.toStringAsFixed(2)}',
+                  style: const TextStyle(color: _green, fontSize: 12),
+                ),
               ),
             ),
 
-            _Field(
-              controller: _noteCtrl,
-              label: 'Note (optional)',
-            ),
+            _Field(controller: _noteCtrl, label: 'Note (optional)'),
 
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!,
-                  style:
-                      const TextStyle(color: Color(0xFFE94560), fontSize: 12)),
+              Text(
+                _error!,
+                style: const TextStyle(color: Color(0xFFE94560), fontSize: 12),
+              ),
             ],
 
             const SizedBox(height: 20),
@@ -172,10 +190,13 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white54,
-                      side: BorderSide(color: Colors.white.withValues(alpha:0.12)),
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -189,16 +210,23 @@ class _PayCreditDialogState extends ConsumerState<PayCreditDialog> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    child: _loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Confirm',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
+                    child:
+                        _loading
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Text(
+                              'Confirm',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
                   ),
                 ),
               ],
@@ -238,7 +266,7 @@ class _Field extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         prefixText: prefix,
-        labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.4)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
         prefixStyle: const TextStyle(color: Colors.white),
         filled: true,
         fillColor: const Color(0xFF1A1F35),
@@ -248,8 +276,7 @@ class _Field extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: Color(0xFF10B981), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
         ),
       ),
     );

@@ -32,26 +32,33 @@ class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
       children: [
         Row(
           children: [
-            const Text('Promos & Packages',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary)),
+            const Text(
+              'Promos & Packages',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
             const Spacer(),
             ElevatedButton.icon(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => const PromoBuilderDialog(),
-              ),
+              onPressed:
+                  () => showDialog(
+                    context: context,
+                    builder: (_) => const PromoBuilderDialog(),
+                  ),
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Promo'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ],
@@ -72,8 +79,11 @@ class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
           child: Row(
             children: [
               const SizedBox(width: 12),
-              const Icon(Icons.search,
-                  size: 16, color: AppColors.textSecondary),
+              const Icon(
+                Icons.search,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
@@ -82,8 +92,9 @@ class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
                   decoration: InputDecoration(
                     hintText: 'Search promos by name…',
                     hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.6),
-                        fontSize: 13),
+                      color: AppColors.textSecondary.withValues(alpha: 0.6),
+                      fontSize: 13,
+                    ),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
@@ -107,15 +118,15 @@ class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
               label: 'Bundle',
               icon: Icons.card_giftcard_rounded,
               selected: _typeFilter == _PromoTypeFilter.bundle,
-              onTap: () =>
-                  setState(() => _typeFilter = _PromoTypeFilter.bundle),
+              onTap:
+                  () => setState(() => _typeFilter = _PromoTypeFilter.bundle),
             ),
             InventoryFilterChip(
               label: 'Buy X Get Y',
               icon: Icons.local_offer_rounded,
               selected: _typeFilter == _PromoTypeFilter.buyXGetY,
-              onTap: () =>
-                  setState(() => _typeFilter = _PromoTypeFilter.buyXGetY),
+              onTap:
+                  () => setState(() => _typeFilter = _PromoTypeFilter.buyXGetY),
             ),
           ],
         ),
@@ -141,27 +152,30 @@ class _PromoSettingsSectionState extends ConsumerState<PromoSettingsSection> {
               );
             }
             final q = _search.trim().toLowerCase();
-            final filtered = promos.where((p) {
-              if (_typeFilter == _PromoTypeFilter.bundle &&
-                  p.promoType != PromoType.bundle) {
-                return false;
-              }
-              if (_typeFilter == _PromoTypeFilter.buyXGetY &&
-                  p.promoType != PromoType.buyXGetY) {
-                return false;
-              }
-              if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) {
-                return false;
-              }
-              return true;
-            }).toList();
+            final filtered =
+                promos.where((p) {
+                  if (_typeFilter == _PromoTypeFilter.bundle &&
+                      p.promoType != PromoType.bundle) {
+                    return false;
+                  }
+                  if (_typeFilter == _PromoTypeFilter.buyXGetY &&
+                      p.promoType != PromoType.buyXGetY) {
+                    return false;
+                  }
+                  if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) {
+                    return false;
+                  }
+                  return true;
+                }).toList();
 
             if (filtered.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(20),
                 child: Center(
-                  child: Text('No promos match your search or filter.',
-                      style: TextStyle(color: AppColors.textSecondary)),
+                  child: Text(
+                    'No promos match your search or filter.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
                 ),
               );
             }
@@ -193,14 +207,17 @@ class _GroupLabel extends StatelessWidget {
   const _GroupLabel(this.text);
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6, top: 4),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-                letterSpacing: 0.3)),
-      );
+    padding: const EdgeInsets.only(bottom: 6, top: 4),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+        letterSpacing: 0.3,
+      ),
+    ),
+  );
 }
 
 class _PromoTile extends ConsumerWidget {
@@ -212,9 +229,10 @@ class _PromoTile extends ConsumerWidget {
     final expired = promo.isActive && !promo.isWithinDateRange;
     final typeLabel =
         promo.promoType == PromoType.bundle ? 'Bundle' : 'Buy X Get Y';
-    final priceLabel = promo.promoType == PromoType.bundle
-        ? '\u20b1${promo.effectivePrice.toStringAsFixed(2)}'
-        : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}';
+    final priceLabel =
+        promo.promoType == PromoType.bundle
+            ? '\u20b1${promo.effectivePrice.toStringAsFixed(2)}'
+            : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -249,25 +267,34 @@ class _PromoTile extends ConsumerWidget {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(promo.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14)),
+                      child: Text(
+                        promo.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                     if (expired) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.orange.shade50,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text('Expired',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.orange.shade700,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          'Expired',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -276,28 +303,36 @@ class _PromoTile extends ConsumerWidget {
                 Text(
                   '$typeLabel \u00b7 $priceLabel \u00b7 ${promo.items.length} item${promo.items.length == 1 ? '' : 's'}',
                   style: const TextStyle(
-                      fontSize: 11, color: AppColors.textSecondary),
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert,
-                size: 18, color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.more_vert,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
             onSelected: (action) => _handleAction(context, ref, action),
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              const PopupMenuItem(
-                  value: 'duplicate', child: Text('Duplicate')),
-              PopupMenuItem(
-                value: 'toggle',
-                child: Text(promo.isActive ? 'Deactivate' : 'Activate'),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Text('Delete', style: TextStyle(color: Colors.red)),
-              ),
-            ],
+            itemBuilder:
+                (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(
+                    value: 'duplicate',
+                    child: Text('Duplicate'),
+                  ),
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Text(promo.isActive ? 'Deactivate' : 'Activate'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
           ),
         ],
       ),
@@ -305,7 +340,10 @@ class _PromoTile extends ConsumerWidget {
   }
 
   Future<void> _handleAction(
-      BuildContext context, WidgetRef ref, String action) async {
+    BuildContext context,
+    WidgetRef ref,
+    String action,
+  ) async {
     final repo = ref.read(promoRepositoryProvider);
     switch (action) {
       case 'edit':
@@ -320,15 +358,18 @@ class _PromoTile extends ConsumerWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text(
-                    'Promo duplicated (inactive) — review and activate it.')),
+              content: Text(
+                'Promo duplicated (inactive) — review and activate it.',
+              ),
+            ),
           );
         }
         break;
       case 'toggle':
         try {
           final fm = ref.read(featureManagerProvider);
-          final activeCount = ref
+          final activeCount =
+              ref
                   .read(promoListProvider)
                   .asData
                   ?.value
@@ -353,20 +394,22 @@ class _PromoTile extends ConsumerWidget {
       case 'delete':
         final confirmed = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Delete Promo'),
-            content: Text('Delete "${promo.name}"? This cannot be undone.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel')),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Delete'),
+          builder:
+              (ctx) => AlertDialog(
+                title: const Text('Delete Promo'),
+                content: Text('Delete "${promo.name}"? This cannot be undone.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    child: const Text('Delete'),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
         if (confirmed == true) {
           try {
@@ -380,20 +423,21 @@ class _PromoTile extends ConsumerWidget {
             if (usedInOrders) {
               final deactivateInstead = await showDialog<bool>(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text("Can't Delete Promo"),
-                  content: Text(message),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
+                builder:
+                    (ctx) => AlertDialog(
+                      title: const Text("Can't Delete Promo"),
+                      content: Text(message),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Deactivate Instead'),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Deactivate Instead'),
-                    ),
-                  ],
-                ),
               );
               if (deactivateInstead == true) {
                 try {
@@ -402,7 +446,10 @@ class _PromoTile extends ConsumerWidget {
                 } catch (e2) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$e2'), backgroundColor: Colors.red),
+                      SnackBar(
+                        content: Text('$e2'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
                   }
                 }
@@ -410,8 +457,9 @@ class _PromoTile extends ConsumerWidget {
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text('Could not delete: $message'),
-                    backgroundColor: Colors.red),
+                  content: Text('Could not delete: $message'),
+                  backgroundColor: Colors.red,
+                ),
               );
             }
           }

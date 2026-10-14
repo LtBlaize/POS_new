@@ -7,7 +7,11 @@ import '../../shared/widgets/app_colors.dart';
 class RoleSelectionScreen extends ConsumerWidget {
   const RoleSelectionScreen({super.key});
 
-  Future<void> _selectRole(BuildContext context, WidgetRef ref, DeviceRole role) async {
+  Future<void> _selectRole(
+    BuildContext context,
+    WidgetRef ref,
+    DeviceRole role,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('device_role', role.name);
     ref.read(deviceRoleProvider.notifier).state = role;
@@ -34,21 +38,28 @@ class RoleSelectionScreen extends ConsumerWidget {
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(Icons.point_of_sale_rounded,
-                      color: Colors.white, size: 36),
+                  child: const Icon(
+                    Icons.point_of_sale_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 const Text(
                   'What is this device?',
                   style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary),
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'This only needs to be set once.',
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 40),
 
@@ -66,8 +77,7 @@ class RoleSelectionScreen extends ConsumerWidget {
                 _RoleCard(
                   icon: Icons.kitchen_rounded,
                   title: 'Kitchen Display',
-                  description:
-                      'Receives orders from the POS over local WiFi.',
+                  description: 'Receives orders from the POS over local WiFi.',
                   onTap: () => _selectRole(context, ref, DeviceRole.kitchen),
                 ),
               ],
@@ -104,9 +114,10 @@ class _RoleCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha:0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Row(
@@ -115,7 +126,7 @@ class _RoleCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: AppColors.primary, size: 28),
@@ -125,20 +136,29 @@ class _RoleCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(description,
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary)),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textSecondary),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

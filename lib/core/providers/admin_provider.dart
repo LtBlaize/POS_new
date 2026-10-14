@@ -15,11 +15,16 @@ final isPlatformAdminProvider = FutureProvider<bool>((ref) async {
   // false prematurely.
   if (user == null) {
     try {
-      user = await ref.watch(authStateProvider.stream).first.timeout(const Duration(seconds: 2));
+      user = await ref
+          .watch(authStateProvider.stream)
+          .first
+          .timeout(const Duration(seconds: 2));
     } catch (_) {
       user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        debugPrint('[AdminCheck] authState timeout — falling back to currentUser');
+        debugPrint(
+          '[AdminCheck] authState timeout — falling back to currentUser',
+        );
       }
     }
   }
@@ -27,8 +32,10 @@ final isPlatformAdminProvider = FutureProvider<bool>((ref) async {
   if (user == null) return false;
 
   try {
-    final result = await Supabase.instance.client
-        .rpc('is_platform_admin', params: {'required_role': null});
+    final result = await Supabase.instance.client.rpc(
+      'is_platform_admin',
+      params: {'required_role': null},
+    );
     return result as bool? ?? false;
   } catch (e) {
     debugPrint('[AdminCheck] RPC failed: $e');

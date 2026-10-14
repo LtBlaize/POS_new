@@ -65,9 +65,7 @@ class CreditTransaction {
       type == CreditTxType.credit ? amount - (amountRemaining ?? amount) : 0;
 
   bool get isPartiallyPaid =>
-      type == CreditTxType.credit &&
-      amountPaid > 0 &&
-      !isSettled;
+      type == CreditTxType.credit && amountPaid > 0 && !isSettled;
 }
 
 /// Represents how a payment was applied across credit transactions

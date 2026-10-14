@@ -43,9 +43,9 @@ class _AuthTextFieldState extends State<AuthTextField> {
   bool _obscure = true;
 
   OutlineInputBorder _border(Color c, [double w = 1]) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: c, width: w),
-      );
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide(color: c, width: w),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -72,32 +72,41 @@ class _AuthTextFieldState extends State<AuthTextField> {
             hintText: widget.hint,
             hintStyle: const TextStyle(color: AuthColors.textMuted),
             helperText: widget.helper,
-            helperStyle:
-                const TextStyle(fontSize: 12, color: AuthColors.textMuted),
+            helperStyle: const TextStyle(
+              fontSize: 12,
+              color: AuthColors.textMuted,
+            ),
             errorStyle: const TextStyle(fontSize: 12, color: AuthColors.error),
             errorMaxLines: 2,
             counterText: '',
-            prefixIcon: widget.prefixIcon != null
-                ? Icon(widget.prefixIcon,
-                    size: 20, color: AuthColors.textMuted)
-                : null,
-            suffixIcon: widget.isPassword
-                ? IconButton(
-                    tooltip: _obscure ? 'Show' : 'Hide',
-                    icon: Icon(
-                      _obscure
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
+            prefixIcon:
+                widget.prefixIcon != null
+                    ? Icon(
+                      widget.prefixIcon,
                       size: 20,
                       color: AuthColors.textMuted,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  )
-                : null,
+                    )
+                    : null,
+            suffixIcon:
+                widget.isPassword
+                    ? IconButton(
+                      tooltip: _obscure ? 'Show' : 'Hide',
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: AuthColors.textMuted,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    )
+                    : null,
             filled: true,
             fillColor: AuthColors.field,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 15,
+            ),
             border: _border(AuthColors.border),
             enabledBorder: _border(AuthColors.border),
             disabledBorder: _border(AuthColors.border),

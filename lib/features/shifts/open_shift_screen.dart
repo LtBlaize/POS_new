@@ -72,7 +72,6 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       });
     }
   }
-  
 
   @override
   void dispose() {
@@ -122,14 +121,14 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _accent.withValues(alpha:0.1),
+                      color: _accent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: _accent.withValues(alpha:0.3)),
+                      border: Border.all(color: _accent.withValues(alpha: 0.3)),
                     ),
-                    child: Text(_error!,
-                        style: const TextStyle(
-                            color: _accent, fontSize: 13)),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: _accent, fontSize: 13),
+                    ),
                   ),
 
                 // ── Open Shift button ────────────────────────────────────
@@ -141,32 +140,34 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                       backgroundColor: _green,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                     ),
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
+                    child:
+                        _loading
+                            ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white))
-                        : Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                  Icons.lock_open_rounded,
-                                  size: 20),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Open Shift  ·  ₱${NumberFormat('#,##0.00').format(_currentAmount)}',
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700),
+                                color: Colors.white,
                               ),
-                            ],
-                          ),
+                            )
+                            : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.lock_open_rounded, size: 20),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Open Shift  ·  ₱${NumberFormat('#,##0.00').format(_currentAmount)}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
                   ),
                 ),
 
@@ -175,8 +176,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                   child: Text(
                     'This amount is your starting cash fund\nand will be included in the shift report.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: _dim, fontSize: 12, height: 1.6),
+                    style: TextStyle(color: _dim, fontSize: 12, height: 1.6),
                   ),
                 ),
               ],
@@ -193,7 +193,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         children: [
@@ -202,34 +202,41 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: _accent.withValues(alpha:0.12),
+              color: _accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.storefront_rounded,
-                color: _accent, size: 28),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: _accent,
+              size: 28,
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
             'Start of Shift',
             style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5),
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             'Welcome, $name',
             style: const TextStyle(
-                color: Color(0xFF10B981),
-                fontSize: 14,
-                fontWeight: FontWeight.w600),
+              color: Color(0xFF10B981),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             DateFormat('EEEE, MMMM d · h:mm a').format(now),
             style: TextStyle(
-                color: Colors.white.withValues(alpha:0.35), fontSize: 12),
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -242,7 +249,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,10 +257,11 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
           Text(
             'OPENING CASH FUND',
             style: TextStyle(
-                color: Colors.white.withValues(alpha:0.35),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2),
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -262,19 +270,20 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
               Text(
                 '₱',
                 style: TextStyle(
-                    color: Colors.white.withValues(alpha:0.4),
-                    fontSize: 28,
-                    fontWeight: FontWeight.w300),
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 28,
+                  fontWeight: FontWeight.w300,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _cashCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                        RegExp(r'[\d.]')),
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                   ],
                   onChanged: (_) => setState(() => _error = null),
                   style: const TextStyle(
@@ -287,7 +296,9 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                     border: InputBorder.none,
                     hintText: '0.00',
                     hintStyle: TextStyle(
-                        color: Color(0xFF374151), fontSize: 36),
+                      color: Color(0xFF374151),
+                      fontSize: 36,
+                    ),
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -296,12 +307,14 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Divider(color: Colors.white.withValues(alpha:0.06)),
+          Divider(color: Colors.white.withValues(alpha: 0.06)),
           const SizedBox(height: 4),
           Text(
             'Tap bills below to add quickly, or type manually',
             style: TextStyle(
-                color: Colors.white.withValues(alpha:0.25), fontSize: 11),
+              color: Colors.white.withValues(alpha: 0.25),
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -316,12 +329,10 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
       childAspectRatio: 2.4,
-      children: _denoms
-          .map((d) => _DenomButton(
-                value: d,
-                onTap: () => _addDenom(d),
-              ))
-          .toList(),
+      children:
+          _denoms
+              .map((d) => _DenomButton(value: d, onTap: () => _addDenom(d)))
+              .toList(),
     );
   }
 }
@@ -342,7 +353,7 @@ class _DenomButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: _surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha:0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Center(
           child: Text(

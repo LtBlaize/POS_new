@@ -43,19 +43,28 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.upload_file_outlined,
-                      color: Colors.white, size: 20),
+                  const Icon(
+                    Icons.upload_file_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
-                  const Text('Import Preview',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  const Text(
+                    'Import Preview',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -101,11 +110,14 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
 
                     // ── Valid rows preview ─────────────────────────────
                     if (hasValid) ...[
-                      const Text('Rows to import',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
+                      const Text(
+                        'Rows to import',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
@@ -119,15 +131,14 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                             const Divider(height: 1),
                             // Rows (max 8 visible, then scroll)
                             ConstrainedBox(
-                              constraints:
-                                  const BoxConstraints(maxHeight: 280),
+                              constraints: const BoxConstraints(maxHeight: 280),
                               child: ListView.separated(
                                 shrinkWrap: true,
                                 itemCount: p.valid.length,
-                                separatorBuilder: (_, _) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (_, i) =>
-                                    _PreviewRow(row: p.valid[i]),
+                                separatorBuilder:
+                                    (_, _) => const Divider(height: 1),
+                                itemBuilder:
+                                    (_, i) => _PreviewRow(row: p.valid[i]),
                               ),
                             ),
                           ],
@@ -139,8 +150,7 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                     if (hasErrors) ...[
                       const SizedBox(height: 16),
                       GestureDetector(
-                        onTap: () =>
-                            setState(() => _showErrors = !_showErrors),
+                        onTap: () => setState(() => _showErrors = !_showErrors),
                         child: Row(
                           children: [
                             Icon(
@@ -154,9 +164,10 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                             Text(
                               '${p.errors.length} row${p.errors.length > 1 ? 's' : ''} skipped — tap to ${_showErrors ? 'hide' : 'show'}',
                               style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.danger,
-                                  fontWeight: FontWeight.w600),
+                                fontSize: 12,
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -165,36 +176,48 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                         const SizedBox(height: 8),
                         Container(
                           decoration: BoxDecoration(
-                            color: AppColors.danger.withValues(alpha:0.04),
+                            color: AppColors.danger.withValues(alpha: 0.04),
                             border: Border.all(
-                                color: AppColors.danger.withValues(alpha:0.2)),
+                              color: AppColors.danger.withValues(alpha: 0.2),
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
-                            children: p.errors
-                                .map((e) => Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Row ${e.rowNumber}',
+                            children:
+                                p.errors
+                                    .map(
+                                      (e) => Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Row ${e.rowNumber}',
                                               style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppColors.danger)),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(e.message,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.danger,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                e.message,
                                                 style: const TextStyle(
-                                                    fontSize: 11,
-                                                    color: AppColors.danger)),
-                                          ),
-                                        ],
+                                                  fontSize: 11,
+                                                  color: AppColors.danger,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ))
-                                .toList(),
+                                    )
+                                    .toList(),
                           ),
                         ),
                       ],
@@ -204,10 +227,13 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Center(
-                          child: Text('No valid rows to import.',
-                              style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13)),
+                          child: Text(
+                            'No valid rows to import.',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -228,7 +254,8 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                         side: const BorderSide(color: AppColors.divider),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: const Text('Cancel'),
                     ),
@@ -236,19 +263,21 @@ class _ImportPreviewDialogState extends State<ImportPreviewDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: hasValid
-                          ? () {
-                              Navigator.of(context).pop();
-                              widget.onConfirm();
-                            }
-                          : null,
+                      onPressed:
+                          hasValid
+                              ? () {
+                                Navigator.of(context).pop();
+                                widget.onConfirm();
+                              }
+                              : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: AppColors.divider,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: Text(
                         hasValid
@@ -279,9 +308,18 @@ class _TableHeader extends StatelessWidget {
         children: [
           SizedBox(width: 46, child: Text('', style: _hStyle)),
           Expanded(child: Text('NAME', style: _hStyle)),
-          SizedBox(width: 72, child: Text('PRICE', textAlign: TextAlign.right, style: _hStyle)),
-          SizedBox(width: 72, child: Text('COST', textAlign: TextAlign.right, style: _hStyle)),
-          SizedBox(width: 56, child: Text('STOCK', textAlign: TextAlign.right, style: _hStyle)),
+          SizedBox(
+            width: 72,
+            child: Text('PRICE', textAlign: TextAlign.right, style: _hStyle),
+          ),
+          SizedBox(
+            width: 72,
+            child: Text('COST', textAlign: TextAlign.right, style: _hStyle),
+          ),
+          SizedBox(
+            width: 56,
+            child: Text('STOCK', textAlign: TextAlign.right, style: _hStyle),
+          ),
         ],
       ),
     );
@@ -310,17 +348,19 @@ class _PreviewRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: row.isUpdate
-                    ? AppColors.info.withValues(alpha:0.1)
-                    : AppColors.success.withValues(alpha:0.1),
+                color:
+                    row.isUpdate
+                        ? AppColors.info.withValues(alpha: 0.1)
+                        : AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 row.isUpdate ? 'UPD' : 'NEW',
                 style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: row.isUpdate ? AppColors.info : AppColors.success),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: row.isUpdate ? AppColors.info : AppColors.success,
+                ),
               ),
             ),
           ),
@@ -328,26 +368,37 @@ class _PreviewRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row.name,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  row.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (row.category != null)
-                  Text(row.category!,
-                      style: const TextStyle(
-                          fontSize: 10, color: AppColors.textSecondary)),
+                  Text(
+                    row.category!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
               ],
             ),
           ),
           SizedBox(
             width: 72,
-            child: Text('₱${row.price.toStringAsFixed(2)}',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textPrimary)),
+            child: Text(
+              '₱${row.price.toStringAsFixed(2)}',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
           SizedBox(
             width: 72,
@@ -355,18 +406,24 @@ class _PreviewRow extends StatelessWidget {
               row.costPrice > 0 ? '₱${row.costPrice.toStringAsFixed(2)}' : '—',
               textAlign: TextAlign.right,
               style: TextStyle(
-                  fontSize: 12,
-                  color: row.costPrice > 0
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary),
+                fontSize: 12,
+                color:
+                    row.costPrice > 0
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+              ),
             ),
           ),
           SizedBox(
             width: 56,
-            child: Text('${row.stockQuantity}',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textPrimary)),
+            child: Text(
+              '${row.stockQuantity}',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),
@@ -392,20 +449,23 @@ class _SummaryPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha:0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text('$count $label',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color)),
+          Text(
+            '$count $label',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );

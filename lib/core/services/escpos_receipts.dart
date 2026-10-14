@@ -23,29 +23,40 @@ class EscPosReceipts {
   }
 
   /// Left label + right value on one 32-char line.
-  static List<int> _line(Generator g, String left, String right,
-      {bool bold = false}) {
+  static List<int> _line(
+    Generator g,
+    String left,
+    String right, {
+    bool bold = false,
+  }) {
     left = _clean(left);
     right = _clean(right);
     final space = _cols - right.length;
     if (left.length > space - 1) left = left.substring(0, space - 1);
-    return g.text(left.padRight(space) + right,
-        styles: PosStyles(bold: bold));
+    return g.text(left.padRight(space) + right, styles: PosStyles(bold: bold));
   }
 
   static Future<Uint8List> testPage() async {
     final g = await _gen();
     final b = <int>[];
     b.addAll(g.reset());
-    b.addAll(g.text('FLUXPOINT TEST',
+    b.addAll(
+      g.text(
+        'FLUXPOINT TEST',
         styles: const PosStyles(
-            align: PosAlign.center, bold: true, height: PosTextSize.size2)));
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+        ),
+      ),
+    );
     b.addAll(g.hr());
     b.addAll(g.text('12345678901234567890123456789012')); // must fit 1 line
     b.addAll(_line(g, 'Left', 'Right'));
     b.addAll(_line(g, 'TOTAL', _money(1234.5), bold: true));
-    b.addAll(g.text('Status: OK',
-        styles: const PosStyles(align: PosAlign.center)));
+    b.addAll(
+      g.text('Status: OK', styles: const PosStyles(align: PosAlign.center)),
+    );
     b.addAll(g.feed(3));
     b.addAll(g.cut());
     return Uint8List.fromList(b);
@@ -63,38 +74,67 @@ class EscPosReceipts {
     final g = await _gen();
     final b = <int>[];
     b.addAll(g.reset());
-    b.addAll(g.text(_clean(businessName.toUpperCase()),
-        styles: const PosStyles(align: PosAlign.center, bold: true)));
+    b.addAll(
+      g.text(
+        _clean(businessName.toUpperCase()),
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      ),
+    );
     if (businessAddress != null) {
-      b.addAll(g.text(_clean(businessAddress),
-          styles: const PosStyles(align: PosAlign.center)));
+      b.addAll(
+        g.text(
+          _clean(businessAddress),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
     }
     b.addAll(g.hr());
     if (tableNumber != null) {
-      b.addAll(g.text('TABLE $tableNumber',
+      b.addAll(
+        g.text(
+          'TABLE $tableNumber',
           styles: const PosStyles(
-              align: PosAlign.center, bold: true, height: PosTextSize.size2)));
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+          ),
+        ),
+      );
     }
     b.addAll(g.text('Order #${order.orderNumber}'));
     final d = order.createdAt.toLocal();
-    b.addAll(g.text('${d.year}-${d.month.toString().padLeft(2, '0')}-'
+    b.addAll(
+      g.text(
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-'
         '${d.day.toString().padLeft(2, '0')} '
-        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}'));
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}',
+      ),
+    );
     b.addAll(g.hr());
     if (isBill) {
-      b.addAll(g.text('BILL',
-          styles: const PosStyles(align: PosAlign.center, bold: true)));
+      b.addAll(
+        g.text(
+          'BILL',
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
     }
 
     for (final item in order.items) {
-      b.addAll(_line(g, '${item.quantity}x ${item.product.name}',
+      b.addAll(
+        _line(
+          g,
+          '${item.quantity}x ${item.product.name}',
           _money(item.total),
-          bold: item.isPromo));
+          bold: item.isPromo,
+        ),
+      );
       if (item.isPromo) {
         for (final c in item.promoComponents!) {
-          final n = c.variantName != null
-              ? '${c.productName} (${c.variantName})'
-              : c.productName;
+          final n =
+              c.variantName != null
+                  ? '${c.productName} (${c.variantName})'
+                  : c.productName;
           b.addAll(g.text(_clean('  ${c.quantity}x $n')));
         }
       }
@@ -120,10 +160,15 @@ class EscPosReceipts {
     }
 
     b.addAll(g.hr());
-    b.addAll(g.text(isBill ? 'This is not an official receipt.' : 'Official Receipt',
-        styles: const PosStyles(align: PosAlign.center)));
-    b.addAll(g.text('Thank you!',
-        styles: const PosStyles(align: PosAlign.center)));
+    b.addAll(
+      g.text(
+        isBill ? 'This is not an official receipt.' : 'Official Receipt',
+        styles: const PosStyles(align: PosAlign.center),
+      ),
+    );
+    b.addAll(
+      g.text('Thank you!', styles: const PosStyles(align: PosAlign.center)),
+    );
     b.addAll(g.feed(3));
     b.addAll(g.cut());
     return Uint8List.fromList(b);

@@ -95,8 +95,8 @@ class InventoryImportService {
   final Ref _ref;
 
   InventoryImportService({required SupabaseClient client, required Ref ref})
-      : _client = client,
-        _ref = ref;
+    : _client = client,
+      _ref = ref;
 
   // ── Pick and parse CSV ────────────────────────────────────────────────────
 
@@ -128,24 +128,32 @@ class InventoryImportService {
 
     final lines = _splitLines(csvText);
     if (lines.isEmpty) {
-      return const ImportPreview(valid: [], errors: [
-        ImportRowError(0, 'File is empty')
-      ], newCount: 0, updateCount: 0);
+      return const ImportPreview(
+        valid: [],
+        errors: [ImportRowError(0, 'File is empty')],
+        newCount: 0,
+        updateCount: 0,
+      );
     }
 
     // Parse header
-    final headers = _parseCsvLine(lines.first)
-        .map((h) => h.trim().toLowerCase().replaceAll(' ', '_'))
-        .toList();
+    final headers =
+        _parseCsvLine(
+          lines.first,
+        ).map((h) => h.trim().toLowerCase().replaceAll(' ', '_')).toList();
 
     // Validate required columns
-    final missingCols = _kRequiredColumns
-        .where((c) => !headers.contains(c))
-        .toList();
+    final missingCols =
+        _kRequiredColumns.where((c) => !headers.contains(c)).toList();
     if (missingCols.isNotEmpty) {
       return ImportPreview(
         valid: [],
-        errors: [ImportRowError(0, 'Missing required columns: ${missingCols.join(', ')}')],
+        errors: [
+          ImportRowError(
+            0,
+            'Missing required columns: ${missingCols.join(', ')}',
+          ),
+        ],
         newCount: 0,
         updateCount: 0,
       );
@@ -201,15 +209,23 @@ class InventoryImportService {
         final priceStr = (row['price'] ?? '').trim();
         final price = double.tryParse(priceStr);
         if (price == null || price < 0) {
-          errors.add(ImportRowError(rowNum, '"$name": invalid price "$priceStr"'));
+          errors.add(
+            ImportRowError(rowNum, '"$name": invalid price "$priceStr"'),
+          );
           continue;
         }
 
         // ── Optional fields ──────────────────────────────────────────
         final costPrice = double.tryParse(row['cost_price'] ?? '') ?? 0;
         final stockQuantity = int.tryParse(row['stock_quantity'] ?? '') ?? 0;
-        final trackInventory = _parseBool(row['track_inventory'], defaultValue: stockQuantity > 0);
-        final sendToKitchen = _parseBool(row['send_to_kitchen'], defaultValue: true);
+        final trackInventory = _parseBool(
+          row['track_inventory'],
+          defaultValue: stockQuantity > 0,
+        );
+        final sendToKitchen = _parseBool(
+          row['send_to_kitchen'],
+          defaultValue: true,
+        );
         final barcode = _nullIfEmpty(row['barcode']);
         final sku = _nullIfEmpty(row['sku']);
         final description = _nullIfEmpty(row['description']);
@@ -239,21 +255,23 @@ class InventoryImportService {
           );
         }
 
-        valid.add(ImportRow(
-          rowNumber: rowNum,
-          name: name,
-          price: price,
-          costPrice: costPrice,
-          stockQuantity: stockQuantity,
-          trackInventory: trackInventory,
-          category: categoryName,
-          categoryId: categoryId,
-          barcode: barcode,
-          sku: sku,
-          description: description,
-          sendToKitchen: sendToKitchen,
-          existingProduct: existingProduct,
-        ));
+        valid.add(
+          ImportRow(
+            rowNumber: rowNum,
+            name: name,
+            price: price,
+            costPrice: costPrice,
+            stockQuantity: stockQuantity,
+            trackInventory: trackInventory,
+            category: categoryName,
+            categoryId: categoryId,
+            barcode: barcode,
+            sku: sku,
+            description: description,
+            sendToKitchen: sendToKitchen,
+            existingProduct: existingProduct,
+          ),
+        );
       } catch (e) {
         errors.add(ImportRowError(rowNum, 'Parse error: $e'));
       }
@@ -284,32 +302,35 @@ class InventoryImportService {
 
     try {
       // Create missing categories first
-      final unknownCategories = preview.valid
-          .where((r) => r.category != null && r.categoryId == null)
-          .map((r) => r.category!)
-          .toSet();
+      final unknownCategories =
+          preview.valid
+              .where((r) => r.category != null && r.categoryId == null)
+              .map((r) => r.category!)
+              .toSet();
 
       final createdCategories = <String, String>{};
       for (final catName in unknownCategories) {
         try {
-          final row = await _client
-              .from('categories')
-              .insert({
-                'business_id': businessId,
-                'name': catName,
-                'is_active': true,
-              })
-              .select('id')
-              .single();
+          final row =
+              await _client
+                  .from('categories')
+                  .insert({
+                    'business_id': businessId,
+                    'name': catName,
+                    'is_active': true,
+                  })
+                  .select('id')
+                  .single();
           createdCategories[catName.toLowerCase()] = row['id'] as String;
         } catch (e) {
           // Category may have been created by a parallel request — fetch it
-          final existing = await _client
-              .from('categories')
-              .select('id')
-              .eq('business_id', businessId)
-              .eq('name', catName)
-              .maybeSingle();
+          final existing =
+              await _client
+                  .from('categories')
+                  .select('id')
+                  .eq('business_id', businessId)
+                  .eq('name', catName)
+                  .maybeSingle();
           if (existing != null) {
             createdCategories[catName.toLowerCase()] = existing['id'] as String;
           }
@@ -330,9 +351,9 @@ class InventoryImportService {
       // Batch insert new products (chunks of 50)
       for (int i = 0; i < toInsert.length; i += 50) {
         final chunk = toInsert.sublist(i, (i + 50).clamp(0, toInsert.length));
-        await _client.from('products').insert(
-          chunk.map((r) => _toInsertPayload(r, businessId)).toList(),
-        );
+        await _client
+            .from('products')
+            .insert(chunk.map((r) => _toInsertPayload(r, businessId)).toList());
         inserted += chunk.length;
       }
 
@@ -345,8 +366,7 @@ class InventoryImportService {
             .select('product_id')
             .eq('is_active', true)
             .inFilter('product_id', updateIds);
-        withVariants
-            .addAll((vr as List).map((r) => r['product_id'] as String));
+        withVariants.addAll((vr as List).map((r) => r['product_id'] as String));
       }
 
       for (final r in toUpdate) {
@@ -372,35 +392,35 @@ class InventoryImportService {
   // ── Payload builders ──────────────────────────────────────────────────────
 
   Map<String, dynamic> _toInsertPayload(ImportRow r, String businessId) => {
-        'business_id': businessId,
-        'name': r.name,
-        'price': r.price,
-        'cost_price': r.costPrice,
-        'description': r.description,
-        'barcode': r.barcode,
-        'sku': r.sku,
-        'category_id': r.categoryId,
-        'track_inventory': r.trackInventory,
-        'stock_quantity': r.stockQuantity,
-        'send_to_kitchen': r.sendToKitchen,
-        'is_available': r.stockQuantity > 0 || !r.trackInventory,
-        'is_active': true,
-      };
+    'business_id': businessId,
+    'name': r.name,
+    'price': r.price,
+    'cost_price': r.costPrice,
+    'description': r.description,
+    'barcode': r.barcode,
+    'sku': r.sku,
+    'category_id': r.categoryId,
+    'track_inventory': r.trackInventory,
+    'stock_quantity': r.stockQuantity,
+    'send_to_kitchen': r.sendToKitchen,
+    'is_available': r.stockQuantity > 0 || !r.trackInventory,
+    'is_active': true,
+  };
 
   Map<String, dynamic> _toUpdatePayload(ImportRow r) => {
-        'name': r.name,
-        'price': r.price,
-        'cost_price': r.costPrice,
-        if (r.description != null) 'description': r.description,
-        if (r.barcode != null) 'barcode': r.barcode,
-        if (r.sku != null) 'sku': r.sku,
-        if (r.categoryId != null) 'category_id': r.categoryId,
-        'track_inventory': r.trackInventory,
-        'stock_quantity': r.stockQuantity,
-        'send_to_kitchen': r.sendToKitchen,
-        'is_available': r.stockQuantity > 0 || !r.trackInventory,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+    'name': r.name,
+    'price': r.price,
+    'cost_price': r.costPrice,
+    if (r.description != null) 'description': r.description,
+    if (r.barcode != null) 'barcode': r.barcode,
+    if (r.sku != null) 'sku': r.sku,
+    if (r.categoryId != null) 'category_id': r.categoryId,
+    'track_inventory': r.trackInventory,
+    'stock_quantity': r.stockQuantity,
+    'send_to_kitchen': r.sendToKitchen,
+    'is_available': r.stockQuantity > 0 || !r.trackInventory,
+    'updated_at': DateTime.now().toIso8601String(),
+  };
 
   // ── CSV parsing ───────────────────────────────────────────────────────────
 

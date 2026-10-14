@@ -25,10 +25,11 @@ class AdminPaymentsScreen extends ConsumerWidget {
         backgroundColor: AdminColors.primary,
         icon: const Icon(Icons.add),
         label: const Text('Record payment'),
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => const _RecordPaymentDialog(),
-        ),
+        onPressed:
+            () => showDialog(
+              context: context,
+              builder: (_) => const _RecordPaymentDialog(),
+            ),
       ),
       body: Column(
         children: [
@@ -56,7 +57,9 @@ class _PaymentFilterBarState extends ConsumerState<_PaymentFilterBar> {
   @override
   void initState() {
     super.initState();
-    _searchCtrl = TextEditingController(text: ref.read(paymentFilterProvider).businessSearch);
+    _searchCtrl = TextEditingController(
+      text: ref.read(paymentFilterProvider).businessSearch,
+    );
   }
 
   @override
@@ -87,7 +90,11 @@ class _PaymentFilterBarState extends ConsumerState<_PaymentFilterBar> {
               onSubmitted: (v) => _update((f) => f.copyWith(businessSearch: v)),
               decoration: InputDecoration(
                 hintText: 'Search business…',
-                prefixIcon: const Icon(Icons.search, size: 18, color: AdminColors.textMuted),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 18,
+                  color: AdminColors.textMuted,
+                ),
                 isDense: true,
                 filled: true,
                 fillColor: AdminColors.surface,
@@ -95,7 +102,10 @@ class _PaymentFilterBarState extends ConsumerState<_PaymentFilterBar> {
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: AdminColors.border),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ),
@@ -111,13 +121,18 @@ class _PaymentFilterBarState extends ConsumerState<_PaymentFilterBar> {
             items: const ['manual', 'paymongo'],
             onChanged: (v) => _update((f) => f.copyWith(provider: v)),
           ),
-          if (filter.status != null || filter.provider != null || filter.businessSearch.isNotEmpty)
+          if (filter.status != null ||
+              filter.provider != null ||
+              filter.businessSearch.isNotEmpty)
             TextButton(
               onPressed: () {
                 _searchCtrl.clear();
                 _update((_) => const PaymentFilter());
               },
-              child: const Text('Clear filters', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                'Clear filters',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -141,14 +156,21 @@ class _PaymentFilterBarState extends ConsumerState<_PaymentFilterBar> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: value,
-          hint: Text(hint, style: const TextStyle(fontSize: 13, color: AdminColors.textMuted)),
+          hint: Text(
+            hint,
+            style: const TextStyle(fontSize: 13, color: AdminColors.textMuted),
+          ),
           items: [
             DropdownMenuItem(value: null, child: Text(hint)),
             ...items.map((i) => DropdownMenuItem(value: i, child: Text(i))),
           ],
           onChanged: onChanged,
           style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary),
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: AdminColors.textMuted),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: AdminColors.textMuted,
+          ),
         ),
       ),
     );
@@ -164,19 +186,27 @@ class _PaymentListBody extends ConsumerWidget {
     final async = ref.watch(paymentListProvider);
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(
-        child: Text('Could not load payments', style: TextStyle(color: AdminColors.textMuted)),
-      ),
+      error:
+          (_, __) => const Center(
+            child: Text(
+              'Could not load payments',
+              style: TextStyle(color: AdminColors.textMuted),
+            ),
+          ),
       data: (page) {
         if (page.items.isEmpty) {
           return const Center(
-            child: Text('No payments match these filters', style: TextStyle(color: AdminColors.textMuted)),
+            child: Text(
+              'No payments match these filters',
+              style: TextStyle(color: AdminColors.textMuted),
+            ),
           );
         }
         return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           itemCount: page.items.length,
-          separatorBuilder: (_, __) => const Divider(height: 1, color: AdminColors.divider),
+          separatorBuilder:
+              (_, __) => const Divider(height: 1, color: AdminColors.divider),
           itemBuilder: (context, i) {
             final p = page.items[i];
             final (bg, fg) = AdminColors.statusPillColors(p.status);
@@ -186,27 +216,62 @@ class _PaymentListBody extends ConsumerWidget {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: Text(p.businessName,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
+                    child: Text(
+                      p.businessName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text('${p.currency} ${p.amount.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary)),
+                    child: Text(
+                      '${p.currency} ${p.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text(p.provider, style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                    child: Text(
+                      p.provider,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AdminColors.textSecondary,
+                      ),
+                    ),
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text(_fmtDate(p.createdAt),
-                        style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                    child: Text(
+                      _fmtDate(p.createdAt),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AdminColors.textSecondary,
+                      ),
+                    ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-                    child: Text(p.status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      p.status,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: fg,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -236,23 +301,53 @@ class _PaymentPaginationBar extends ConsumerWidget {
         return Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AdminColors.divider))),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AdminColors.divider)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${result.totalCount} payments', style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+              Text(
+                '${result.totalCount} payments',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AdminColors.textSecondary,
+                ),
+              ),
               Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.chevron_left, size: 20),
-                    color: page > 0 ? AdminColors.textPrimary : AdminColors.textMuted,
-                    onPressed: page > 0 ? () => ref.read(paymentPageProvider.notifier).state = page - 1 : null,
+                    color:
+                        page > 0
+                            ? AdminColors.textPrimary
+                            : AdminColors.textMuted,
+                    onPressed:
+                        page > 0
+                            ? () =>
+                                ref.read(paymentPageProvider.notifier).state =
+                                    page - 1
+                            : null,
                   ),
-                  Text('Page ${page + 1} of $totalPages', style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                  Text(
+                    'Page ${page + 1} of $totalPages',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AdminColors.textSecondary,
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right, size: 20),
-                    color: page + 1 < totalPages ? AdminColors.textPrimary : AdminColors.textMuted,
-                    onPressed: page + 1 < totalPages ? () => ref.read(paymentPageProvider.notifier).state = page + 1 : null,
+                    color:
+                        page + 1 < totalPages
+                            ? AdminColors.textPrimary
+                            : AdminColors.textMuted,
+                    onPressed:
+                        page + 1 < totalPages
+                            ? () =>
+                                ref.read(paymentPageProvider.notifier).state =
+                                    page + 1
+                            : null,
                   ),
                 ],
               ),
@@ -270,7 +365,8 @@ class _PaymentPaginationBar extends ConsumerWidget {
 class _RecordPaymentDialog extends ConsumerStatefulWidget {
   const _RecordPaymentDialog();
   @override
-  ConsumerState<_RecordPaymentDialog> createState() => _RecordPaymentDialogState();
+  ConsumerState<_RecordPaymentDialog> createState() =>
+      _RecordPaymentDialogState();
 }
 
 class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
@@ -314,7 +410,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     // error — the payment is still recorded either way, only the plan/expiry
     // update is left undone.
     try {
-      await ref.read(adminPaymentsServiceProvider).recordManualPayment(
+      await ref
+          .read(adminPaymentsServiceProvider)
+          .recordManualPayment(
             businessId: biz.id,
             amount: amount,
             status: 'completed',
@@ -330,11 +428,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     }
 
     try {
-      await ref.read(adminSubscriptionServiceProvider).changePlan(
-            businessId: biz.id,
-            newPlan: plan,
-            durationMonths: 1,
-          );
+      await ref
+          .read(adminSubscriptionServiceProvider)
+          .changePlan(businessId: biz.id, newPlan: plan, durationMonths: 1);
       ref.invalidate(paymentListProvider);
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -363,7 +459,8 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               displayStringForOption: (b) => b.name,
               optionsBuilder: (value) {
                 final q = value.text.trim().toLowerCase();
-                if (q.isEmpty) return allBusinesses; // shows the full list as soon as the field is tapped
+                if (q.isEmpty)
+                  return allBusinesses; // shows the full list as soon as the field is tapped
                 final starts = <BusinessOption>[];
                 final contains = <BusinessOption>[];
                 for (final b in allBusinesses) {
@@ -374,7 +471,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                     contains.add(b);
                   }
                 }
-                return [...starts, ...contains]; // prefix matches ranked above mid-string matches
+                return [
+                  ...starts,
+                  ...contains,
+                ]; // prefix matches ranked above mid-string matches
               },
               onSelected: (b) => setState(() => _selectedBusiness = b),
               fieldViewBuilder: (context, controller, focusNode, onSubmit) {
@@ -383,58 +483,85 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                   focusNode: focusNode,
                   decoration: InputDecoration(
                     labelText: 'Business',
-                    hintText: businessesAsync.isLoading ? 'Loading businesses…' : 'Tap to browse or type to filter…',
+                    hintText:
+                        businessesAsync.isLoading
+                            ? 'Loading businesses…'
+                            : 'Tap to browse or type to filter…',
                   ),
                 );
               },
             ),
             const SizedBox(height: 16),
-            const Text('Plan', style: TextStyle(fontSize: 12, color: AdminColors.textMuted)),
+            const Text(
+              'Plan',
+              style: TextStyle(fontSize: 12, color: AdminColors.textMuted),
+            ),
             const SizedBox(height: 8),
             Row(
-              children: kPlanPrices.entries.map((e) {
-                final selected = _selectedPlan == e.key;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedPlan = e.key),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: selected ? AdminColors.infoBg : AdminColors.surface,
+              children:
+                  kPlanPrices.entries.map((e) {
+                    final selected = _selectedPlan == e.key;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkWell(
+                          onTap: () => setState(() => _selectedPlan = e.key),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? AdminColors.primary : AdminColors.border,
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              e.key[0].toUpperCase() + e.key.substring(1),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: selected ? AdminColors.primary : AdminColors.textPrimary,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  selected
+                                      ? AdminColors.infoBg
+                                      : AdminColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color:
+                                    selected
+                                        ? AdminColors.primary
+                                        : AdminColors.border,
+                                width: selected ? 2 : 1,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text('₱${e.value.toStringAsFixed(0)}',
-                                style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
-                          ],
+                            child: Column(
+                              children: [
+                                Text(
+                                  e.key[0].toUpperCase() + e.key.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        selected
+                                            ? AdminColors.primary
+                                            : AdminColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '₱${e.value.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AdminColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _referenceCtrl,
-              decoration: const InputDecoration(labelText: 'Reference (optional)', hintText: 'e.g. bank transfer ref #'),
+              decoration: const InputDecoration(
+                labelText: 'Reference (optional)',
+                hintText: 'e.g. bank transfer ref #',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -443,18 +570,29 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: AdminColors.danger, fontSize: 12)),
+              Text(
+                _error!,
+                style: const TextStyle(color: AdminColors.danger, fontSize: 12),
+              ),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: _submitting ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Record'),
+          child:
+              _submitting
+                  ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Record'),
         ),
       ],
     );

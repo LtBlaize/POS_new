@@ -12,7 +12,6 @@ import '../models/product.dart';
 import '../models/product_variant.dart';
 import '../models/promo.dart';
 
-
 // REPLACE
 class CartNotifier extends StateNotifier<List<CartItem>> {
   CartNotifier() : super([]) {
@@ -36,10 +35,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       if (raw == null) return;
 
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      final items = (map['items'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(CartItem.fromParkedMap)
-          .toList();
+      final items =
+          (map['items'] as List)
+              .cast<Map<String, dynamic>>()
+              .map(CartItem.fromParkedMap)
+              .toList();
       if (items.isEmpty) return;
 
       orderDiscountAmount =
@@ -65,7 +65,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// Debounced write-through so a burst of taps (e.g. tapping +3 quickly)
   /// doesn't hit disk on every single tap.
   void _persist() {
-    if (_restoringDraft) return; // don't immediately re-save what we just loaded
+    if (_restoringDraft)
+      return; // don't immediately re-save what we just loaded
     _persistDebounce?.cancel();
     _persistDebounce = Timer(const Duration(milliseconds: 400), () async {
       try {
@@ -148,13 +149,14 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   double get itemsTotal => state.fold(0, (sum, item) => sum + item.total);
 
   double get orderDiscountValue {
-    final raw = orderDiscountType == DiscountType.percentage
-        ? itemsTotal * (orderDiscountAmount / 100)
-        : orderDiscountAmount;
+    final raw =
+        orderDiscountType == DiscountType.percentage
+            ? itemsTotal * (orderDiscountAmount / 100)
+            : orderDiscountAmount;
     return raw.clamp(0.0, itemsTotal).toDouble();
   }
 
- double _tipAmount = 0;
+  double _tipAmount = 0;
   double get tipAmount => _tipAmount;
 
   void setTip(double amount) {
@@ -163,17 +165,19 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     _persist();
   }
 
-  double get grandTotal => (itemsTotal - orderDiscountValue + _tipAmount).clamp(0, double.infinity);
+  double get grandTotal =>
+      (itemsTotal - orderDiscountValue + _tipAmount).clamp(0, double.infinity);
 
   void addProduct(Product product, {ProductVariant? variant}) {
-    final index = state.indexWhere((item) =>
-        item.product.id == product.id &&
-        item.selectedVariant?.id == variant?.id);
+    final index = state.indexWhere(
+      (item) =>
+          item.product.id == product.id &&
+          item.selectedVariant?.id == variant?.id,
+    );
     if (index >= 0) {
       final current = state[index];
-      final stockCap = variant != null
-          ? variant.stockQuantity
-          : product.stockQuantity;
+      final stockCap =
+          variant != null ? variant.stockQuantity : product.stockQuantity;
       if (product.trackInventory && current.quantity >= stockCap) {
         return;
       }
@@ -238,7 +242,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       price: promo.effectivePrice,
       imageUrl: promo.imageUrl,
     );
-    final index = state.indexWhere((item) => item.product.id == promoProduct.id);
+    final index = state.indexWhere(
+      (item) => item.product.id == promoProduct.id,
+    );
     if (index >= 0) {
       final current = state[index];
       final updated = List<CartItem>.from(state);
@@ -259,7 +265,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         CartItem(
           product: promoProduct,
           quantity: 1,
-          costAtSale: 0, // promo COGS not tracked from components yet — see note in final report
+          costAtSale:
+              0, // promo COGS not tracked from components yet — see note in final report
           promoComponents: components,
           promoId: promo.id,
         ),
@@ -294,7 +301,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   double get total => grandTotal;
 }
 
-final cartProvider =
-    StateNotifierProvider<CartNotifier, List<CartItem>>(
+final cartProvider = StateNotifierProvider<CartNotifier, List<CartItem>>(
   (ref) => CartNotifier(),
 );

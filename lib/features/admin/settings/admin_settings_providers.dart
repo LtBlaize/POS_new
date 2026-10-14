@@ -20,21 +20,25 @@ class AdminUserRow {
   });
 
   factory AdminUserRow.fromMap(Map<String, dynamic> map) => AdminUserRow(
-        id: map['id'] as String,
-        authUserId: map['auth_user_id'] as String,
-        email: map['email'] as String? ?? '(no email)',
-        role: map['role'] as String,
-        isActive: map['is_active'] as bool,
-        createdAt: DateTime.parse(map['created_at'] as String),
-      );
+    id: map['id'] as String,
+    authUserId: map['auth_user_id'] as String,
+    email: map['email'] as String? ?? '(no email)',
+    role: map['role'] as String,
+    isActive: map['is_active'] as bool,
+    createdAt: DateTime.parse(map['created_at'] as String),
+  );
 }
 
 /// list_admin_users() is security-definer and checks platform_admin itself
 /// (see phase12 migration) — it throws for non-platform_admin admins, which
 /// the screen surfaces as an access-restricted state, not a generic error.
-final adminUsersListProvider = FutureProvider.autoDispose<List<AdminUserRow>>((ref) async {
+final adminUsersListProvider = FutureProvider.autoDispose<List<AdminUserRow>>((
+  ref,
+) async {
   final rows = await Supabase.instance.client.rpc('list_admin_users');
-  return (rows as List).map((r) => AdminUserRow.fromMap(r as Map<String, dynamic>)).toList();
+  return (rows as List)
+      .map((r) => AdminUserRow.fromMap(r as Map<String, dynamic>))
+      .toList();
 });
 
 /// The signed-in admin's own admin_users.id — used to disable the
@@ -72,7 +76,12 @@ class AdminSettingsService {
     throw Exception(error ?? "Inviting new admins isn't available yet.");
   }
 
-  Future<void> _call(String action, String targetAdminId, {String? role, String? reason}) async {
+  Future<void> _call(
+    String action,
+    String targetAdminId, {
+    String? role,
+    String? reason,
+  }) async {
     final res = await _client.functions.invoke(
       'admin-manage-admins',
       body: {
@@ -89,4 +98,6 @@ class AdminSettingsService {
   }
 }
 
-final adminSettingsServiceProvider = Provider<AdminSettingsService>((ref) => AdminSettingsService());
+final adminSettingsServiceProvider = Provider<AdminSettingsService>(
+  (ref) => AdminSettingsService(),
+);

@@ -29,28 +29,39 @@ class ParkedOrdersPanel extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.pause_circle_outline,
-                    size: 18, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.pause_circle_outline,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 8),
-                const Text('Parked Orders',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                const Text(
+                  'Parked Orders',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const Spacer(),
                 if (state.orders.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha:0.15),
+                      color: AppColors.warning.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('${state.orders.length}',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.warning)),
+                    child: Text(
+                      '${state.orders.length}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -58,36 +69,43 @@ class ParkedOrdersPanel extends ConsumerWidget {
 
           // ── List ────────────────────────────────────────────
           Expanded(
-            child: state.loading
-                ? const Center(child: CircularProgressIndicator())
-                : state.orders.isEmpty
+            child:
+                state.loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : state.orders.isEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.inbox_outlined,
-                                size: 36,
-                                color: AppColors.textSecondary
-                                    .withValues(alpha:0.25)),
-                            const SizedBox(height: 8),
-                            Text('No parked orders',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary
-                                        .withValues(alpha:0.5))),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: state.orders.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final order = state.orders[index];
-                          return _ParkedOrderCard(order: order);
-                        },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 36,
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.25,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No parked orders',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                    )
+                    : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: state.orders.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final order = state.orders[index];
+                        return _ParkedOrderCard(order: order);
+                      },
+                    ),
           ),
         ],
       ),
@@ -114,19 +132,25 @@ class _ParkedOrderCard extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: Text(order.label,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              Text('₱${order.total.toStringAsFixed(2)}',
+                child: Text(
+                  order.label,
                   style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary)),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                '₱${order.total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -135,7 +159,9 @@ class _ParkedOrderCard extends ConsumerWidget {
                 .map((i) => '${i.quantity}× ${i.product.name}')
                 .join(', '),
             style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary),
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -143,8 +169,9 @@ class _ParkedOrderCard extends ConsumerWidget {
           Text(
             _timeAgo(order.parkedAt),
             style: TextStyle(
-                fontSize: 10,
-                color: AppColors.textSecondary.withValues(alpha:0.6)),
+              fontSize: 10,
+              color: AppColors.textSecondary.withValues(alpha: 0.6),
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -156,13 +183,17 @@ class _ParkedOrderCard extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     side: BorderSide(color: AppColors.primary),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('Restore',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary)),
+                  child: const Text(
+                    'Restore',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -174,8 +205,11 @@ class _ParkedOrderCard extends ConsumerWidget {
                     border: Border.all(color: AppColors.divider),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.delete_outline,
-                      size: 16, color: AppColors.danger),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    size: 16,
+                    color: AppColors.danger,
+                  ),
                 ),
               ),
             ],
@@ -190,23 +224,32 @@ class _ParkedOrderCard extends ConsumerWidget {
     if (currentCart.isNotEmpty) {
       final confirm = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Replace current cart?',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          content: const Text(
-              'Restoring this order will clear the current cart. Continue?'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
-            ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary),
-                child: const Text('Replace',
-                    style: TextStyle(color: Colors.white))),
-          ],
-        ),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text(
+                'Replace current cart?',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              content: const Text(
+                'Restoring this order will clear the current cart. Continue?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: const Text(
+                    'Replace',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
       );
       if (confirm != true) return;
     }
@@ -216,26 +259,33 @@ class _ParkedOrderCard extends ConsumerWidget {
   void _delete(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove parked order?',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-        content: Text('Delete "${order.label}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(parkedOrderProvider.notifier).deleteParked(order.id);
-            },
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Delete',
-                style: TextStyle(color: Colors.white)),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text(
+              'Remove parked order?',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            content: Text('Delete "${order.label}"? This cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ref.read(parkedOrderProvider.notifier).deleteParked(order.id);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 

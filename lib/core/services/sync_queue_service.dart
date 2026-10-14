@@ -278,7 +278,8 @@ class SyncQueueService {
     }
     if (dead.isNotEmpty) {
       debugPrint(
-          '[SyncQueue] Dead-lettered ${dead.length} entr${dead.length == 1 ? 'y' : 'ies'}');
+        '[SyncQueue] Dead-lettered ${dead.length} entr${dead.length == 1 ? 'y' : 'ies'}',
+      );
     }
   }
 
@@ -325,18 +326,18 @@ class SyncQueueService {
       case 'update_round_status':
         await replayRoundStatus(payload);
 
-            case 'update_order_status':
+      case 'update_order_status':
         final newStatus = payload['status'] as String;
-        final isOpenStatus = const {'pending', 'preparing', 'ready'}
-            .contains(newStatus);
+        final isOpenStatus = const {
+          'pending',
+          'preparing',
+          'ready',
+        }.contains(newStatus);
         // Never move a cancelled order, and never move a completed order
         // back to an open status.
         await _updateOrderExpectingRow(
           recordId,
-          {
-            'status': newStatus,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
+          {'status': newStatus, 'updated_at': DateTime.now().toIso8601String()},
           notStatuses: [
             if (newStatus != 'cancelled') 'cancelled',
             if (isOpenStatus) 'completed',
@@ -344,18 +345,14 @@ class SyncQueueService {
         );
 
       case 'process_payment':
-        await _updateOrderExpectingRow(
-          recordId,
-          {
-            'payment_method': payload['payment_method'],
-            'amount_tendered': payload['amount_tendered'],
-            'change_amount': payload['change_amount'],
-            'reference_number': payload['reference_number'],
-            'paid_at': payload['paid_at'],
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onlyIfUnpaid: true,
-        );
+        await _updateOrderExpectingRow(recordId, {
+          'payment_method': payload['payment_method'],
+          'amount_tendered': payload['amount_tendered'],
+          'change_amount': payload['change_amount'],
+          'reference_number': payload['reference_number'],
+          'paid_at': payload['paid_at'],
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onlyIfUnpaid: true);
 
       case 'process_split_payment':
         final payments =
@@ -371,43 +368,42 @@ class SyncQueueService {
         if (toInsert.isNotEmpty) {
           await _client.from('order_payments').insert(toInsert);
         }
-        await _updateOrderExpectingRow(
-          recordId,
-          {
-            'payment_method': payload['primary_method'],
-            'amount_tendered': payload['amount_tendered'],
-            'change_amount': payload['change_amount'],
-            'is_split_payment': true,
-            'paid_at': payload['paid_at'] ?? DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onlyIfUnpaid: true,
-        );
+        await _updateOrderExpectingRow(recordId, {
+          'payment_method': payload['primary_method'],
+          'amount_tendered': payload['amount_tendered'],
+          'change_amount': payload['change_amount'],
+          'is_split_payment': true,
+          'paid_at': payload['paid_at'] ?? DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onlyIfUnpaid: true);
 
       case 'insert_receipt':
         // A receipt made offline carries a temporary order number. Rebuild
         // its number from the order's official one. The order's insert_order
         // entry always replays first (same conflict key).
-        final rcOrder = await _client
-            .from('orders')
-            .select('order_number')
-            .eq('id', payload['order_id'] as String)
-            .maybeSingle();
+        final rcOrder =
+            await _client
+                .from('orders')
+                .select('order_number')
+                .eq('id', payload['order_id'] as String)
+                .maybeSingle();
         if (rcOrder != null) {
           final issued =
               DateTime.parse(payload['issued_at'] as String).toLocal();
-          final rcDate = '${issued.year}'
+          final rcDate =
+              '${issued.year}'
               '${issued.month.toString().padLeft(2, '0')}'
               '${issued.day.toString().padLeft(2, '0')}';
           payload['receipt_number'] =
               'RCP-$rcDate-${(rcOrder['order_number'] as int).toString().padLeft(6, '0')}';
         }
         final rcNumber = payload['receipt_number'] as String;
-        final rcExisting = await _client
-            .from('receipts')
-            .select('id')
-            .eq('receipt_number', rcNumber)
-            .maybeSingle();
+        final rcExisting =
+            await _client
+                .from('receipts')
+                .select('id')
+                .eq('receipt_number', rcNumber)
+                .maybeSingle();
         if (rcExisting != null) {
           debugPrint('[SyncQueue] Receipt $rcNumber already exists, skipping');
         } else {
@@ -419,16 +415,19 @@ class SyncQueueService {
       case 'adjust_stock':
       case 'adjust_variant_stock':
         final isVariant = op == 'adjust_variant_stock';
-        await _client.rpc('apply_stock_change', params: {
-          'p_business_id': payload['business_id'],
-          'p_product_id': isVariant ? payload['product_id'] : recordId,
-          'p_variant_id': isVariant ? recordId : null,
-          'p_delta': payload['quantity_change'],
-          'p_action': payload['action'],
-          'p_performed_by': payload['performed_by'],
-          'p_notes': payload['notes'],
-          'p_idempotency_key': idemKey,
-        });
+        await _client.rpc(
+          'apply_stock_change',
+          params: {
+            'p_business_id': payload['business_id'],
+            'p_product_id': isVariant ? payload['product_id'] : recordId,
+            'p_variant_id': isVariant ? recordId : null,
+            'p_delta': payload['quantity_change'],
+            'p_action': payload['action'],
+            'p_performed_by': payload['performed_by'],
+            'p_notes': payload['notes'],
+            'p_idempotency_key': idemKey,
+          },
+        );
 
       case 'upload_product_image':
         final productId = recordId;
@@ -440,7 +439,8 @@ class SyncQueueService {
 
         await _client
             .from('products')
-            .update({'image_url': url}).eq('id', productId);
+            .update({'image_url': url})
+            .eq('id', productId);
         await _local.updateProductImageUrl(productId, url);
 
       case 'insert_kitchen_ticket':
@@ -458,16 +458,18 @@ class SyncQueueService {
 
       case 'void_order_item':
         // Idempotency: skip if void record already exists
-        final existingVoid = await _client
-            .from('void_order_items')
-            .select('id')
-            .eq('id', recordId)
-            .maybeSingle();
+        final existingVoid =
+            await _client
+                .from('void_order_items')
+                .select('id')
+                .eq('id', recordId)
+                .maybeSingle();
         if (existingVoid == null) {
-          final voidPayload = Map<String, dynamic>.from(payload)
-            ..remove('track_inventory')
-            ..remove('current_stock')
-            ..remove('business_id');
+          final voidPayload =
+              Map<String, dynamic>.from(payload)
+                ..remove('track_inventory')
+                ..remove('current_stock')
+                ..remove('business_id');
           await _client.from('void_order_items').insert(voidPayload);
 
           var find = _client
@@ -489,71 +491,89 @@ class SyncQueueService {
         }
 
       case 'upsert_credit_customer':
-        await _client.from('credit_customers').upsert(payload,
-            onConflict: 'id', ignoreDuplicates: true);
+        await _client
+            .from('credit_customers')
+            .upsert(payload, onConflict: 'id', ignoreDuplicates: true);
 
       case 'add_credit':
         final creditCustomer = payload['customer'] as Map<String, dynamic>?;
         if (creditCustomer != null) {
-          await _client.from('credit_customers').upsert(creditCustomer,
-              onConflict: 'id', ignoreDuplicates: true);
+          await _client
+              .from('credit_customers')
+              .upsert(creditCustomer, onConflict: 'id', ignoreDuplicates: true);
         }
-        await _client.rpc('add_credit', params: {
-          'p_id': recordId,
-          'p_customer_id': payload['customer_id'],
-          'p_business_id': payload['business_id'],
-          'p_amount': payload['amount'],
-          'p_note': payload['note'],
-          'p_order_id': payload['order_id'],
-          'p_created_at': payload['created_at'],
-        });
+        await _client.rpc(
+          'add_credit',
+          params: {
+            'p_id': recordId,
+            'p_customer_id': payload['customer_id'],
+            'p_business_id': payload['business_id'],
+            'p_amount': payload['amount'],
+            'p_note': payload['note'],
+            'p_order_id': payload['order_id'],
+            'p_created_at': payload['created_at'],
+          },
+        );
 
       case 'record_credit_payment':
-        await _client.rpc('apply_credit_payment', params: {
-          'p_payment_id': payload['payment_tx_id'],
-          'p_customer_id': payload['customer_id'],
-          'p_business_id': payload['business_id'],
-          'p_amount': payload['amount'],
-          'p_note': payload['note'],
-          'p_created_at': payload['created_at'],
-        });
+        await _client.rpc(
+          'apply_credit_payment',
+          params: {
+            'p_payment_id': payload['payment_tx_id'],
+            'p_customer_id': payload['customer_id'],
+            'p_business_id': payload['business_id'],
+            'p_amount': payload['amount'],
+            'p_note': payload['note'],
+            'p_created_at': payload['created_at'],
+          },
+        );
 
       case 'void_order':
-        final orderRow = await _client
-            .from('orders')
-            .select('status')
-            .eq('id', payload['order_id'] as String)
-            .maybeSingle();
+        final orderRow =
+            await _client
+                .from('orders')
+                .select('status')
+                .eq('id', payload['order_id'] as String)
+                .maybeSingle();
         if (orderRow == null) break;
 
         final voidedAt = payload['voided_at'] as String;
         final voidedById = payload['voided_by_staff_id'] as String;
         final reason = payload['reason'] as String;
 
-        await _client.from('orders').update({
-          'status': 'cancelled',
-          'notes': reason,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', payload['order_id'] as String);
+        await _client
+            .from('orders')
+            .update({
+              'status': 'cancelled',
+              'notes': reason,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', payload['order_id'] as String);
 
         // Upsert by id: safe to re-run after a partial failure.
         final items = (payload['items'] as List).cast<Map<String, dynamic>>();
         for (final item in items) {
-          await _client.from('void_order_items').upsert({
-            'id': item['id'],
-            'order_id': payload['order_id'],
-            'product_id': item['product_id'],
-            'product_name': item['product_name'],
-            'unit_price': item['unit_price'],
-            'quantity': item['quantity'],
-            'subtotal': item['subtotal'],
-            'promo_id': item['promo_id'],
-            'promo_group_id': item['promo_group_id'],
-            'reason': reason,
-            'voided_by_staff_id': voidedById,
-            'voided_by_staff_name': payload['voided_by_staff_name'],
-            'voided_at': voidedAt,
-          }, onConflict: 'id', ignoreDuplicates: true);
+          await _client
+              .from('void_order_items')
+              .upsert(
+                {
+                  'id': item['id'],
+                  'order_id': payload['order_id'],
+                  'product_id': item['product_id'],
+                  'product_name': item['product_name'],
+                  'unit_price': item['unit_price'],
+                  'quantity': item['quantity'],
+                  'subtotal': item['subtotal'],
+                  'promo_id': item['promo_id'],
+                  'promo_group_id': item['promo_group_id'],
+                  'reason': reason,
+                  'voided_by_staff_id': voidedById,
+                  'voided_by_staff_name': payload['voided_by_staff_name'],
+                  'voided_at': voidedAt,
+                },
+                onConflict: 'id',
+                ignoreDuplicates: true,
+              );
           await _local.markVoidSynced(item['id'] as String);
         }
 
@@ -575,20 +595,24 @@ class SyncQueueService {
               .from('cashier_shifts')
               .upsert(payload, onConflict: 'id');
         } on PostgrestException catch (e) {
-          final dupOpen = e.code == '23505' &&
+          final dupOpen =
+              e.code == '23505' &&
               e.message.contains('idx_one_open_shift_per_staff');
           if (!dupOpen) rethrow;
           // Staff already has an open shift on the server: adopt it.
-          final server = await _client
-              .from('cashier_shifts')
-              .select()
-              .eq('staff_id', payload['staff_id'] as String)
-              .eq('status', 'open')
-              .limit(1)
-              .maybeSingle();
+          final server =
+              await _client
+                  .from('cashier_shifts')
+                  .select()
+                  .eq('staff_id', payload['staff_id'] as String)
+                  .eq('status', 'open')
+                  .limit(1)
+                  .maybeSingle();
           if (server == null) rethrow;
           await _local.adoptServerShift(
-              localId: recordId, server: Map<String, dynamic>.from(server));
+            localId: recordId,
+            server: Map<String, dynamic>.from(server),
+          );
           _ref.read(shiftsReconciledProvider.notifier).state = DateTime.now();
         }
 
@@ -606,7 +630,8 @@ class SyncQueueService {
       case 'delete_staff':
         await _client
             .from('staff_members')
-            .update({'is_active': false}).eq('id', recordId);
+            .update({'is_active': false})
+            .eq('id', recordId);
 
       default:
         throw UnsupportedError('Unknown sync operation: $op');
@@ -623,8 +648,10 @@ class SyncQueueService {
     final rows = (payload['items'] as List).cast<Map<String, dynamic>>();
     final ids = rows.map((r) => r['id'] as String).toList();
 
-    final existing =
-        await _client.from('order_items').select('id').inFilter('id', ids);
+    final existing = await _client
+        .from('order_items')
+        .select('id')
+        .inFilter('id', ids);
     final have = (existing as List).map((r) => r['id'] as String).toSet();
     final fresh = <Map<String, dynamic>>[
       for (final r in rows)
@@ -636,29 +663,36 @@ class SyncQueueService {
         .from('order_items')
         .select('subtotal')
         .eq('order_id', orderId);
-    final subtotal = (all as List)
-        .fold<double>(0, (s, r) => s + (r['subtotal'] as num).toDouble());
+    final subtotal = (all as List).fold<double>(
+      0,
+      (s, r) => s + (r['subtotal'] as num).toDouble(),
+    );
 
-    final order = await _client
-        .from('orders')
-        .select('discount_amount, tip_amount, status, paid_at')
-        .eq('id', orderId)
-        .single();
+    final order =
+        await _client
+            .from('orders')
+            .select('discount_amount, tip_amount, status, paid_at')
+            .eq('id', orderId)
+            .single();
     final taxRate = (payload['tax_rate'] as num?)?.toDouble() ?? 0.0;
     final tax = subtotal * taxRate;
     final discount = (order['discount_amount'] as num).toDouble();
     final tip = (order['tip_amount'] as num?)?.toDouble() ?? 0.0;
-    final reopen = payload['reopen_for_kitchen'] == true &&
+    final reopen =
+        payload['reopen_for_kitchen'] == true &&
         order['paid_at'] == null &&
         order['status'] != 'cancelled';
 
-    await _client.from('orders').update({
-      'subtotal': subtotal,
-      'tax_amount': tax,
-      'total_amount': subtotal + tax - discount + tip,
-      if (reopen) 'status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', orderId);
+    await _client
+        .from('orders')
+        .update({
+          'subtotal': subtotal,
+          'tax_amount': tax,
+          'total_amount': subtotal + tax - discount + tip,
+          if (reopen) 'status': 'pending',
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', orderId);
   }
 
   /// Sets discount + tip and recomputes the total from the stored subtotal
@@ -680,7 +714,8 @@ class SyncQueueService {
         .select('kitchen_status')
         .eq('order_id', orderId);
     final derived = deriveOrderStatus(
-        (rows as List).map((r) => r['kitchen_status'] as String));
+      (rows as List).map((r) => r['kitchen_status'] as String),
+    );
     await _client
         .from('orders')
         .update({
@@ -695,20 +730,24 @@ class SyncQueueService {
     final orderId = payload['order_id'] as String;
     final discount = (payload['discount'] as num).toDouble();
     final tip = (payload['tip'] as num).toDouble();
-    final o = await _client
-        .from('orders')
-        .select('subtotal, tax_amount, paid_at')
-        .eq('id', orderId)
-        .single();
+    final o =
+        await _client
+            .from('orders')
+            .select('subtotal, tax_amount, paid_at')
+            .eq('id', orderId)
+            .single();
     if (o['paid_at'] != null) return; // never rewrite a paid order
     final subtotal = (o['subtotal'] as num).toDouble();
     final tax = (o['tax_amount'] as num).toDouble();
-    await _client.from('orders').update({
-      'discount_amount': discount,
-      'tip_amount': tip,
-      'total_amount': subtotal + tax - discount + tip,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', orderId);
+    await _client
+        .from('orders')
+        .update({
+          'discount_amount': discount,
+          'tip_amount': tip,
+          'total_amount': subtotal + tax - discount + tip,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', orderId);
   }
 
   /// Updates an order and fails loudly if the order doesn't exist on the
@@ -728,11 +767,12 @@ class SyncQueueService {
     final rows = await q.select('id');
     if ((rows as List).isNotEmpty) return;
 
-    final exists = await _client
-        .from('orders')
-        .select('id')
-        .eq('id', orderId)
-        .maybeSingle();
+    final exists =
+        await _client
+            .from('orders')
+            .select('id')
+            .eq('id', orderId)
+            .maybeSingle();
     if (exists == null) {
       throw StateError('order_missing_on_server:$orderId');
     }
@@ -740,38 +780,49 @@ class SyncQueueService {
   }
 
   Future<void> _recomputeOrderTotals(String orderId) async {
-    final remaining = await _client
-        .from('order_items')
-        .select('subtotal')
-        .eq('order_id', orderId) as List;
+    final remaining =
+        await _client
+                .from('order_items')
+                .select('subtotal')
+                .eq('order_id', orderId)
+            as List;
     final now = DateTime.now().toIso8601String();
     if (remaining.isEmpty) {
       await _client
           .from('orders')
-          .update({'status': 'cancelled', 'updated_at': now}).eq('id', orderId);
+          .update({'status': 'cancelled', 'updated_at': now})
+          .eq('id', orderId);
       return;
     }
     final newSubtotal = remaining.fold<double>(
-        0, (s, r) => s + (r['subtotal'] as num).toDouble());
-    final o = await _client
-        .from('orders')
-        .select('tax_amount, discount_amount, subtotal, tip_amount')
-        .eq('id', orderId)
-        .single();
+      0,
+      (s, r) => s + (r['subtotal'] as num).toDouble(),
+    );
+    final o =
+        await _client
+            .from('orders')
+            .select('tax_amount, discount_amount, subtotal, tip_amount')
+            .eq('id', orderId)
+            .single();
     final oldSub = (o['subtotal'] as num).toDouble();
     final taxRate =
         oldSub > 0 ? (o['tax_amount'] as num).toDouble() / oldSub : 0.0;
     final newTax = newSubtotal * taxRate;
-    final newDiscount =
-        (o['discount_amount'] as num).toDouble().clamp(0.0, newSubtotal);
+    final newDiscount = (o['discount_amount'] as num).toDouble().clamp(
+      0.0,
+      newSubtotal,
+    );
     final tip = (o['tip_amount'] as num?)?.toDouble() ?? 0.0;
-    await _client.from('orders').update({
-      'subtotal': newSubtotal,
-      'tax_amount': newTax,
-      'discount_amount': newDiscount,
-      'total_amount': newSubtotal + newTax - newDiscount + tip,
-      'updated_at': now,
-    }).eq('id', orderId);
+    await _client
+        .from('orders')
+        .update({
+          'subtotal': newSubtotal,
+          'tax_amount': newTax,
+          'discount_amount': newDiscount,
+          'total_amount': newSubtotal + newTax - newDiscount + tip,
+          'updated_at': now,
+        })
+        .eq('id', orderId);
   }
 
   Future<void> _replayInsertOrder(Map<String, dynamic> payload) async {
@@ -781,18 +832,20 @@ class SyncQueueService {
 
     // Check first: an upsert with ignoreDuplicates still fires the
     // BEFORE INSERT trigger on retries and would burn a number.
-    final existingOrder = await _client
-        .from('orders')
-        .select('order_number')
-        .eq('id', orderId)
-        .maybeSingle();
+    final existingOrder =
+        await _client
+            .from('orders')
+            .select('order_number')
+            .eq('id', orderId)
+            .maybeSingle();
     final int serverNumber;
     if (existingOrder == null) {
-      final inserted = await _client
-          .from('orders')
-          .insert(orderPayload)
-          .select('order_number')
-          .single();
+      final inserted =
+          await _client
+              .from('orders')
+              .insert(orderPayload)
+              .select('order_number')
+              .single();
       serverNumber = inserted['order_number'] as int;
     } else {
       serverNumber = existingOrder['order_number'] as int;

@@ -69,12 +69,10 @@ class TopBar extends ConsumerWidget {
       height: isCompact ? 52 : 64,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -123,29 +121,34 @@ class TopBar extends ConsumerWidget {
             child: Row(
               children: [
                 SizedBox(width: isCompact ? 8 : 10),
-                Icon(Icons.search,
-                    size: isCompact ? 15 : 18,
-                    color: AppColors.textSecondary),
+                Icon(
+                  Icons.search,
+                  size: isCompact ? 15 : 18,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 6),
                 // Replace the TextField widget in top_bar.dart
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) =>
-                          ref.read(posSearchQueryProvider.notifier).state = v,
-                      style: TextStyle(fontSize: isCompact ? 12 : 13),
-                      decoration: InputDecoration(
-                        hintText: isCompact
-                            ? 'Search…'
-                            : 'Search products or scan barcode…',
-                        hintStyle: TextStyle(
-                            color: AppColors.textSecondary.withValues(alpha:0.7),
-                            fontSize: isCompact ? 12 : 13),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
+                Expanded(
+                  child: TextField(
+                    onChanged:
+                        (v) =>
+                            ref.read(posSearchQueryProvider.notifier).state = v,
+                    style: TextStyle(fontSize: isCompact ? 12 : 13),
+                    decoration: InputDecoration(
+                      hintText:
+                          isCompact
+                              ? 'Search…'
+                              : 'Search products or scan barcode…',
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.7),
+                        fontSize: isCompact ? 12 : 13,
                       ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
+                ),
                 // Hide keyboard shortcut hint on compact
                 if (onCameraTap != null)
                   GestureDetector(
@@ -153,24 +156,31 @@ class TopBar extends ConsumerWidget {
                     child: Container(
                       margin: const EdgeInsets.all(4),
                       padding: const EdgeInsets.all(4),
-                      child: Icon(Icons.qr_code_scanner_rounded,
-                          size: isCompact ? 16 : 18,
-                          color: AppColors.textSecondary),
+                      child: Icon(
+                        Icons.qr_code_scanner_rounded,
+                        size: isCompact ? 16 : 18,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   )
                 else if (!isCompact)
                   Container(
                     margin: const EdgeInsets.all(4),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.divider,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('⌘K',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary)),
+                    child: const Text(
+                      '⌘K',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -190,18 +200,20 @@ class TopBar extends ConsumerWidget {
 
           // Notifications — hide on very compact to save space
           if (!isCompact)
-            Builder(builder: (context) {
-              final lowStock = ref.watch(lowStockProvider);
-              return GestureDetector(
-                onTap: () => _showLowStock(context, ref, lowStock),
-                child: _IconBadge(
-                  icon: Icons.notifications_outlined,
-                  count: lowStock.length,
-                  color: AppColors.warning,
-                  compact: false,
-                ),
-              );
-            }),
+            Builder(
+              builder: (context) {
+                final lowStock = ref.watch(lowStockProvider);
+                return GestureDetector(
+                  onTap: () => _showLowStock(context, ref, lowStock),
+                  child: _IconBadge(
+                    icon: Icons.notifications_outlined,
+                    count: lowStock.length,
+                    color: AppColors.warning,
+                    compact: false,
+                  ),
+                );
+              },
+            ),
 
           SizedBox(width: isCompact ? 8 : 16),
 
@@ -215,15 +227,17 @@ class TopBar extends ConsumerWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius:
-                  BorderRadius.circular(isCompact ? 8 : 10),
+              borderRadius: BorderRadius.circular(isCompact ? 8 : 10),
             ),
             child: Center(
-              child: Text(initials,
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: isCompact ? 10 : 12,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                initials,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isCompact ? 10 : 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -233,7 +247,8 @@ class TopBar extends ConsumerWidget {
 
   // "Flux Point" -> FP, "Blaize Catering" -> BC, "Fluxpoint" -> FL
   String _initials(String name) {
-    final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words =
+        name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     if (words.isEmpty) return '?';
     if (words.length == 1) {
       final w = words.first;
@@ -243,65 +258,87 @@ class TopBar extends ConsumerWidget {
   }
 
   void _showLowStock(
-      BuildContext context, WidgetRef ref, List<LowStockEntry> items) {
+    BuildContext context,
+    WidgetRef ref,
+    List<LowStockEntry> items,
+  ) {
     final fm = ref.read(featureManagerProvider);
     final canOpenInventory =
         ref.read(activeStaffTabsProvider).contains('inventory') &&
-            fm.hasFeature('inventory');
+        fm.hasFeature('inventory');
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Low stock'),
-        content: SizedBox(
-          width: 340,
-          child: items.isEmpty
-              ? const Text('All stocked items are above the low-stock level.')
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final e in items)
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(e.name),
-                        trailing: Text(
-                          e.stock <= 0 ? 'Out of stock' : '${e.stock} left',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: e.stock <= 0
-                                ? Colors.red
-                                : AppColors.warning,
-                          ),
-                        ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Low stock'),
+            content: SizedBox(
+              width: 340,
+              child:
+                  items.isEmpty
+                      ? const Text(
+                        'All stocked items are above the low-stock level.',
+                      )
+                      : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final e in items)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(e.name),
+                              trailing: Text(
+                                e.stock <= 0
+                                    ? 'Out of stock'
+                                    : '${e.stock} left',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color:
+                                      e.stock <= 0
+                                          ? Colors.red
+                                          : AppColors.warning,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-          if (canOpenInventory)
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                ref.read(posRequestedTabProvider.notifier).state = 'Inventory';
-              },
-              child: const Text('Go to Inventory'),
             ),
-        ],
-      ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+              if (canOpenInventory)
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    ref.read(posRequestedTabProvider.notifier).state =
+                        'Inventory';
+                  },
+                  child: const Text('Go to Inventory'),
+                ),
+            ],
+          ),
     );
   }
 
   String _weekday(int d) =>
       ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d - 1];
 
-  String _month(int m) => [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  String _month(int m) =>
+      [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
       ][m - 1];
 }
 
@@ -346,14 +383,14 @@ class _IconBadge extends StatelessWidget {
                 color: color,
                 borderRadius: BorderRadius.circular(6),
               ),
-              constraints:
-                  const BoxConstraints(minWidth: 16, minHeight: 16),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
               child: Text(
                 '$count',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700),
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -376,7 +413,8 @@ class TrialBanner extends ConsumerWidget {
     final isExpired = !fm.isOnActiveTrial && !fm.currentPlan.isPaid;
 
     // Hide banner entirely if paid or trial hasn't started yet.
-    if (fm.currentPlan.isPaid || fm.isOnActiveTrial == false && days == 0 && !isExpired) {
+    if (fm.currentPlan.isPaid ||
+        fm.isOnActiveTrial == false && days == 0 && !isExpired) {
       return const SizedBox.shrink();
     }
 
@@ -385,20 +423,20 @@ class TrialBanner extends ConsumerWidget {
     final String message;
 
     if (isExpired) {
-      bg      = const Color(0xFFFFEBEB);
-      fg      = const Color(0xFFC0392B);
+      bg = const Color(0xFFFFEBEB);
+      fg = const Color(0xFFC0392B);
       message = 'Your trial has expired — upgrade to keep full access.';
     } else if (days <= 1) {
-      bg      = const Color(0xFFFFEBEB);
-      fg      = const Color(0xFFC0392B);
+      bg = const Color(0xFFFFEBEB);
+      fg = const Color(0xFFC0392B);
       message = 'Last day of your trial — upgrade now to avoid losing access.';
     } else if (days <= 2) {
-      bg      = const Color(0xFFFFF3E0);
-      fg      = const Color(0xFFE65100);
+      bg = const Color(0xFFFFF3E0);
+      fg = const Color(0xFFE65100);
       message = '$days days left in your trial — upgrade to keep full access.';
     } else {
-      bg      = const Color(0xFFFFF8E1);
-      fg      = const Color(0xFF856404);
+      bg = const Color(0xFFFFF8E1);
+      fg = const Color(0xFF856404);
       message = '$days days left in your free trial.';
     }
 

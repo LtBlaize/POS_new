@@ -32,32 +32,32 @@ class SubscriptionPlan {
   });
 
   factory SubscriptionPlan.fromMap(Map<String, dynamic> m) => SubscriptionPlan(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        price: (m['price'] as num?)?.toDouble() ?? 0,
-        billingInterval: m['billing_interval'] as String? ?? 'monthly',
-        features: (m['features'] as Map<String, dynamic>?) ?? {},
-        isActive: m['is_active'] as bool? ?? true,
-        createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
-        updatedAt: DateTime.parse(m['updated_at'] as String).toLocal(),
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    price: (m['price'] as num?)?.toDouble() ?? 0,
+    billingInterval: m['billing_interval'] as String? ?? 'monthly',
+    features: (m['features'] as Map<String, dynamic>?) ?? {},
+    isActive: m['is_active'] as bool? ?? true,
+    createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
+    updatedAt: DateTime.parse(m['updated_at'] as String).toLocal(),
+  );
 }
 
 final subscriptionPlansProvider =
     FutureProvider.autoDispose<List<SubscriptionPlan>>((ref) async {
-  try {
-    final client = Supabase.instance.client;
-    final rows = await client
-        .from('subscription_plans')
-        .select()
-        .order('price', ascending: true);
-    return (rows as List)
-        .map((r) => SubscriptionPlan.fromMap(r as Map<String, dynamic>))
-        .toList();
-  } catch (_) {
-    return [];
-  }
-});
+      try {
+        final client = Supabase.instance.client;
+        final rows = await client
+            .from('subscription_plans')
+            .select()
+            .order('price', ascending: true);
+        return (rows as List)
+            .map((r) => SubscriptionPlan.fromMap(r as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        return [];
+      }
+    });
 
 class AdminPlansService {
   final _client = Supabase.instance.client;
@@ -88,25 +88,33 @@ class AdminPlansService {
     required Map<String, dynamic> features,
     required bool isActive,
   }) async {
-    await _client.from('subscription_plans').update({
-      'name': name,
-      'price': price,
-      'billing_interval': billingInterval,
-      'features': features,
-      'is_active': isActive,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id);
+    await _client
+        .from('subscription_plans')
+        .update({
+          'name': name,
+          'price': price,
+          'billing_interval': billingInterval,
+          'features': features,
+          'is_active': isActive,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   Future<void> setActive(String id, bool isActive) async {
     await _client
         .from('subscription_plans')
-        .update({'is_active': isActive, 'updated_at': DateTime.now().toUtc().toIso8601String()})
+        .update({
+          'is_active': isActive,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
         .eq('id', id);
   }
 }
 
-final adminPlansServiceProvider = Provider<AdminPlansService>((ref) => AdminPlansService());
+final adminPlansServiceProvider = Provider<AdminPlansService>(
+  (ref) => AdminPlansService(),
+);
 
 /// Parses the features JSON textarea; throws FormatException with a message
 /// suitable for direct display if invalid.
@@ -115,7 +123,9 @@ Map<String, dynamic> parseFeaturesJson(String raw) {
   if (trimmed.isEmpty) return {};
   final decoded = jsonDecode(trimmed);
   if (decoded is! Map<String, dynamic>) {
-    throw const FormatException('Features must be a JSON object, e.g. {"kitchen": true}');
+    throw const FormatException(
+      'Features must be a JSON object, e.g. {"kitchen": true}',
+    );
   }
   return decoded;
 }

@@ -16,30 +16,28 @@ Product makeProduct({
   double price = 100.0,
   double costPrice = 40.0,
   bool trackInventory = false,
-}) =>
-    Product(
-      id: id,
-      businessId: 'biz-1',
-      name: 'Test Product',
-      price: price,
-      category: 'Food',
-      trackInventory: trackInventory,
-      sendToKitchen: false,
-      costPrice: costPrice,
-    );
+}) => Product(
+  id: id,
+  businessId: 'biz-1',
+  name: 'Test Product',
+  price: price,
+  category: 'Food',
+  trackInventory: trackInventory,
+  sendToKitchen: false,
+  costPrice: costPrice,
+);
 
 ProductVariant makeVariant({
   String id = 'var-1',
   double priceDelta = 20.0,
   double costPrice = 60.0,
-}) =>
-    ProductVariant(
-      id: id,
-      productId: 'prod-1',
-      name: 'Large',
-      priceDelta: priceDelta,
-      costPrice: costPrice,
-    );
+}) => ProductVariant(
+  id: id,
+  productId: 'prod-1',
+  name: 'Large',
+  priceDelta: priceDelta,
+  costPrice: costPrice,
+);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -298,42 +296,49 @@ void main() {
       final restored = CartItem.fromParkedMap(map);
 
       expect(restored.selectedVariant, isNotNull);
-      expect(restored.selectedVariant!.id, equals(original.selectedVariant!.id));
-      expect(restored.selectedVariant!.priceDelta,
-          equals(original.selectedVariant!.priceDelta));
-      expect(restored.selectedVariant!.costPrice,
-          equals(original.selectedVariant!.costPrice));
+      expect(
+        restored.selectedVariant!.id,
+        equals(original.selectedVariant!.id),
+      );
+      expect(
+        restored.selectedVariant!.priceDelta,
+        equals(original.selectedVariant!.priceDelta),
+      );
+      expect(
+        restored.selectedVariant!.costPrice,
+        equals(original.selectedVariant!.costPrice),
+      );
       expect(restored.discountType, equals(DiscountType.percentage));
       // Totals should survive the round-trip
       expect(restored.total, equals(original.total));
     });
 
-    test('round-trip preserves computed total (no variant, fixed discount)', () {
-      final original = CartItem(
-        product: makeProduct(price: 200),
-        quantity: 1,
-        discountAmount: 50,
-        discountType: DiscountType.fixed,
-      );
-      final restored = CartItem.fromParkedMap(original.toParkedMap());
-      expect(restored.total, equals(150.0));
-    });
+    test(
+      'round-trip preserves computed total (no variant, fixed discount)',
+      () {
+        final original = CartItem(
+          product: makeProduct(price: 200),
+          quantity: 1,
+          discountAmount: 50,
+          discountType: DiscountType.fixed,
+        );
+        final restored = CartItem.fromParkedMap(original.toParkedMap());
+        expect(restored.total, equals(150.0));
+      },
+    );
 
     test('fromParkedMap with missing discount_type defaults to fixed', () {
-      final map = CartItem(
-        product: makeProduct(price: 80),
-        quantity: 1,
-      ).toParkedMap()..remove('discount_type');
+      final map =
+          CartItem(product: makeProduct(price: 80), quantity: 1).toParkedMap()
+            ..remove('discount_type');
 
       final restored = CartItem.fromParkedMap(map);
       expect(restored.discountType, equals(DiscountType.fixed));
     });
 
     test('fromParkedMap with null variant fields produces no variant', () {
-      final map = CartItem(
-        product: makeProduct(price: 80),
-        quantity: 1,
-      ).toParkedMap();
+      final map =
+          CartItem(product: makeProduct(price: 80), quantity: 1).toParkedMap();
       expect(map['variant_id'], isNull);
 
       final restored = CartItem.fromParkedMap(map);

@@ -48,9 +48,13 @@ class _ProductCardState extends ConsumerState<ProductCard>
   void initState() {
     super.initState();
     _controller = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 120));
-    _scaleAnim = Tween(begin: 1.0, end: 0.93).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _scaleAnim = Tween(
+      begin: 1.0,
+      end: 0.93,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -118,14 +122,15 @@ class _ProductCardState extends ConsumerState<ProductCard>
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: inCart > 0
-                  ? AppColors.primary.withValues(alpha:0.4)
-                  : AppColors.divider,
+              color:
+                  inCart > 0
+                      ? AppColors.primary.withValues(alpha: 0.4)
+                      : AppColors.divider,
               width: inCart > 0 ? 1.5 : 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha:0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -148,25 +153,31 @@ class _ProductCardState extends ConsumerState<ProductCard>
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(13)),
+                          top: Radius.circular(13),
+                        ),
                       ),
                       child: Center(
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
-                          child: _added
-                              ? const Icon(Icons.check_rounded,
-                                  color: Colors.white,
-                                  size: 32,
-                                  key: ValueKey('check'))
-                              : Text(
-                                  liveProduct.name[0],
-                                  key: const ValueKey('letter'),
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white.withValues(alpha:0.4),
+                          child:
+                              _added
+                                  ? const Icon(
+                                    Icons.check_rounded,
+                                    color: Colors.white,
+                                    size: 32,
+                                    key: ValueKey('check'),
+                                  )
+                                  : Text(
+                                    liveProduct.name[0],
+                                    key: const ValueKey('letter'),
+                                    style: TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                    ),
                                   ),
-                                ),
                         ),
                       ),
                     ),
@@ -176,13 +187,15 @@ class _ProductCardState extends ConsumerState<ProductCard>
                         right: 8,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha:0.15),
+                                color: Colors.black.withValues(alpha: 0.15),
                                 blurRadius: 4,
                               ),
                             ],
@@ -232,8 +245,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
 
                           // Price + add button — always visible
                           Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Flexible(
                                 child: Text(
@@ -249,8 +261,9 @@ class _ProductCardState extends ConsumerState<ProductCard>
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color:
-                                      gradColors.first.withValues(alpha:0.08),
+                                  color: gradColors.first.withValues(
+                                    alpha: 0.08,
+                                  ),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Icon(

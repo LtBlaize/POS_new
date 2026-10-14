@@ -3,17 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/order.dart';
 import '../../../../shared/widgets/app_colors.dart';
 
-
 class KitchenSentView extends StatelessWidget {
   final Order order;
   final VoidCallback onDone;
-  final String? tableNumber;   
+  final String? tableNumber;
 
   const KitchenSentView({
     super.key,
     required this.order,
     required this.onDone,
-    this.tableNumber,     
+    this.tableNumber,
   });
 
   static const _dark = Color(0xFF1A1A2E);
@@ -36,8 +35,7 @@ class KitchenSentView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
               decoration: const BoxDecoration(
                 color: _dark,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 children: [
@@ -48,46 +46,57 @@ class KitchenSentView extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: _gold, width: 2),
                     ),
-                    child: const Icon(Icons.kitchen_outlined,
-                        color: _gold, size: 26),
+                    child: const Icon(
+                      Icons.kitchen_outlined,
+                      color: _gold,
+                      size: 26,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
                     'Order Sent to Kitchen',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800),
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Customer will pay later',
                     style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.55), fontSize: 12),
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 12,
+                    ),
                   ),
                   if (tableId != null) ...[
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 5),
+                        horizontal: 14,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
-                        color: _gold.withValues(alpha:0.15),
+                        color: _gold.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: _gold.withValues(alpha:0.4)),
+                        border: Border.all(color: _gold.withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.table_restaurant_outlined,
-                              size: 13, color: _gold),
+                          const Icon(
+                            Icons.table_restaurant_outlined,
+                            size: 13,
+                            color: _gold,
+                          ),
                           const SizedBox(width: 5),
                           Text(
                             'Table $tableId',
                             style: const TextStyle(
-                                color: _gold,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700),
+                              color: _gold,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
                       ),
@@ -111,64 +120,69 @@ class KitchenSentView extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        ...order.items.map((item) => Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 3),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 22,
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      color: _dark.withValues(alpha:0.07),
-                                      borderRadius:
-                                          BorderRadius.circular(6),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${item.quantity}',
-                                        style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: _dark),
+                        ...order.items.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: _dark.withValues(alpha: 0.07),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${item.quantity}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: _dark,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      item.product.name,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.textPrimary),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    item.product.name,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textPrimary,
                                     ),
                                   ),
-                                  Text(
-                                    '₱${item.total.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  '₱${item.total.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                ],
-                              ),
-                            )),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         const Divider(height: 14),
                         Row(
                           children: [
                             const Text(
                               'Total',
                               style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                  color: _dark),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: _dark,
+                              ),
                             ),
                             const Spacer(),
                             Text(
                               '₱${order.totalAmount.toStringAsFixed(2)}',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                  color: _gold),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: _gold,
+                              ),
                             ),
                           ],
                         ),
@@ -186,15 +200,19 @@ class KitchenSentView extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Icon(Icons.hourglass_top_rounded,
-                            size: 14, color: Color(0xFF856404)),
+                        Icon(
+                          Icons.hourglass_top_rounded,
+                          size: 14,
+                          color: Color(0xFF856404),
+                        ),
                         SizedBox(width: 6),
                         Text(
                           'Payment pending — awaiting customer',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF856404),
-                              fontWeight: FontWeight.w600),
+                            fontSize: 12,
+                            color: Color(0xFF856404),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -209,12 +227,15 @@ class KitchenSentView extends StatelessWidget {
                         backgroundColor: _dark,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: const Text(
                         'New Order',
                         style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 15),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   ),

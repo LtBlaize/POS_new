@@ -41,7 +41,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     final auth = ref.read(authServiceProvider);
     try {
@@ -63,9 +66,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     } catch (e) {
       final msg = e.toString().toLowerCase();
-      setState(() => _error = msg.contains('expired') || msg.contains('invalid')
-          ? 'Code is invalid or expired. Go back and request a new one.'
-          : 'Could not update password. ${_codeVerified ? "Try a different password." : "Try again."}');
+      setState(
+        () =>
+            _error =
+                msg.contains('expired') || msg.contains('invalid')
+                    ? 'Code is invalid or expired. Go back and request a new one.'
+                    : 'Could not update password. ${_codeVerified ? "Try a different password." : "Try again."}',
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -79,8 +86,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -93,15 +102,22 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 24),
-                const Text('Reset Password',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary)),
+                const Text(
+                  'Reset Password',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('Enter the 6-digit code we sent to\n${widget.email}',
-                    style: const TextStyle(
-                        fontSize: 14, color: AppColors.textSecondary)),
+                Text(
+                  'Enter the 6-digit code we sent to\n${widget.email}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: 32),
                 if (!_codeVerified) ...[
                   AuthTextField(
@@ -110,9 +126,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     controller: _codeCtrl,
                     keyboardType: TextInputType.number,
                     prefixIcon: Icons.pin_outlined,
-                    validator: (v) => (v == null || v.trim().length != 6)
-                        ? 'Enter the 6-digit code'
-                        : null,
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().length != 6)
+                                ? 'Enter the 6-digit code'
+                                : null,
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -121,9 +139,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   hint: '••••••••',
                   controller: _passCtrl,
                   prefixIcon: Icons.lock_outline_rounded,
-                  validator: (v) => (v == null || v.length < 6)
-                      ? 'At least 6 characters'
-                      : null,
+                  validator:
+                      (v) =>
+                          (v == null || v.length < 6)
+                              ? 'At least 6 characters'
+                              : null,
                 ),
                 const SizedBox(height: 16),
                 AuthTextField(
@@ -131,8 +151,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   hint: '••••••••',
                   controller: _confirmCtrl,
                   prefixIcon: Icons.lock_outline_rounded,
-                  validator: (v) =>
-                      v != _passCtrl.text ? 'Passwords don\'t match' : null,
+                  validator:
+                      (v) =>
+                          v != _passCtrl.text ? 'Passwords don\'t match' : null,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
@@ -142,9 +163,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                       color: Colors.red.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(_error!,
-                        style: const TextStyle(color: Colors.red, fontSize: 13),
-                        textAlign: TextAlign.center),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 28),

@@ -1,4 +1,3 @@
-
 import 'product.dart';
 import 'product_variant.dart';
 import 'promo.dart';
@@ -19,8 +18,10 @@ class CartItem {
   // receipt/kitchen reconstruction. Null for every ordinary cart item.
   final List<PromoComponent>? promoComponents;
   final String? promoId;
+
   /// Which ordering round this line belongs to (persisted lines only; 1 for old data).
   final int round;
+
   /// pending | preparing | ready | served (per round, set by the kitchen).
   final String kitchenStatus;
 
@@ -36,49 +37,50 @@ class CartItem {
     this.promoId,
     this.round = 1,
     this.kitchenStatus = 'pending',
-  }) : costAtSale = costAtSale ??
-            (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
-                ? selectedVariant.costPrice
-                : product.costPrice);
+  }) : costAtSale =
+           costAtSale ??
+           (selectedVariant?.costPrice != null && selectedVariant!.costPrice > 0
+               ? selectedVariant.costPrice
+               : product.costPrice);
 
   bool get isPromo => promoComponents != null;
 
   /// True if the kitchen has anything to cook for this line.
-  bool get hasKitchenWork => isPromo
-      ? promoComponents!.any((c) => c.sendToKitchen)
-      : product.sendToKitchen;
+  bool get hasKitchenWork =>
+      isPromo
+          ? promoComponents!.any((c) => c.sendToKitchen)
+          : product.sendToKitchen;
 
   CartItem withKitchenStatus(String s) => CartItem(
-        product: product,
-        selectedVariant: selectedVariant,
-        quantity: quantity,
-        discountAmount: discountAmount,
-        discountType: discountType,
-        costAtSale: costAtSale,
-        notes: notes,
-        promoComponents: promoComponents,
-        promoId: promoId,
-        round: round,
-        kitchenStatus: s,
-      );
+    product: product,
+    selectedVariant: selectedVariant,
+    quantity: quantity,
+    discountAmount: discountAmount,
+    discountType: discountType,
+    costAtSale: costAtSale,
+    notes: notes,
+    promoComponents: promoComponents,
+    promoId: promoId,
+    round: round,
+    kitchenStatus: s,
+  );
 
   CartItem withRound(int r) => CartItem(
-        product: product,
-        selectedVariant: selectedVariant,
-        quantity: quantity,
-        discountAmount: discountAmount,
-        discountType: discountType,
-        costAtSale: costAtSale,
-        notes: notes,
-        promoComponents: promoComponents,
-        promoId: promoId,
-        round: r,
-        kitchenStatus: kitchenStatus,
-      );
+    product: product,
+    selectedVariant: selectedVariant,
+    quantity: quantity,
+    discountAmount: discountAmount,
+    discountType: discountType,
+    costAtSale: costAtSale,
+    notes: notes,
+    promoComponents: promoComponents,
+    promoId: promoId,
+    round: r,
+    kitchenStatus: kitchenStatus,
+  );
 
-  static DiscountType discountTypeFromString(String? s) =>
-      DiscountType.values.firstWhere((e) => e.name == s,
-          orElse: () => DiscountType.fixed);
+  static DiscountType discountTypeFromString(String? s) => DiscountType.values
+      .firstWhere((e) => e.name == s, orElse: () => DiscountType.fixed);
 
   /// Groups raw order_item-like rows [T] into CartItems. Rows sharing a
   /// non-null promo-group id become one promo CartItem (header + its
@@ -108,70 +110,77 @@ class CartItem {
     }
 
     for (final rowsInGroup in groups.values) {
-      final headerRow =
-          rowsInGroup.firstWhere(isHeaderRow, orElse: () => rowsInGroup.first);
-      final componentRows =
-          rowsInGroup.where((r) => !isHeaderRow(r)).toList();
+      final headerRow = rowsInGroup.firstWhere(
+        isHeaderRow,
+        orElse: () => rowsInGroup.first,
+      );
+      final componentRows = rowsInGroup.where((r) => !isHeaderRow(r)).toList();
       final header = buildItem(headerRow);
-      result.add(CartItem(
-        product: header.product,
-        quantity: header.quantity,
-        discountAmount: header.discountAmount,
-        discountType: header.discountType,
-        costAtSale: header.costAtSale,
-        notes: header.notes,
-        promoId: header.promoId,
-        round: header.round,
-        promoComponents: componentRows.map(buildComponent).toList(),
-        kitchenStatus: header.kitchenStatus,
-      ));
+      result.add(
+        CartItem(
+          product: header.product,
+          quantity: header.quantity,
+          discountAmount: header.discountAmount,
+          discountType: header.discountType,
+          costAtSale: header.costAtSale,
+          notes: header.notes,
+          promoId: header.promoId,
+          round: header.round,
+          promoComponents: componentRows.map(buildComponent).toList(),
+          kitchenStatus: header.kitchenStatus,
+        ),
+      );
     }
     return result;
   }
-  double get effectivePrice => selectedVariant != null
-      ? selectedVariant!.resolvedPrice(product.price)
-      : product.price;
+
+  double get effectivePrice =>
+      selectedVariant != null
+          ? selectedVariant!.resolvedPrice(product.price)
+          : product.price;
 
   double get rawTotal => effectivePrice * quantity;
 
-  double get discountValue => discountType == DiscountType.percentage
-      ? rawTotal * (discountAmount / 100)
-      : discountAmount;
+  double get discountValue =>
+      discountType == DiscountType.percentage
+          ? rawTotal * (discountAmount / 100)
+          : discountAmount;
 
   double get total => (rawTotal - discountValue).clamp(0, double.infinity);
 
- Map<String, dynamic> toParkedMap() => {
-        'product_id': product.id,
-        'product_business_id': product.businessId,
-        'product_name': product.name,
-        'product_price': product.price,
-        'product_category': product.category,
-        'product_track_inventory': product.trackInventory,
-        'product_send_to_kitchen': product.sendToKitchen,
-        'quantity': quantity,
-        'discount_amount': discountAmount,
-        'discount_type': discountType.name,
-        'variant_id': selectedVariant?.id,
-        'variant_name': selectedVariant?.name,
-        'variant_price_delta': selectedVariant?.priceDelta,
-        'variant_cost_price': selectedVariant?.costPrice,
-        'cost_at_sale': costAtSale,
-        'notes': notes,
-        'promo_id': promoId,
-        'promo_components': promoComponents?.map((c) => c.toParkedMap()).toList(),
-      };
+  Map<String, dynamic> toParkedMap() => {
+    'product_id': product.id,
+    'product_business_id': product.businessId,
+    'product_name': product.name,
+    'product_price': product.price,
+    'product_category': product.category,
+    'product_track_inventory': product.trackInventory,
+    'product_send_to_kitchen': product.sendToKitchen,
+    'quantity': quantity,
+    'discount_amount': discountAmount,
+    'discount_type': discountType.name,
+    'variant_id': selectedVariant?.id,
+    'variant_name': selectedVariant?.name,
+    'variant_price_delta': selectedVariant?.priceDelta,
+    'variant_cost_price': selectedVariant?.costPrice,
+    'cost_at_sale': costAtSale,
+    'notes': notes,
+    'promo_id': promoId,
+    'promo_components': promoComponents?.map((c) => c.toParkedMap()).toList(),
+  };
 
   factory CartItem.fromParkedMap(Map<String, dynamic> m) {
     final variantId = m['variant_id'] as String?;
-    final selectedVariant = variantId != null
-        ? ProductVariant(
-            id: variantId,
-            productId: m['product_id'] as String,
-            name: m['variant_name'] as String? ?? '',
-            priceDelta: (m['variant_price_delta'] as num?)?.toDouble() ?? 0,
-            costPrice: (m['variant_cost_price'] as num?)?.toDouble() ?? 0,
-          )
-        : null;
+    final selectedVariant =
+        variantId != null
+            ? ProductVariant(
+              id: variantId,
+              productId: m['product_id'] as String,
+              name: m['variant_name'] as String? ?? '',
+              priceDelta: (m['variant_price_delta'] as num?)?.toDouble() ?? 0,
+              costPrice: (m['variant_cost_price'] as num?)?.toDouble() ?? 0,
+            )
+            : null;
 
     return CartItem(
       product: Product(
@@ -193,22 +202,24 @@ class CartItem {
       costAtSale: (m['cost_at_sale'] as num?)?.toDouble() ?? 0,
       notes: m['notes'] as String?,
       promoId: m['promo_id'] as String?,
-      promoComponents: (m['promo_components'] as List?)
-          ?.cast<Map<String, dynamic>>()
-          .map(PromoComponent.fromParkedMap)
-          .toList(),
+      promoComponents:
+          (m['promo_components'] as List?)
+              ?.cast<Map<String, dynamic>>()
+              .map(PromoComponent.fromParkedMap)
+              .toList(),
     );
   }
 }
+
 /// Orders lines by round and merges identical plain lines (same product,
 /// variant and note) so a receipt shows "Coke x3" instead of one line per round.
 /// Promos and discounted lines are left as separate lines.
 List<CartItem> mergeForReceipt(List<CartItem> items) {
-  final sorted = items.asMap().entries.toList()
-    ..sort((a, b) {
-      final c = a.value.round.compareTo(b.value.round);
-      return c != 0 ? c : a.key.compareTo(b.key);
-    });
+  final sorted =
+      items.asMap().entries.toList()..sort((a, b) {
+        final c = a.value.round.compareTo(b.value.round);
+        return c != 0 ? c : a.key.compareTo(b.key);
+      });
   final out = <CartItem>[];
   final seen = <String, int>{};
   for (final e in sorted) {

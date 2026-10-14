@@ -98,60 +98,66 @@ class Sidebar extends ConsumerWidget {
   void _showUpgradeDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.lock_rounded, size: 18, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Pro feature', style: TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: const Text(
-          kStoreBuild
-              ? "This feature isn't included in your current plan."
-              : 'Your free trial has ended. Upgrade to Pro to unlock Reports, '
-                  'Kitchen Display, and Table Management.',
-          style: TextStyle(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Not now'),
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.lock_rounded, size: 18, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Pro feature', style: TextStyle(fontSize: 16)),
+              ],
+            ),
+            content: const Text(
+              kStoreBuild
+                  ? "This feature isn't included in your current plan."
+                  : 'Your free trial has ended. Upgrade to Pro to unlock Reports, '
+                      'Kitchen Display, and Table Management.',
+              style: TextStyle(fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Not now'),
+              ),
+              if (!kStoreBuild)
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    // Phase 8: navigate to settings subscription section.
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                  ),
+                  child: const Text('View plans'),
+                ),
+            ],
           ),
-          if (!kStoreBuild)
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              // Phase 8: navigate to settings subscription section.
-              Navigator.pushNamed(context, '/settings');
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            child: const Text('View plans'),
-          ),
-        ],
-      ),
     );
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text('You will be returned to the login screen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Log out?'),
+            content: const Text('You will be returned to the login screen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Log out'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true) return;
@@ -179,29 +185,31 @@ class Sidebar extends ConsumerWidget {
 
     final fm = featureManager;
 
-    final visibleItems = _allItems.where((item) {
-      // 1. Role-based tab check — always applies.
-      if (item.requiredTab != null &&
-          !allowedTabs.contains(item.requiredTab)) {
-        return false;
-      }
-      // 2. Feature check.
-      // Plan-gated features (reports, kitchen, tables, export) stay visible
-      // but show a lock badge when the current plan doesn't include them —
-      // both during trial AND after expiry. This lets users see what they're
-      // missing at all times, not just after trial ends.
-      // Config-gated features (anything else) are hard-hidden when disabled.
-      if (item.requiredFeature != null &&
-          !fm.hasFeature(item.requiredFeature!)) {
-        final isPlanGated = item.requiredFeature == AppFeature.reports ||
-            item.requiredFeature == AppFeature.kitchen ||
-            item.requiredFeature == AppFeature.tables ||
-            item.requiredFeature == AppFeature.excelExport;
-        if (!isPlanGated) return false;
-        // Plan-gated: stay visible so lock badge shows.
-      }
-      return true;
-    }).toList();
+    final visibleItems =
+        _allItems.where((item) {
+          // 1. Role-based tab check — always applies.
+          if (item.requiredTab != null &&
+              !allowedTabs.contains(item.requiredTab)) {
+            return false;
+          }
+          // 2. Feature check.
+          // Plan-gated features (reports, kitchen, tables, export) stay visible
+          // but show a lock badge when the current plan doesn't include them —
+          // both during trial AND after expiry. This lets users see what they're
+          // missing at all times, not just after trial ends.
+          // Config-gated features (anything else) are hard-hidden when disabled.
+          if (item.requiredFeature != null &&
+              !fm.hasFeature(item.requiredFeature!)) {
+            final isPlanGated =
+                item.requiredFeature == AppFeature.reports ||
+                item.requiredFeature == AppFeature.kitchen ||
+                item.requiredFeature == AppFeature.tables ||
+                item.requiredFeature == AppFeature.excelExport;
+            if (!isPlanGated) return false;
+            // Plan-gated: stay visible so lock badge shows.
+          }
+          return true;
+        }).toList();
 
     return Container(
       width: 80,
@@ -223,15 +231,12 @@ class Sidebar extends ConsumerWidget {
           ...visibleItems.map((item) {
             final isActive = currentRoute == item.route;
             final isInventory = item.route == '/inventory';
-            final lowStockAlert = isInventory
-                ? ref.watch(inventoryProvider).lowStockAlert
-                : null;
+            final lowStockAlert =
+                isInventory ? ref.watch(inventoryProvider).lowStockAlert : null;
             final hasBadge = lowStockAlert != null;
 
             return Tooltip(
-              message: hasBadge
-                  ? '${item.label} — $lowStockAlert'
-                  : item.label,
+              message: hasBadge ? '${item.label} — $lowStockAlert' : item.label,
               preferBelow: false,
               child: GestureDetector(
                 onTap: () {
@@ -245,17 +250,22 @@ class Sidebar extends ConsumerWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.symmetric(
-                      vertical: 4, horizontal: 10),
+                    vertical: 4,
+                    horizontal: 10,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.accent.withValues(alpha:0.15)
-                        : Colors.transparent,
+                    color:
+                        isActive
+                            ? AppColors.accent.withValues(alpha: 0.15)
+                            : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
-                    border: isActive
-                        ? Border.all(
-                            color: AppColors.accent.withValues(alpha:0.4))
-                        : null,
+                    border:
+                        isActive
+                            ? Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.4),
+                            )
+                            : null,
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -265,9 +275,12 @@ class Sidebar extends ConsumerWidget {
                         children: [
                           Icon(
                             item.icon,
-                            color: isActive
-                                ? AppColors.accent
-                                : AppColors.textOnDark.withValues(alpha:0.5),
+                            color:
+                                isActive
+                                    ? AppColors.accent
+                                    : AppColors.textOnDark.withValues(
+                                      alpha: 0.5,
+                                    ),
                             size: 24,
                           ),
                           if (hasBadge)
@@ -308,9 +321,10 @@ class Sidebar extends ConsumerWidget {
                       Text(
                         item.label,
                         style: TextStyle(
-                          color: isActive
-                              ? AppColors.accent
-                              : AppColors.textOnDark.withValues(alpha:0.5),
+                          color:
+                              isActive
+                                  ? AppColors.accent
+                                  : AppColors.textOnDark.withValues(alpha: 0.5),
                           fontSize: 9,
                         ),
                       ),
@@ -325,39 +339,41 @@ class Sidebar extends ConsumerWidget {
           const OfflineBanner(),
 
           if (ref.watch(activeStaffTabsProvider).contains('settings'))
-          Tooltip(
-            message: 'Log out',
-            preferBelow: false,
-            child: GestureDetector(
-              onTap: () => _logout(context, ref),
-              child: Container(
-                margin: const EdgeInsets.symmetric(
-                    vertical: 12, horizontal: 10),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.logout_rounded,
-                      color: AppColors.textOnDark.withValues(alpha:0.5),
-                      size: 24,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: AppColors.textOnDark.withValues(alpha:0.5),
-                        fontSize: 9,
+            Tooltip(
+              message: 'Log out',
+              preferBelow: false,
+              child: GestureDetector(
+                onTap: () => _logout(context, ref),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 10,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.logout_rounded,
+                        color: AppColors.textOnDark.withValues(alpha: 0.5),
+                        size: 24,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: AppColors.textOnDark.withValues(alpha: 0.5),
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

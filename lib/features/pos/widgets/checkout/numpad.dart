@@ -33,33 +33,36 @@ class QuickAmountRow extends StatelessWidget {
     final amounts = _amounts;
     if (amounts.isEmpty) return const SizedBox.shrink();
     return Row(
-      children: amounts
-          .map((v) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: GestureDetector(
-                    onTap: isBusy ? null : () => onSelect(v),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      decoration: BoxDecoration(
-                        color: CheckoutTheme.elevated,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: CheckoutTheme.border),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '₱${v.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          color: CheckoutTheme.textHigh,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+      children:
+          amounts
+              .map(
+                (v) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: GestureDetector(
+                      onTap: isBusy ? null : () => onSelect(v),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: CheckoutTheme.elevated,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: CheckoutTheme.border),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '₱${v.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: CheckoutTheme.textHigh,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ))
-          .toList(),
+              )
+              .toList(),
     );
   }
 }
@@ -80,25 +83,27 @@ class Numpad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: _keys.map((row) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: row.map((k) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: NumpadKey(
-                    label: k,
-                    isBackspace: k == '⌫',
-                    onTap: onTap == null ? null : () => onTap!(k),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      }).toList(),
+      children:
+          _keys.map((row) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children:
+                    row.map((k) {
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: NumpadKey(
+                            label: k,
+                            isBackspace: k == '⌫',
+                            onTap: onTap == null ? null : () => onTap!(k),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
+            );
+          }).toList(),
     );
   }
 }
@@ -130,9 +135,13 @@ class _NumpadKeyState extends State<NumpadKey>
   void initState() {
     super.initState();
     _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 80));
-    _scale = Tween(begin: 1.0, end: 0.92)
-        .animate(CurvedAnimation(parent: _ac, curve: Curves.easeOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+    );
+    _scale = Tween(
+      begin: 1.0,
+      end: 0.92,
+    ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOut));
   }
 
   @override
@@ -158,25 +167,34 @@ class _NumpadKeyState extends State<NumpadKey>
         child: Container(
           height: 52,
           decoration: BoxDecoration(
-            color: widget.isBackspace ? CheckoutTheme.roseDim : CheckoutTheme.elevated,
+            color:
+                widget.isBackspace
+                    ? CheckoutTheme.roseDim
+                    : CheckoutTheme.elevated,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: widget.isBackspace
-                  ? CheckoutTheme.rose.withValues(alpha:0.25)
-                  : CheckoutTheme.border,
+              color:
+                  widget.isBackspace
+                      ? CheckoutTheme.rose.withValues(alpha: 0.25)
+                      : CheckoutTheme.border,
             ),
           ),
           alignment: Alignment.center,
-          child: widget.isBackspace
-              ? const Icon(Icons.backspace_outlined, color: CheckoutTheme.rose, size: 18)
-              : Text(
-                  widget.label,
-                  style: const TextStyle(
-                    color: CheckoutTheme.textHigh,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+          child:
+              widget.isBackspace
+                  ? const Icon(
+                    Icons.backspace_outlined,
+                    color: CheckoutTheme.rose,
+                    size: 18,
+                  )
+                  : Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: CheckoutTheme.textHigh,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
         ),
       ),
     );

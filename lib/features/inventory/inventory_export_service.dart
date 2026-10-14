@@ -27,18 +27,20 @@ class InventoryExportService {
 
     for (final entry in entries) {
       final p = entry.product;
-      buffer.writeln([
-        _escape(p.name),
-        p.price.toStringAsFixed(2),
-        p.costPrice.toStringAsFixed(2),
-        p.effectiveStock,
-        p.trackInventory ? 'true' : 'false',
-        _escape(p.category),
-        _escape(p.barcode ?? ''),
-        _escape(p.sku ?? ''),
-        _escape(p.description ?? ''),
-        p.sendToKitchen ? 'true' : 'false',
-      ].join(','));
+      buffer.writeln(
+        [
+          _escape(p.name),
+          p.price.toStringAsFixed(2),
+          p.costPrice.toStringAsFixed(2),
+          p.effectiveStock,
+          p.trackInventory ? 'true' : 'false',
+          _escape(p.category),
+          _escape(p.barcode ?? ''),
+          _escape(p.sku ?? ''),
+          _escape(p.description ?? ''),
+          p.sendToKitchen ? 'true' : 'false',
+        ].join(','),
+      );
     }
 
     final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
@@ -61,9 +63,10 @@ class InventoryExportService {
       );
     } else {
       // Desktop — save to downloads folder
-      final dir = Platform.isWindows
-          ? '${Platform.environment['USERPROFILE']}\\Downloads'
-          : '${Platform.environment['HOME']}/Downloads';
+      final dir =
+          Platform.isWindows
+              ? '${Platform.environment['USERPROFILE']}\\Downloads'
+              : '${Platform.environment['HOME']}/Downloads';
       final file = File('$dir/$fileName.csv');
       await file.writeAsBytes(bytes);
     }

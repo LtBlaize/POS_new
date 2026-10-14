@@ -31,32 +31,41 @@ class ShiftService {
   final bool Function() _isOnline;
   static const _net = Duration(seconds: 4);
 
-  ShiftService(this._db, this._supabase,
-      {SyncQueueService? syncQueue, bool Function()? isOnline})
-      : _syncQueue = syncQueue,
-        _isOnline = isOnline ?? (() => true);
+  ShiftService(
+    this._db,
+    this._supabase, {
+    SyncQueueService? syncQueue,
+    bool Function()? isOnline,
+  }) : _syncQueue = syncQueue,
+       _isOnline = isOnline ?? (() => true);
 
   // ── Shift sync (upsert by id, so replays are safe) ─────────────────────────
 
   Future<bool> _hasPendingSync(String shiftId) async {
     final d = await _db.db;
     final r = await d.rawQuery(
-        "SELECT 1 FROM sync_queue WHERE record_id = ? AND operation = 'upsert_shift' AND status = 'pending' LIMIT 1",
-        [shiftId]);
+      "SELECT 1 FROM sync_queue WHERE record_id = ? AND operation = 'upsert_shift' AND status = 'pending' LIMIT 1",
+      [shiftId],
+    );
     return r.isNotEmpty;
   }
 
   /// A shift opened offline that hasn't reached the server yet.
   Future<CashierShift?> _pendingLocalOpenShift(
-      String businessId, String staffId) async {
+    String businessId,
+    String staffId,
+  ) async {
     final d = await _db.db;
-    final rows = await d.rawQuery('''
+    final rows = await d.rawQuery(
+      '''
       SELECT * FROM cashier_shifts
       WHERE business_id = ? AND staff_id = ? AND status = 'open'
         AND id IN (SELECT record_id FROM sync_queue
                    WHERE operation = 'upsert_shift' AND status = 'pending')
       ORDER BY opened_at DESC LIMIT 1
-    ''', [businessId, staffId]);
+    ''',
+      [businessId, staffId],
+    );
     return rows.isEmpty ? null : _shiftFromMap(rows.first);
   }
 
@@ -65,8 +74,12 @@ class ShiftService {
   /// older queued state overwrite the newer one.)
   Future<void> _pushShift(String shiftId) async {
     final d = await _db.db;
-    final rows = await d.query('cashier_shifts',
-        where: 'id = ?', whereArgs: [shiftId], limit: 1);
+    final rows = await d.query(
+      'cashier_shifts',
+      where: 'id = ?',
+      whereArgs: [shiftId],
+      limit: 1,
+    );
     if (rows.isEmpty) return;
     final row = Map<String, dynamic>.from(rows.first);
 
@@ -115,7 +128,10 @@ class ShiftService {
   }) async {
     final deviceId = await _getDeviceId();
     final existing = await getOpenShift(
-        businessId: businessId, staffId: staffId, deviceId: deviceId);
+      businessId: businessId,
+      staffId: staffId,
+      deviceId: deviceId,
+    );
     if (existing != null) return existing;
 
     final id = const Uuid().v4();
@@ -140,8 +156,11 @@ class ShiftService {
     };
 
     final d = await _db.db;
-    await d.insert('cashier_shifts', payload,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await d.insert(
+      'cashier_shifts',
+      payload,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
     await _pushShift(id);
 
     final shift = CashierShift(
@@ -184,8 +203,11 @@ class ShiftService {
             return _pendingLocalOpenShift(businessId, staffId);
           }
           final d = await _db.db;
-          await d.insert('cashier_shifts', _shiftToRow(shift),
-              conflictAlgorithm: ConflictAlgorithm.replace);
+          await d.insert(
+            'cashier_shifts',
+            _shiftToRow(shift),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
           return shift;
         }
         // Server has none: keep a shift opened offline that hasn't synced yet.
@@ -243,8 +265,7 @@ class ShiftService {
       where: 'id = ?',
       whereArgs: [shiftId],
     );
-    final expenses =
-        (expRows.firstOrNull?['expenses'] as num? ?? 0).toDouble();
+    final expenses = (expRows.firstOrNull?['expenses'] as num? ?? 0).toDouble();
 
     final updates = {
       'status': 'closed',
@@ -261,14 +282,19 @@ class ShiftService {
     };
 
     final d = await _db.db;
-    final rowsAffected = await d.update('cashier_shifts', updates,
-        where: 'id = ?', whereArgs: [shiftId]);
+    final rowsAffected = await d.update(
+      'cashier_shifts',
+      updates,
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
     if (rowsAffected == 0) {
-      await d.insert('cashier_shifts', {..._shiftToRow(shift), ...updates},
-          conflictAlgorithm: ConflictAlgorithm.replace);
+      await d.insert('cashier_shifts', {
+        ..._shiftToRow(shift),
+        ...updates,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await _pushShift(shiftId); // syncs now, or queues for later
-
 
     final closed = shift.copyWith(
       status: ShiftStatus.closed,
@@ -417,7 +443,9 @@ class ShiftService {
       // Fetch orders assigned to this staff member
       final assignedOrders = await _supabase
           .from('orders')
-          .select('id, total_amount, payment_method, status, paid_at, is_split_payment')
+          .select(
+            'id, total_amount, payment_method, status, paid_at, is_split_payment',
+          )
           .eq('business_id', businessId)
           .eq('cashier_id', staffId)
           .gte('created_at', from.toUtc().toIso8601String())
@@ -431,7 +459,9 @@ class ShiftService {
       // accounts that were created before the staff row existed)
       final nullCashierOrders = await _supabase
           .from('orders')
-          .select('id, total_amount, payment_method, status, paid_at, is_split_payment')
+          .select(
+            'id, total_amount, payment_method, status, paid_at, is_split_payment',
+          )
           .eq('business_id', businessId)
           .isFilter('cashier_id', null)
           .gte('created_at', from.toUtc().toIso8601String())
@@ -440,7 +470,6 @@ class ShiftService {
       for (final o in nullCashierOrders) {
         tally(o);
       }
-
 
       // ── Tally credits paid (payments collected on existing utang) ──────────
       try {
@@ -462,33 +491,35 @@ class ShiftService {
       // ── Full offline fallback ──────────────────────────────────────────────
       final d = await _db.db;
 
-      final rows = await d.rawQuery('''
+      final rows = await d.rawQuery(
+        '''
         SELECT id, total_amount, payment_method, status, paid_at, is_split_payment FROM orders
         WHERE business_id = ?
           AND (cashier_id = ? OR cashier_id IS NULL)
           AND created_at >= ? AND created_at <= ?
-      ''', [
-        businessId,
-        staffId,
-        from.toUtc().toIso8601String(),
-        to.toUtc().toIso8601String(),
-      ]);
+      ''',
+        [
+          businessId,
+          staffId,
+          from.toUtc().toIso8601String(),
+          to.toUtc().toIso8601String(),
+        ],
+      );
       for (final o in rows) {
         tally(o);
       }
       await tallySplitOrders();
 
-
       // Credits paid — offline
       try {
-        final paymentRows = await d.rawQuery('''
+        final paymentRows = await d.rawQuery(
+          '''
           SELECT amount FROM credit_transactions
           WHERE type = 'payment'
             AND created_at >= ? AND created_at <= ?
-        ''', [
-          from.toUtc().toIso8601String(),
-          to.toUtc().toIso8601String(),
-        ]);
+        ''',
+          [from.toUtc().toIso8601String(), to.toUtc().toIso8601String()],
+        );
         for (final p in paymentRows) {
           creditsPaid += (p['amount'] as num).toDouble();
         }
@@ -507,8 +538,12 @@ class ShiftService {
 
   Future<CashierShift?> _getShiftById(String shiftId) async {
     final d = await _db.db;
-    final local = await d.query('cashier_shifts',
-        where: 'id = ?', whereArgs: [shiftId], limit: 1);
+    final local = await d.query(
+      'cashier_shifts',
+      where: 'id = ?',
+      whereArgs: [shiftId],
+      limit: 1,
+    );
     if (local.isNotEmpty) return _shiftFromMap(local.first);
     if (_isOnline()) {
       try {
@@ -541,10 +576,10 @@ class ShiftService {
 
     // 2. Sync to Supabase
     try {
-      await _supabase.rpc('increment_shift_expenses', params: {
-        'p_shift_id': shiftId,
-        'p_amount': amount,
-      });
+      await _supabase.rpc(
+        'increment_shift_expenses',
+        params: {'p_shift_id': shiftId, 'p_amount': amount},
+      );
     } catch (_) {
       // Non-fatal — local value is correct, Supabase will be updated
       // at shift close when the full summary is written.
@@ -595,47 +630,48 @@ class ShiftService {
   // ── Mappers ────────────────────────────────────────────────────────────────
 
   CashierShift _shiftFromMap(Map<String, dynamic> r) => CashierShift(
-        id: r['id'] as String,
-        businessId: r['business_id'] as String,
-        staffId: r['staff_id'] as String,
-        staffName: r['staff_name'] as String,
-        openingCash: (r['opening_cash'] as num).toDouble(),
-        openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
-        status:
-            r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
-        closedAt: r['closed_at'] != null
+    id: r['id'] as String,
+    businessId: r['business_id'] as String,
+    staffId: r['staff_id'] as String,
+    staffName: r['staff_name'] as String,
+    openingCash: (r['opening_cash'] as num).toDouble(),
+    openedAt: DateTime.parse(r['opened_at'] as String).toLocal(),
+    status: r['status'] == 'open' ? ShiftStatus.open : ShiftStatus.closed,
+    closedAt:
+        r['closed_at'] != null
             ? DateTime.parse(r['closed_at'] as String).toLocal()
             : null,
-        actualCashCount: r['actual_cash_count'] != null
+    actualCashCount:
+        r['actual_cash_count'] != null
             ? (r['actual_cash_count'] as num).toDouble()
             : null,
-        notes: r['notes'] as String?,
-        totalSales: (r['total_sales'] as num? ?? 0).toDouble(),
-        cashSales: (r['cash_sales'] as num? ?? 0).toDouble(),
-        gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
-        otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
-        creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
-        creditsPaid: (r['credits_paid'] as num? ?? 0).toDouble(),
-        expenses: (r['expenses'] as num? ?? 0).toDouble(),
-      );
+    notes: r['notes'] as String?,
+    totalSales: (r['total_sales'] as num? ?? 0).toDouble(),
+    cashSales: (r['cash_sales'] as num? ?? 0).toDouble(),
+    gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
+    otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
+    creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
+    creditsPaid: (r['credits_paid'] as num? ?? 0).toDouble(),
+    expenses: (r['expenses'] as num? ?? 0).toDouble(),
+  );
 
   Map<String, dynamic> _shiftToRow(CashierShift s) => {
-        'id': s.id,
-        'business_id': s.businessId,
-        'staff_id': s.staffId,
-        'staff_name': s.staffName,
-        'opening_cash': s.openingCash,
-        'opened_at': s.openedAt.toUtc().toIso8601String(),
-        'status': s.status == ShiftStatus.open ? 'open' : 'closed',
-        'closed_at': s.closedAt?.toUtc().toIso8601String(),
-        'actual_cash_count': s.actualCashCount,
-        'notes': s.notes,
-        'total_sales': s.totalSales,
-        'cash_sales': s.cashSales,
-        'gcash_sales': s.gcashSales,
-        'other_sales': s.otherSales,
-        'credit_given': s.creditGiven,
-        'credits_paid': s.creditsPaid,
-        'expenses': s.expenses,
-      };
+    'id': s.id,
+    'business_id': s.businessId,
+    'staff_id': s.staffId,
+    'staff_name': s.staffName,
+    'opening_cash': s.openingCash,
+    'opened_at': s.openedAt.toUtc().toIso8601String(),
+    'status': s.status == ShiftStatus.open ? 'open' : 'closed',
+    'closed_at': s.closedAt?.toUtc().toIso8601String(),
+    'actual_cash_count': s.actualCashCount,
+    'notes': s.notes,
+    'total_sales': s.totalSales,
+    'cash_sales': s.cashSales,
+    'gcash_sales': s.gcashSales,
+    'other_sales': s.otherSales,
+    'credit_given': s.creditGiven,
+    'credits_paid': s.creditsPaid,
+    'expenses': s.expenses,
+  };
 }

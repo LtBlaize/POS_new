@@ -22,18 +22,24 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('You will be returned to the login screen.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AdminColors.danger),
-            child: const Text('Sign out'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Sign out?'),
+            content: const Text('You will be returned to the login screen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AdminColors.danger,
+                ),
+                child: const Text('Sign out'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -54,7 +60,9 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
     final profile = ref.read(profileProvider).value;
     if (profile == null || profile.businessId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No business profile is linked to this admin account.')),
+        const SnackBar(
+          content: Text('No business profile is linked to this admin account.'),
+        ),
       );
       return;
     }
@@ -74,7 +82,10 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
         children: [
           if (showMenuButton)
             IconButton(
-              icon: const Icon(Icons.menu_rounded, color: AdminColors.textPrimary),
+              icon: const Icon(
+                Icons.menu_rounded,
+                color: AdminColors.textPrimary,
+              ),
               onPressed: onMenuTap ?? () => Scaffold.of(context).openDrawer(),
             ),
 
@@ -88,8 +99,15 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
                 enabled: false,
                 decoration: InputDecoration(
                   hintText: 'Search businesses, payments...',
-                  hintStyle: const TextStyle(color: AdminColors.textMuted, fontSize: 13.5),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: AdminColors.textMuted),
+                  hintStyle: const TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 13.5,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: AdminColors.textMuted,
+                  ),
                   filled: true,
                   fillColor: AdminColors.background,
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -118,7 +136,10 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
           // against for the dashboard KPIs, so it's left empty here too.
           IconButton(
             tooltip: 'Notifications',
-            icon: const Icon(Icons.notifications_none_rounded, color: AdminColors.textSecondary),
+            icon: const Icon(
+              Icons.notifications_none_rounded,
+              color: AdminColors.textSecondary,
+            ),
             onPressed: () {},
           ),
 
@@ -126,7 +147,9 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
 
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             onSelected: (value) {
               switch (value) {
                 case 'view_as_business':
@@ -137,29 +160,52 @@ class AdminTopBar extends ConsumerWidget implements PreferredSizeWidget {
                   _signOut(context, ref);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'view_as_business', child: Text('View as business')),
-              PopupMenuItem(value: 'settings', child: Text('Settings')),
-              PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
-            ],
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem(
+                    value: 'view_as_business',
+                    child: Text('View as business'),
+                  ),
+                  PopupMenuItem(value: 'settings', child: Text('Settings')),
+                  PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
+                ],
             child: const Row(
               children: [
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: AdminColors.neutralBg,
-                  child: Icon(Icons.person, color: AdminColors.textSecondary, size: 20),
+                  child: Icon(
+                    Icons.person,
+                    color: AdminColors.textSecondary,
+                    size: 20,
+                  ),
                 ),
                 SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Admin Profile', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text('Administrator (Platform Admin)',
-                        style: TextStyle(fontSize: 11, color: AdminColors.textMuted)),
+                    Text(
+                      'Admin Profile',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Administrator (Platform Admin)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AdminColors.textMuted,
+                      ),
+                    ),
                   ],
                 ),
                 SizedBox(width: 4),
-                Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AdminColors.textMuted),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: AdminColors.textMuted,
+                ),
               ],
             ),
           ),

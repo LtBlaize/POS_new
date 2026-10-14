@@ -19,7 +19,8 @@ class ProductGrid extends ConsumerWidget {
         if (products.isEmpty) {
           final query = ref.watch(posSearchQueryProvider);
           final category = ref.watch(selectedCategoryProvider);
-          final allProducts = ref.watch(productListProvider).asData?.value ?? [];
+          final allProducts =
+              ref.watch(productListProvider).asData?.value ?? [];
 
           final String message;
           if (query.isNotEmpty) {
@@ -38,8 +39,10 @@ class ProductGrid extends ConsumerWidget {
         }
         return LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount =
-                (constraints.maxWidth / 130).floor().clamp(2, 6);
+            final crossAxisCount = (constraints.maxWidth / 130).floor().clamp(
+              2,
+              6,
+            );
             return GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -54,10 +57,11 @@ class ProductGrid extends ConsumerWidget {
               // Without this, Flutter reuses card state by position (index),
               // so tapping card at index 0 uses the state of whatever was
               // previously at index 0 — causing wrong product to be added.
-              itemBuilder: (_, index) => ProductCard(
-                key: ValueKey(products[index].id),
-                product: products[index],
-              ),
+              itemBuilder:
+                  (_, index) => ProductCard(
+                    key: ValueKey(products[index].id),
+                    product: products[index],
+                  ),
             );
           },
         );

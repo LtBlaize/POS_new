@@ -48,9 +48,10 @@ class _RoomSettingsSectionState extends ConsumerState<RoomSettingsSection> {
               const Text(
                 'Add room',
                 style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 10),
               Row(
@@ -61,12 +62,16 @@ class _RoomSettingsSectionState extends ConsumerState<RoomSettingsSection> {
                       decoration: InputDecoration(
                         hintText: 'e.g. Main Hall, VIP Room, Terrace',
                         hintStyle: const TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
                         filled: true,
                         fillColor: Colors.white,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(color: AppColors.divider),
@@ -87,14 +92,21 @@ class _RoomSettingsSectionState extends ConsumerState<RoomSettingsSection> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       elevation: 0,
                     ),
-                    child: const Text('Add',
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Add',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -132,9 +144,9 @@ class _RoomSettingsSectionState extends ConsumerState<RoomSettingsSection> {
       (r) => r.name.toLowerCase() == name.toLowerCase(),
     );
     if (duplicate) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"$name" already exists')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('"$name" already exists')));
       return;
     }
 
@@ -160,8 +172,11 @@ class _RoomChip extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.meeting_room_outlined,
-              size: 13, color: AppColors.textSecondary),
+          const Icon(
+            Icons.meeting_room_outlined,
+            size: 13,
+            color: AppColors.textSecondary,
+          ),
           const SizedBox(width: 5),
           Text(
             room.name,
@@ -176,27 +191,36 @@ class _RoomChip extends ConsumerWidget {
             onTap: () async {
               final confirm = await showDialog<bool>(
                 context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Delete room?'),
-                  content: Text(
-                      '"${room.name}" will be removed. Tables in this room will become ungrouped.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel')),
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete',
-                            style: TextStyle(color: AppColors.danger))),
-                  ],
-                ),
+                builder:
+                    (_) => AlertDialog(
+                      title: const Text('Delete room?'),
+                      content: Text(
+                        '"${room.name}" will be removed. Tables in this room will become ungrouped.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(color: AppColors.danger),
+                          ),
+                        ),
+                      ],
+                    ),
               );
               if (confirm == true) {
                 ref.read(settingsProvider.notifier).deleteRoom(room.id);
               }
             },
-            child: const Icon(Icons.close,
-                size: 13, color: AppColors.textSecondary),
+            child: const Icon(
+              Icons.close,
+              size: 13,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -222,16 +246,23 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: AppColors.primary),
         const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
         if (subtitle.isNotEmpty) ...[
           const SizedBox(width: 6),
-          Text('· $subtitle',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            '· $subtitle',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ],
     );

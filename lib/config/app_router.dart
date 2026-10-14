@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../core/providers/role_permissions_provider.dart';
 import '../core/providers/staff_provider.dart';
-import '../core/providers/admin_provider.dart';               // ADD (Phase 3)
+import '../core/providers/admin_provider.dart'; // ADD (Phase 3)
 import '../core/models/staff.dart';
 import '../core/services/feature_manager.dart';
 import '../features/auth/auth_provider.dart';
@@ -21,9 +21,9 @@ import '../features/auth/role_selection_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/settings/widgets/ip_setup_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
-import '../features/admin/admin_placeholder_screen.dart';     // ADD (Phase 3)
-import '../features/admin/admin_shell.dart';                  // ADD (Phase 4)
-import '../features/admin/dashboard/admin_dashboard_screen.dart';  // ADD (Phase 4)
+import '../features/admin/admin_placeholder_screen.dart'; // ADD (Phase 3)
+import '../features/admin/admin_shell.dart'; // ADD (Phase 4)
+import '../features/admin/dashboard/admin_dashboard_screen.dart'; // ADD (Phase 4)
 import '../features/admin/businesses/admin_businesses_screen.dart';
 import '../features/admin/businesses/admin_business_detail_screen.dart';
 import '../features/admin/subscriptions/admin_subscriptions_screen.dart';
@@ -45,22 +45,22 @@ final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<AppRouter>((ref) {
   final featureManager = ref.watch(featureManagerProvider);
-  return AppRouter(featureManager, ref);   // pass ref
+  return AppRouter(featureManager, ref); // pass ref
 });
 
 // Admin routes recognized by the router. Every one of these currently maps
 // to a placeholder scaffold (Phase 3) — Phase 4-12 replace them one at a
 // time with real screens without touching this list.
 const _adminRouteTitles = <String, String>{
-  '/admin':               'Admin Dashboard',
-  '/admin/dashboard':     'Admin Dashboard',
-  '/admin/businesses':    'Businesses',
+  '/admin': 'Admin Dashboard',
+  '/admin/dashboard': 'Admin Dashboard',
+  '/admin/businesses': 'Businesses',
   '/admin/subscriptions': 'Subscriptions',
-  '/admin/payments':      'Payments',
-  '/admin/plans':         'Plans',
-  '/admin/activity':      'Activity Log',
-  '/admin/system':        'System Health',
-  '/admin/settings':      'Admin Settings',
+  '/admin/payments': 'Payments',
+  '/admin/plans': 'Plans',
+  '/admin/activity': 'Activity Log',
+  '/admin/system': 'System Health',
+  '/admin/settings': 'Admin Settings',
 };
 const _adminBusinessDetailPrefix = '/admin/businesses/';
 
@@ -74,21 +74,21 @@ class AppRouter {
   // Tab → route mapping for permission checks (existing POS routes only —
   // admin routes are gated separately by _isPlatformAdmin, not staff perms).
   static const _tabForRoute = <String, String>{
-    '/pos':       'pos',
-    '/orders':    'orders',
-    '/kitchen':   'kitchen',
-    '/tables':    'kitchen',
+    '/pos': 'pos',
+    '/orders': 'orders',
+    '/kitchen': 'kitchen',
+    '/tables': 'kitchen',
     '/inventory': 'inventory',
-    '/credits':   'utang',
-    '/reports':   'reports',
-    '/settings':  'settings',
+    '/credits': 'utang',
+    '/reports': 'reports',
+    '/settings': 'settings',
   };
 
   /// Returns true if the currently active staff member can access [tab].
   bool _canAccessTab(String tab) {
     final staff = _ref.read(activeStaffProvider);
     if (staff == null) return false;
-    if (staff.role == StaffRole.owner) return true;   // owner always can
+    if (staff.role == StaffRole.owner) return true; // owner always can
 
     final perms = _ref.read(rolePermissionsProvider).value ?? {};
     return perms[staff.role.value]?.contains(tab) ?? false;
@@ -111,11 +111,11 @@ class AppRouter {
     final name = settings.name;
 
     // ── Auth routes (always accessible) ──────────────────────────────────────
-    if (name == '/login')         return _route(const LoginScreen());
-    if (name == '/register')      return _route(const RegisterScreen());
+    if (name == '/login') return _route(const LoginScreen());
+    if (name == '/register') return _route(const RegisterScreen());
     if (name == '/business-type') return _route(const BusinessTypeScreen());
-    if (name == '/role-select')        return _route(const RoleSelectionScreen());
-    if (name == '/forgot-password')    return _route(const ForgotPasswordScreen());
+    if (name == '/role-select') return _route(const RoleSelectionScreen());
+    if (name == '/forgot-password') return _route(const ForgotPasswordScreen());
 
     // /pending is the dedicated boot-wait route. Always serves _PendingPosScreen
     // regardless of featureManager state — it will self-navigate to /admin
@@ -132,7 +132,9 @@ class AppRouter {
         // Not an admin (or admin check hasn't resolved true yet) — never
         // expose even a blank admin scaffold to a non-admin session.
         final user = _ref.read(authStateProvider).value;
-        return user != null ? _route(const _PendingPosScreen()) : _route(const LoginScreen());
+        return user != null
+            ? _route(const _PendingPosScreen())
+            : _route(const LoginScreen());
       }
       // Phase 4: every admin route is now wrapped in AdminShell (sidebar +
       // topbar persist across navigation) instead of a bare placeholder
@@ -162,7 +164,7 @@ class AppRouter {
       } else {
         content = AdminPlaceholderScreen(title: title);
       }
-      
+
       return _route(AdminShell(currentRoute: name, child: content));
     }
 
@@ -178,10 +180,14 @@ class AppRouter {
 
     // ── Feature guards ────────────────────────────────────────────────────────
     final isOwner = _canAccessTab('settings');
-    if (!isOwner && name == '/kitchen'   && !fm.hasFeature('kitchen'))   return _pos(fm);
-    if (!isOwner && name == '/inventory' && !fm.hasFeature('inventory')) return _pos(fm);
-    if (!isOwner && name == '/tables'    && !fm.hasFeature('tables'))    return _pos(fm);
-    if (!isOwner && name == '/credits'   && !fm.hasFeature('credits'))   return _pos(fm);
+    if (!isOwner && name == '/kitchen' && !fm.hasFeature('kitchen'))
+      return _pos(fm);
+    if (!isOwner && name == '/inventory' && !fm.hasFeature('inventory'))
+      return _pos(fm);
+    if (!isOwner && name == '/tables' && !fm.hasFeature('tables'))
+      return _pos(fm);
+    if (!isOwner && name == '/credits' && !fm.hasFeature('credits'))
+      return _pos(fm);
     // ── Tab permission guards ─────────────────────────────────────────────────
     final requiredTab = _tabForRoute[name];
     if (requiredTab != null && !_canAccessTab(requiredTab)) {
@@ -190,14 +196,14 @@ class AppRouter {
 
     // ── Protected routes ──────────────────────────────────────────────────────
     return switch (name) {
-      '/pos'       => _route(POSScreen(featureManager: fm)),
-      '/orders'    => _route(OrdersScreen(featureManager: fm)),
-      '/kitchen'   => _route(const KitchenScreen()),
+      '/pos' => _route(POSScreen(featureManager: fm)),
+      '/orders' => _route(OrdersScreen(featureManager: fm)),
+      '/kitchen' => _route(const KitchenScreen()),
       '/inventory' => _route(const InventoryScreen()),
-      '/settings'  => _route(SettingsScreen(featureManager: fm)),
-      '/credits'   => _route(CreditsScreen(featureManager: fm)),
-      '/ip-setup'  => _route(const IpSetupScreen()),
-      _            => _pos(fm),
+      '/settings' => _route(SettingsScreen(featureManager: fm)),
+      '/credits' => _route(CreditsScreen(featureManager: fm)),
+      '/ip-setup' => _route(const IpSetupScreen()),
+      _ => _pos(fm),
     };
   }
 
@@ -312,7 +318,9 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
         // auth failure. Keep the session, stay on /pending, retry.
         // (A truly revoked token makes the SDK emit signedOut, which
         // MyApp's listener already routes to /login.)
-        debugPrint('[Pending] profile error with live session — retrying in 5s: $e');
+        debugPrint(
+          '[Pending] profile error with live session — retrying in 5s: $e',
+        );
         _retryTimer ??= Timer(const Duration(seconds: 5), () {
           _retryTimer = null;
           if (!mounted || _navigated) return;
@@ -332,16 +340,20 @@ class _PendingPosScreenState extends ConsumerState<_PendingPosScreen> {
             children: [
               const Icon(Icons.wifi_off, color: Colors.white54, size: 40),
               const SizedBox(height: 16),
-              const Text("Can't reach the server",
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                "Can't reach the server",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 6),
               const Text(
-                  'First-time setup on this device needs internet.\nRetrying automatically…',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                'First-time setup on this device needs internet.\nRetrying automatically…',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => ref.invalidate(profileProvider),

@@ -4,28 +4,28 @@ enum PromoType { bundle, buyXGetY }
 
 extension PromoTypeX on PromoType {
   String get value => switch (this) {
-        PromoType.bundle => 'bundle',
-        PromoType.buyXGetY => 'buy_x_get_y',
-      };
+    PromoType.bundle => 'bundle',
+    PromoType.buyXGetY => 'buy_x_get_y',
+  };
   static PromoType fromString(String v) => switch (v) {
-        'buy_x_get_y' => PromoType.buyXGetY,
-        _ => PromoType.bundle,
-      };
+    'buy_x_get_y' => PromoType.buyXGetY,
+    _ => PromoType.bundle,
+  };
 }
 
 enum PromoItemRole { bundle, buy, get }
 
 extension PromoItemRoleX on PromoItemRole {
   String get value => switch (this) {
-        PromoItemRole.bundle => 'bundle',
-        PromoItemRole.buy => 'buy',
-        PromoItemRole.get => 'get',
-      };
+    PromoItemRole.bundle => 'bundle',
+    PromoItemRole.buy => 'buy',
+    PromoItemRole.get => 'get',
+  };
   static PromoItemRole fromString(String v) => switch (v) {
-        'buy' => PromoItemRole.buy,
-        'get' => PromoItemRole.get,
-        _ => PromoItemRole.bundle,
-      };
+    'buy' => PromoItemRole.buy,
+    'get' => PromoItemRole.get,
+    _ => PromoItemRole.bundle,
+  };
 }
 
 class PromoItem {
@@ -60,26 +60,26 @@ class PromoItem {
   });
 
   factory PromoItem.fromMap(Map<String, dynamic> map) => PromoItem(
-        id: map['id'] as String,
-        promoId: map['promo_id'] as String,
-        productId: map['product_id'] as String,
-        variantId: map['variant_id'] as String?,
-        quantity: map['quantity'] as int,
-        role: PromoItemRoleX.fromString(map['role'] as String? ?? 'bundle'),
-        productName: map['product_name'] as String?,
-        variantName: map['variant_name'] as String?,
-        productPrice: (map['product_price'] as num?)?.toDouble(),
-        productTrackInventory: map['product_track_inventory'] as bool?,
-        productSendToKitchen: map['product_send_to_kitchen'] as bool?,
-      );
+    id: map['id'] as String,
+    promoId: map['promo_id'] as String,
+    productId: map['product_id'] as String,
+    variantId: map['variant_id'] as String?,
+    quantity: map['quantity'] as int,
+    role: PromoItemRoleX.fromString(map['role'] as String? ?? 'bundle'),
+    productName: map['product_name'] as String?,
+    variantName: map['variant_name'] as String?,
+    productPrice: (map['product_price'] as num?)?.toDouble(),
+    productTrackInventory: map['product_track_inventory'] as bool?,
+    productSendToKitchen: map['product_send_to_kitchen'] as bool?,
+  );
 
   Map<String, dynamic> toMap() => {
-        'promo_id': promoId,
-        'product_id': productId,
-        'variant_id': variantId,
-        'quantity': quantity,
-        'role': role.value,
-      };
+    'promo_id': promoId,
+    'product_id': productId,
+    'variant_id': variantId,
+    'quantity': quantity,
+    'role': role.value,
+  };
 }
 
 class Promo {
@@ -146,11 +146,13 @@ class Promo {
       case PromoType.buyXGetY:
         final buyTotal = buyItems.fold<double>(
           0,
-          (sum, i) => sum + (i.productPrice ?? 0) * i.quantity * (buyQuantity ?? 1),
+          (sum, i) =>
+              sum + (i.productPrice ?? 0) * i.quantity * (buyQuantity ?? 1),
         );
         final getTotal = getItems.fold<double>(
           0,
-          (sum, i) => sum + (i.productPrice ?? 0) * i.quantity * (getQuantity ?? 1),
+          (sum, i) =>
+              sum + (i.productPrice ?? 0) * i.quantity * (getQuantity ?? 1),
         );
         return buyTotal + getTotal;
     }
@@ -164,51 +166,62 @@ class Promo {
       case PromoType.buyXGetY:
         final buyTotal = buyItems.fold<double>(
           0,
-          (sum, i) => sum + (i.productPrice ?? 0) * i.quantity * (buyQuantity ?? 1),
+          (sum, i) =>
+              sum + (i.productPrice ?? 0) * i.quantity * (buyQuantity ?? 1),
         );
         final getTotal = getItems.fold<double>(
           0,
-          (sum, i) => sum + (i.productPrice ?? 0) * i.quantity * (getQuantity ?? 1),
+          (sum, i) =>
+              sum + (i.productPrice ?? 0) * i.quantity * (getQuantity ?? 1),
         );
         final discount = (getDiscountPercent ?? 100) / 100;
         return buyTotal + (getTotal * (1 - discount));
     }
   }
 
-  double get savings => (originalTotal - effectivePrice).clamp(0, double.infinity);
+  double get savings =>
+      (originalTotal - effectivePrice).clamp(0, double.infinity);
 
-  factory Promo.fromMap(Map<String, dynamic> map, {List<PromoItem> items = const []}) =>
-      Promo(
-        id: map['id'] as String,
-        businessId: map['business_id'] as String,
-        name: map['name'] as String,
-        description: map['description'] as String?,
-        imageUrl: map['image_url'] as String?,
-        promoType: PromoTypeX.fromString(map['promo_type'] as String),
-        bundlePrice: (map['bundle_price'] as num?)?.toDouble(),
-        buyQuantity: map['buy_quantity'] as int?,
-        getQuantity: map['get_quantity'] as int?,
-        getDiscountPercent: (map['get_discount_percent'] as num?)?.toDouble(),
-        isActive: map['is_active'] as bool? ?? true,
-        startDate: map['start_date'] != null ? DateTime.parse(map['start_date'] as String) : null,
-        endDate: map['end_date'] != null ? DateTime.parse(map['end_date'] as String) : null,
-        items: items,
-      );
+  factory Promo.fromMap(
+    Map<String, dynamic> map, {
+    List<PromoItem> items = const [],
+  }) => Promo(
+    id: map['id'] as String,
+    businessId: map['business_id'] as String,
+    name: map['name'] as String,
+    description: map['description'] as String?,
+    imageUrl: map['image_url'] as String?,
+    promoType: PromoTypeX.fromString(map['promo_type'] as String),
+    bundlePrice: (map['bundle_price'] as num?)?.toDouble(),
+    buyQuantity: map['buy_quantity'] as int?,
+    getQuantity: map['get_quantity'] as int?,
+    getDiscountPercent: (map['get_discount_percent'] as num?)?.toDouble(),
+    isActive: map['is_active'] as bool? ?? true,
+    startDate:
+        map['start_date'] != null
+            ? DateTime.parse(map['start_date'] as String)
+            : null,
+    endDate:
+        map['end_date'] != null
+            ? DateTime.parse(map['end_date'] as String)
+            : null,
+    items: items,
+  );
 
   Map<String, dynamic> toMap() => {
-        'business_id': businessId,
-        'name': name,
-        'description': description,
-        'image_url': imageUrl,
-        'promo_type': promoType.value,
-        'bundle_price': bundlePrice,
-        'buy_quantity': buyQuantity,
-        'get_quantity': getQuantity,
-        'get_discount_percent': getDiscountPercent,
-        'is_active': isActive,
-        'start_date': startDate?.toIso8601String(),
-        'end_date': endDate?.toIso8601String(),
-      };
+    'business_id': businessId,
+    'name': name,
+    'description': description,
+    'image_url': imageUrl,
+    'promo_type': promoType.value,
+    'bundle_price': bundlePrice,
+    'buy_quantity': buyQuantity,
+    'get_quantity': getQuantity,
+    'get_discount_percent': getDiscountPercent,
+    'is_active': isActive,
+    'start_date': startDate?.toIso8601String(),
+    'end_date': endDate?.toIso8601String(),
+  };
 
   Promo copyWith({
     String? name,
@@ -219,23 +232,22 @@ class Promo {
     DateTime? startDate,
     DateTime? endDate,
     List<PromoItem>? items,
-  }) =>
-      Promo(
-        id: id,
-        businessId: businessId,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        imageUrl: imageUrl ?? this.imageUrl,
-        promoType: promoType,
-        bundlePrice: bundlePrice ?? this.bundlePrice,
-        buyQuantity: buyQuantity,
-        getQuantity: getQuantity,
-        getDiscountPercent: getDiscountPercent,
-        isActive: isActive ?? this.isActive,
-        startDate: startDate ?? this.startDate,
-        endDate: endDate ?? this.endDate,
-        items: items ?? this.items,
-      );
+  }) => Promo(
+    id: id,
+    businessId: businessId,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    imageUrl: imageUrl ?? this.imageUrl,
+    promoType: promoType,
+    bundlePrice: bundlePrice ?? this.bundlePrice,
+    buyQuantity: buyQuantity,
+    getQuantity: getQuantity,
+    getDiscountPercent: getDiscountPercent,
+    isActive: isActive ?? this.isActive,
+    startDate: startDate ?? this.startDate,
+    endDate: endDate ?? this.endDate,
+    items: items ?? this.items,
+  );
 }
 
 // ── Cart-side representation ────────────────────────────────────────────────
@@ -265,7 +277,8 @@ class PromoComponent {
     required this.sendToKitchen,
   });
 
-  factory PromoComponent.fromParkedMap(Map<String, dynamic> m) => PromoComponent(
+  factory PromoComponent.fromParkedMap(Map<String, dynamic> m) =>
+      PromoComponent(
         promoId: m['promo_id'] as String,
         productId: m['product_id'] as String,
         variantId: m['variant_id'] as String?,
@@ -277,13 +290,13 @@ class PromoComponent {
       );
 
   Map<String, dynamic> toParkedMap() => {
-        'promo_id': promoId,
-        'product_id': productId,
-        'variant_id': variantId,
-        'product_name': productName,
-        'variant_name': variantName,
-        'quantity': quantity,
-        'track_inventory': trackInventory,
-        'send_to_kitchen': sendToKitchen,
-      };
+    'promo_id': promoId,
+    'product_id': productId,
+    'variant_id': variantId,
+    'product_name': productName,
+    'variant_name': variantName,
+    'quantity': quantity,
+    'track_inventory': trackInventory,
+    'send_to_kitchen': sendToKitchen,
+  };
 }

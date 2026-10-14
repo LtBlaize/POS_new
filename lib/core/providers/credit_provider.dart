@@ -8,7 +8,8 @@ import '../services/sync_queue_service.dart';
 
 final creditCustomersProvider =
     AsyncNotifierProvider<CreditCustomersNotifier, List<CreditCustomer>>(
-        CreditCustomersNotifier.new);
+      CreditCustomersNotifier.new,
+    );
 
 class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
   @override
@@ -47,7 +48,9 @@ class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
     String? note,
     String? orderId,
   }) async {
-    await ref.read(creditServiceProvider).addCredit(
+    await ref
+        .read(creditServiceProvider)
+        .addCredit(
           customerId: customerId,
           businessId: _businessId, // ← now passed correctly
           amount: amount,
@@ -62,7 +65,9 @@ class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
     required double amount,
     String? note,
   }) async {
-    await ref.read(creditServiceProvider).recordPayment(
+    await ref
+        .read(creditServiceProvider)
+        .recordPayment(
           customerId: customerId,
           businessId: _businessId, // ← now passed correctly
           amount: amount,
@@ -73,7 +78,9 @@ class CreditCustomersNotifier extends AsyncNotifier<List<CreditCustomer>> {
 }
 
 final creditTransactionsProvider =
-    FutureProvider.family<List<CreditTransaction>, String>(
-        (ref, customerId) async {
-  return ref.watch(creditServiceProvider).getTransactions(customerId);
-});
+    FutureProvider.family<List<CreditTransaction>, String>((
+      ref,
+      customerId,
+    ) async {
+      return ref.watch(creditServiceProvider).getTransactions(customerId);
+    });

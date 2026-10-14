@@ -10,16 +10,16 @@ enum BusinessType {
   const BusinessType(this.value);
 
   factory BusinessType.fromString(String v) => BusinessType.values.firstWhere(
-        (e) => e.value == v,
-        orElse: () => BusinessType.retail,
-      );
+    (e) => e.value == v,
+    orElse: () => BusinessType.retail,
+  );
 
   String get displayName => switch (this) {
-        BusinessType.restaurant => 'Restaurant',
-        BusinessType.retail     => 'Retail Store',
-        BusinessType.cafe       => 'Café',
-        BusinessType.bakery     => 'Bakery',
-      };
+    BusinessType.restaurant => 'Restaurant',
+    BusinessType.retail => 'Retail Store',
+    BusinessType.cafe => 'Café',
+    BusinessType.bakery => 'Bakery',
+  };
 
   bool get isRestaurant =>
       this == BusinessType.restaurant ||
@@ -37,17 +37,14 @@ enum SubscriptionPlan {
   final String value;
   const SubscriptionPlan(this.value);
 
-  factory SubscriptionPlan.fromString(String v) =>
-      SubscriptionPlan.values.firstWhere(
-        (e) => e.value == v,
-        orElse: () => SubscriptionPlan.starter,
-      );
+  factory SubscriptionPlan.fromString(String v) => SubscriptionPlan.values
+      .firstWhere((e) => e.value == v, orElse: () => SubscriptionPlan.starter);
 
   String get displayName => switch (this) {
-        SubscriptionPlan.starter => 'Starter',
-        SubscriptionPlan.growth  => 'Growth',
-        SubscriptionPlan.pro     => 'Pro',
-      };
+    SubscriptionPlan.starter => 'Starter',
+    SubscriptionPlan.growth => 'Growth',
+    SubscriptionPlan.pro => 'Pro',
+  };
 
   bool get isPaid => true; // no free tier anymore
 }
@@ -121,50 +118,53 @@ class Business {
   // ── Serialisation ────────────────────────────────────────────────────────────
 
   factory Business.fromMap(Map<String, dynamic> map) => Business(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        businessType:
-            BusinessType.fromString(map['business_type'] as String),
-        subscriptionPlan: SubscriptionPlan.fromString(
-            map['subscription_plan'] as String? ?? 'starter'),
-        logoUrl:  map['logo_url']  as String?,
-        address:  map['address']   as String?,
-        phone:    map['phone']     as String?,
-        email:    map['email']     as String?,
-        currency: map['currency']  as String? ?? 'PHP',
-        timezone: map['timezone']  as String? ?? 'Asia/Manila',
-        isActive: map['is_active'] as bool?   ?? true,
-        createdAt: DateTime.parse(map['created_at'] as String),
-        updatedAt: DateTime.parse(map['updated_at'] as String),
-        trialStartedAt: map['trial_started_at'] != null
+    id: map['id'] as String,
+    name: map['name'] as String,
+    businessType: BusinessType.fromString(map['business_type'] as String),
+    subscriptionPlan: SubscriptionPlan.fromString(
+      map['subscription_plan'] as String? ?? 'starter',
+    ),
+    logoUrl: map['logo_url'] as String?,
+    address: map['address'] as String?,
+    phone: map['phone'] as String?,
+    email: map['email'] as String?,
+    currency: map['currency'] as String? ?? 'PHP',
+    timezone: map['timezone'] as String? ?? 'Asia/Manila',
+    isActive: map['is_active'] as bool? ?? true,
+    createdAt: DateTime.parse(map['created_at'] as String),
+    updatedAt: DateTime.parse(map['updated_at'] as String),
+    trialStartedAt:
+        map['trial_started_at'] != null
             ? DateTime.parse(map['trial_started_at'] as String)
             : null,
-        trialEndsAt: map['trial_ends_at'] != null
+    trialEndsAt:
+        map['trial_ends_at'] != null
             ? DateTime.parse(map['trial_ends_at'] as String)
             : null,
-        subscriptionExpiresAt: map['subscription_expires_at'] != null
+    subscriptionExpiresAt:
+        map['subscription_expires_at'] != null
             ? DateTime.parse(map['subscription_expires_at'] as String)
             : null,
-      );
+  );
 
   Map<String, dynamic> toMap() => {
-        'id':                id,
-        'name':              name,
-        'business_type':     businessType.value,
-        'subscription_plan': subscriptionPlan.value,
-        'logo_url':          logoUrl,
-        'address':           address,
-        'phone':             phone,
-        'email':             email,
-        'currency':          currency,
-        'timezone':          timezone,
-        'is_active':         isActive,
-        'created_at':        createdAt.toIso8601String(),
-        'updated_at':        updatedAt.toIso8601String(),
-        'trial_started_at':  trialStartedAt?.toIso8601String(),
-        'trial_ends_at':     trialEndsAt?.toIso8601String(),
-        'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'business_type': businessType.value,
+    'subscription_plan': subscriptionPlan.value,
+    'logo_url': logoUrl,
+    'address': address,
+    'phone': phone,
+    'email': email,
+    'currency': currency,
+    'timezone': timezone,
+    'is_active': isActive,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'trial_started_at': trialStartedAt?.toIso8601String(),
+    'trial_ends_at': trialEndsAt?.toIso8601String(),
+    'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
+  };
 
   Business copyWith({
     String? id,
@@ -183,25 +183,24 @@ class Business {
     DateTime? trialStartedAt,
     DateTime? trialEndsAt,
     DateTime? subscriptionExpiresAt,
-  }) =>
-      Business(
-        id:               id               ?? this.id,
-        name:             name             ?? this.name,
-        businessType:     businessType     ?? this.businessType,
-        subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
-        logoUrl:          logoUrl          ?? this.logoUrl,
-        address:          address          ?? this.address,
-        phone:            phone            ?? this.phone,
-        email:            email            ?? this.email,
-        currency:         currency         ?? this.currency,
-        timezone:         timezone         ?? this.timezone,
-        isActive:         isActive         ?? this.isActive,
-        createdAt:        createdAt        ?? this.createdAt,
-        updatedAt:        updatedAt        ?? this.updatedAt,
-        trialStartedAt:   trialStartedAt   ?? this.trialStartedAt,
-        trialEndsAt:      trialEndsAt      ?? this.trialEndsAt,
-        subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
-      );
+  }) => Business(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    businessType: businessType ?? this.businessType,
+    subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
+    logoUrl: logoUrl ?? this.logoUrl,
+    address: address ?? this.address,
+    phone: phone ?? this.phone,
+    email: email ?? this.email,
+    currency: currency ?? this.currency,
+    timezone: timezone ?? this.timezone,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    trialStartedAt: trialStartedAt ?? this.trialStartedAt,
+    trialEndsAt: trialEndsAt ?? this.trialEndsAt,
+    subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
+  );
 
   @override
   String toString() =>

@@ -23,13 +23,25 @@ const _navGroups = <_AdminNavGroup>[
   ]),
   _AdminNavGroup('MANAGEMENT', [
     _AdminNavItem(Icons.store_rounded, 'Businesses', '/admin/businesses'),
-    _AdminNavItem(Icons.calendar_month_rounded, 'Subscriptions', '/admin/subscriptions'),
+    _AdminNavItem(
+      Icons.calendar_month_rounded,
+      'Subscriptions',
+      '/admin/subscriptions',
+    ),
     _AdminNavItem(Icons.credit_card_rounded, 'Payments', '/admin/payments'),
     _AdminNavItem(Icons.workspaces_rounded, 'Plans', '/admin/plans'),
   ]),
   _AdminNavGroup('MONITORING', [
-    _AdminNavItem(Icons.description_outlined, 'Activity Logs', '/admin/activity'),
-    _AdminNavItem(Icons.favorite_border_rounded, 'System Health', '/admin/system'),
+    _AdminNavItem(
+      Icons.description_outlined,
+      'Activity Logs',
+      '/admin/activity',
+    ),
+    _AdminNavItem(
+      Icons.favorite_border_rounded,
+      'System Health',
+      '/admin/system',
+    ),
   ]),
   _AdminNavGroup('SYSTEM', [
     _AdminNavItem(Icons.settings_outlined, 'Settings', '/admin/settings'),
@@ -58,18 +70,24 @@ class AdminSidebar extends ConsumerWidget {
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('You will be returned to the login screen.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AdminColors.danger),
-            child: const Text('Sign out'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Sign out?'),
+            content: const Text('You will be returned to the login screen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AdminColors.danger,
+                ),
+                child: const Text('Sign out'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -96,35 +114,41 @@ class AdminSidebar extends ConsumerWidget {
           children: [
             // ── Logo ──────────────────────────────────────────────────────
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 20, vertical: 20),
-              child: collapsed
-                  ? const Center(child: _LogoMark())
-                  : const Row(
-                      children: [
-                        _LogoMark(),
-                        SizedBox(width: 10),
-                        Text.rich(
-                          TextSpan(children: [
+              padding: EdgeInsets.symmetric(
+                horizontal: collapsed ? 0 : 20,
+                vertical: 20,
+              ),
+              child:
+                  collapsed
+                      ? const Center(child: _LogoMark())
+                      : const Row(
+                        children: [
+                          _LogoMark(),
+                          SizedBox(width: 10),
+                          Text.rich(
                             TextSpan(
-                              text: 'FluxPoint ',
-                              style: TextStyle(
-                                color: AdminColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 18,
-                              ),
+                              children: [
+                                TextSpan(
+                                  text: 'FluxPoint ',
+                                  style: TextStyle(
+                                    color: AdminColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Admin',
+                                  style: TextStyle(
+                                    color: AdminColors.textSecondary,
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
                             ),
-                            TextSpan(
-                              text: 'Admin',
-                              style: TextStyle(
-                                color: AdminColors.textSecondary,
-                                fontWeight: FontWeight.w400,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ]),
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
             ),
 
             // ── Nav groups ────────────────────────────────────────────────
@@ -162,56 +186,80 @@ class AdminSidebar extends ConsumerWidget {
             // ── Bottom profile card ──────────────────────────────────────
             Padding(
               padding: EdgeInsets.all(collapsed ? 8 : 12),
-              child: collapsed
-                  ? IconButton(
-                      tooltip: 'Sign out',
-                      icon: const Icon(Icons.logout_rounded, color: AdminColors.textSecondary),
-                      onPressed: () => _signOut(context, ref),
-                    )
-                  : Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AdminColors.border),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const CircleAvatar(
-                                radius: 16,
-                                backgroundColor: AdminColors.neutralBg,
-                                child: Icon(Icons.person, size: 18, color: AdminColors.textSecondary),
-                              ),
-                              const SizedBox(width: 10),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Admin', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                    Text('(Platform Administrator)',
-                                        style: TextStyle(color: AdminColors.textMuted, fontSize: 11)),
-                                  ],
+              child:
+                  collapsed
+                      ? IconButton(
+                        tooltip: 'Sign out',
+                        icon: const Icon(
+                          Icons.logout_rounded,
+                          color: AdminColors.textSecondary,
+                        ),
+                        onPressed: () => _signOut(context, ref),
+                      )
+                      : Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AdminColors.border),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AdminColors.neutralBg,
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 18,
+                                    color: AdminColors.textSecondary,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          _MiniLink(
-                            icon: Icons.settings_outlined,
-                            label: 'Settings',
-                            onTap: () => Navigator.pushReplacementNamed(context, '/admin/settings'),
-                          ),
-                          _MiniLink(
-                            icon: Icons.logout_rounded,
-                            label: 'Sign out',
-                            color: AdminColors.danger,
-                            onTap: () => _signOut(context, ref),
-                          ),
-                        ],
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Admin',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      Text(
+                                        '(Platform Administrator)',
+                                        style: TextStyle(
+                                          color: AdminColors.textMuted,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _MiniLink(
+                              icon: Icons.settings_outlined,
+                              label: 'Settings',
+                              onTap:
+                                  () => Navigator.pushReplacementNamed(
+                                    context,
+                                    '/admin/settings',
+                                  ),
+                            ),
+                            _MiniLink(
+                              icon: Icons.logout_rounded,
+                              label: 'Sign out',
+                              color: AdminColors.danger,
+                              onTap: () => _signOut(context, ref),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
             ),
           ],
         ),
@@ -241,20 +289,28 @@ class _NavTile extends StatelessWidget {
   final bool isActive;
   final bool collapsed;
 
-  const _NavTile({required this.item, required this.isActive, required this.collapsed});
+  const _NavTile({
+    required this.item,
+    required this.isActive,
+    required this.collapsed,
+  });
 
   @override
   Widget build(BuildContext context) {
     final content = AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 10, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: collapsed ? 0 : 10,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
         color: isActive ? AdminColors.sidebarActiveBg : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
-        mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisAlignment:
+            collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: [
           Icon(
             item.icon,
@@ -284,7 +340,9 @@ class _NavTile extends StatelessWidget {
       child: content,
     );
 
-    return collapsed ? Tooltip(message: item.label, preferBelow: false, child: tappable) : tappable;
+    return collapsed
+        ? Tooltip(message: item.label, preferBelow: false, child: tappable)
+        : tappable;
   }
 }
 
@@ -294,7 +352,12 @@ class _MiniLink extends StatelessWidget {
   final Color? color;
   final VoidCallback onTap;
 
-  const _MiniLink({required this.icon, required this.label, required this.onTap, this.color});
+  const _MiniLink({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +370,13 @@ class _MiniLink extends StatelessWidget {
           children: [
             Icon(icon, size: 15, color: color ?? AdminColors.textSecondary),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 12.5, color: color ?? AdminColors.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: color ?? AdminColors.textSecondary,
+              ),
+            ),
           ],
         ),
       ),

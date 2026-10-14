@@ -15,21 +15,22 @@ import 'package:uuid/uuid.dart';
 // ── Staff list ────────────────────────────────────────────────────────────────
 
 final staffListProvider =
-    StateNotifierProvider<StaffListNotifier, AsyncValue<List<StaffMember>>>(
-        (ref) {
-  final client = ref.watch(supabaseClientProvider);
-  final businessId = ref.watch(activeBusinessIdProvider);
-  final local = ref.read(localDbServiceProvider);
-  final syncQueue = ref.read(syncQueueServiceProvider);
+    StateNotifierProvider<StaffListNotifier, AsyncValue<List<StaffMember>>>((
+      ref,
+    ) {
+      final client = ref.watch(supabaseClientProvider);
+      final businessId = ref.watch(activeBusinessIdProvider);
+      final local = ref.read(localDbServiceProvider);
+      final syncQueue = ref.read(syncQueueServiceProvider);
 
-  return StaffListNotifier(
-    client: client,
-    businessId: businessId,
-    local: local,
-    syncQueue: syncQueue,
-    ref: ref,
-  );
-});
+      return StaffListNotifier(
+        client: client,
+        businessId: businessId,
+        local: local,
+        syncQueue: syncQueue,
+        ref: ref,
+      );
+    });
 
 class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   final SupabaseClient _client;
@@ -44,12 +45,12 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
     required LocalDbService local,
     required SyncQueueService syncQueue,
     required Ref ref,
-  })  : _client = client,
-        _businessId = businessId,
-        _local = local,
-        _syncQueue = syncQueue,
-        _ref = ref,
-        super(const AsyncValue.loading()) {
+  }) : _client = client,
+       _businessId = businessId,
+       _local = local,
+       _syncQueue = syncQueue,
+       _ref = ref,
+       super(const AsyncValue.loading()) {
     debugPrint('[Staff] StaffListNotifier constructed, businessId=$businessId');
     load();
     _ref.listen<bool>(isOnlineProvider, (prev, next) {
@@ -61,7 +62,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
   bool get _isOnline => _ref.read(isOnlineProvider);
 
   Future<void> load({bool retrying = false}) async {
-    debugPrint('[Staff] load() called, businessId=$_businessId, retrying=$retrying');
+    debugPrint(
+      '[Staff] load() called, businessId=$_businessId, retrying=$retrying',
+    );
     if (_businessId == null) {
       state = const AsyncValue.loading();
       return;
@@ -84,7 +87,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
     // Keep showing the cached staff while refreshing; only spin if none.
     if (!state.hasValue) state = const AsyncValue.loading();
     try {
-      debugPrint('[Staff] Querying Supabase for business_id=$_businessId, isOnline=$_isOnline');
+      debugPrint(
+        '[Staff] Querying Supabase for business_id=$_businessId, isOnline=$_isOnline',
+      );
       final rows = await _client
           .from('staff_members')
           .select()
@@ -95,8 +100,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
       debugPrint('[Staff] Supabase returned ${(rows as List).length} raw rows');
 
-      final members =
-          (rows).map((r) => StaffMember.fromJson(r)).toList();
+      final members = (rows).map((r) => StaffMember.fromJson(r)).toList();
 
       debugPrint('[Staff] Parsed ${members.length} StaffMember objects');
 
@@ -109,20 +113,24 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
       final hasOwner = members.any((m) => m.role == StaffRole.owner);
       if (!hasOwner && !retrying) {
         try {
-          final profileRow = await _client
-              .from('profiles')
-              .select('full_name')
-              .eq('business_id', _businessId)
-              .eq('role', 'owner')
-              .maybeSingle();
+          final profileRow =
+              await _client
+                  .from('profiles')
+                  .select('full_name')
+                  .eq('business_id', _businessId)
+                  .eq('role', 'owner')
+                  .maybeSingle();
 
           if (profileRow != null) {
             debugPrint(
-                '[Staff] No owner staff row — auto-creating for existing account...');
+              '[Staff] No owner staff row — auto-creating for existing account...',
+            );
             // Generate a random 6-digit PIN and hash it.
             // The owner will be prompted to set a proper PIN on next login,
             // but at least the hash is non-empty so PIN unlock works.
-            final tempPin = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+            final tempPin =
+                (100000 + (DateTime.now().millisecondsSinceEpoch % 900000))
+                    .toString();
             final tempSalt = StaffMember.generateSalt();
             await _client.from('staff_members').insert({
               'business_id': _businessId,
@@ -133,7 +141,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
               'is_active': true,
             });
             assert(() {
-              debugPrint('[Staff] Owner auto-created with temp PIN: $tempPin — owner must update this in Settings.');
+              debugPrint(
+                '[Staff] Owner auto-created with temp PIN: $tempPin — owner must update this in Settings.',
+              );
               return true;
             }());
             return load(retrying: true);
@@ -143,7 +153,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
         }
       }
 
-            debugPrint('[Staff] Setting state to AsyncValue.data with ${members.length} members');
+      debugPrint(
+        '[Staff] Setting state to AsyncValue.data with ${members.length} members',
+      );
       state = AsyncValue.data(members);
     } catch (e, s) {
       debugPrint('[Staff] FETCH FAILED: $e');
@@ -171,9 +183,10 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
       // "2 staff" means non-owner staff — matches the existing UI
       // convention (nonOwners filter in staff_settings_section.dart).
       // Owner is separate and unlimited.
-      final currentCount = (state.asData?.value ?? [])
-          .where((m) => m.role != StaffRole.owner)
-          .length;
+      final currentCount =
+          (state.asData?.value ?? [])
+              .where((m) => m.role != StaffRole.owner)
+              .length;
       if (currentCount >= maxStaffAccounts) {
         state = AsyncValue.error(
           'Staff limit reached for your plan ($maxStaffAccounts max).',
@@ -254,7 +267,8 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
     if (_isOnline) {
       await _client
           .from('staff_members')
-          .update({'is_active': false}).eq('id', id);
+          .update({'is_active': false})
+          .eq('id', id);
       await load();
     } else {
       await _syncQueue.enqueue(
@@ -275,7 +289,8 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
 final activeStaffProvider =
     StateNotifierProvider<ActiveStaffNotifier, StaffMember?>(
-        (ref) => ActiveStaffNotifier());
+      (ref) => ActiveStaffNotifier(),
+    );
 
 class ActiveStaffNotifier extends StateNotifier<StaffMember?> {
   ActiveStaffNotifier() : super(null);
@@ -305,9 +320,8 @@ class StaffSessionService {
   StaffSessionService({
     required SupabaseClient client,
     required bool Function() isOnline,
-  })  : _client = client,
-        _isOnline = isOnline;
-  
+  }) : _client = client,
+       _isOnline = isOnline;
 
   /// Call this immediately after a successful PIN unlock.
   /// Upserts this device as the active session for [staff].
@@ -318,15 +332,12 @@ class StaffSessionService {
   }) async {
     final deviceId = await _getDeviceId();
     try {
-      await _client.from('staff_sessions').upsert(
-        {
-          'business_id': businessId,
-          'staff_id': staffId,
-          'device_id': deviceId,
-          'created_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: 'staff_id',
-      );
+      await _client.from('staff_sessions').upsert({
+        'business_id': businessId,
+        'staff_id': staffId,
+        'device_id': deviceId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'staff_id');
     } catch (e) {
       debugPrint('[SESSION] claim FAILED error=$e');
     }

@@ -45,7 +45,7 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
   final _manualKeyController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
- @override
+  @override
   void dispose() {
     _manualController.dispose();
     _manualKeyController.dispose();
@@ -66,8 +66,7 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
       await prefs.setString('pos_lan_key', key);
     }
 
-    final reachable =
-        await ref.read(connectivityServiceProvider).probeLan(ip);
+    final reachable = await ref.read(connectivityServiceProvider).probeLan(ip);
 
     if (!mounted) return;
 
@@ -75,8 +74,7 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
       await savePosIp(ip, ref);
 
       // FIX: actually start the LAN connection after saving the IP
-      final businessId =
-          ref.read(businessProvider)?.id ?? '';
+      final businessId = ref.read(businessProvider)?.id ?? '';
       ref.read(kitchenStateProvider.notifier).connect(businessId);
       // ─────────────────────────────────────────────────────────
 
@@ -90,12 +88,14 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Cannot reach POS at $ip\nMake sure both devices are on the same WiFi.'),
+              'Cannot reach POS at $ip\nMake sure both devices are on the same WiFi.',
+            ),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -108,9 +108,10 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
     if (raw == null) return;
     // Format: pos://192.168.1.x?key=abc123
     final uri = Uri.tryParse(raw);
-    final ip = uri != null
-        ? '${uri.host}${uri.port != 0 ? ':${uri.port}' : ''}'
-        : raw.replaceFirst('pos://', '').split('?').first.trim();
+    final ip =
+        uri != null
+            ? '${uri.host}${uri.port != 0 ? ':${uri.port}' : ''}'
+            : raw.replaceFirst('pos://', '').split('?').first.trim();
     final key = uri?.queryParameters['key'];
     if (_isValidIp(ip)) _connectToIp(ip, key: key);
   }
@@ -139,28 +140,31 @@ class _IpSetupScreenState extends ConsumerState<IpSetupScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
-        title: const Text('Device Setup',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Device Setup',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: role == DeviceRole.pos
-          ? const _PosQrDisplay()
-          : _KitchenSetupBody(
-              scanning: _scanning,
-              probing: _probing,
-              probeSuccess: _probeSuccess,
-              resolvedIp: _resolvedIp,
-              manualController: _manualController,
-              manualKeyController: _manualKeyController,
-              formKey: _formKey,
-              onStartScan: () => setState(() => _scanning = true),
-              onStopScan: () => setState(() => _scanning = false),
-              onQrScanned: _onQrScanned,
-              onManualSubmit: _submitManual,
-              onDone: () => Navigator.of(context).pop(),
-            ),
+      body:
+          role == DeviceRole.pos
+              ? const _PosQrDisplay()
+              : _KitchenSetupBody(
+                scanning: _scanning,
+                probing: _probing,
+                probeSuccess: _probeSuccess,
+                resolvedIp: _resolvedIp,
+                manualController: _manualController,
+                manualKeyController: _manualKeyController,
+                formKey: _formKey,
+                onStartScan: () => setState(() => _scanning = true),
+                onStopScan: () => setState(() => _scanning = false),
+                onQrScanned: _onQrScanned,
+                onManualSubmit: _submitManual,
+                onDone: () => Navigator.of(context).pop(),
+              ),
     );
   }
 }
@@ -188,21 +192,28 @@ class _PosQrDisplay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.wifi_off_outlined,
-                      size: 48, color: AppColors.textSecondary),
+                  Icon(
+                    Icons.wifi_off_outlined,
+                    size: 48,
+                    color: AppColors.textSecondary,
+                  ),
                   SizedBox(height: 16),
                   Text(
                     'Could not determine local IP address.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 16, color: AppColors.textSecondary),
+                      fontSize: 16,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   SizedBox(height: 8),
                   Text(
                     'Connect to WiFi and restart the app.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -220,16 +231,19 @@ class _PosQrDisplay extends StatelessWidget {
                   'Point the kitchen tablet at this QR code',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
                   'Both devices must be on the same WiFi network',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      fontSize: 14, color: AppColors.textSecondary),
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 Container(
@@ -244,7 +258,9 @@ class _PosQrDisplay extends StatelessWidget {
                     version: QrVersions.auto,
                     size: 220,
                     eyeStyle: const QrEyeStyle(
-                        eyeShape: QrEyeShape.square, color: Colors.black),
+                      eyeShape: QrEyeShape.square,
+                      color: Colors.black,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -260,7 +276,9 @@ class _PosQrDisplay extends StatelessWidget {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -269,8 +287,11 @@ class _PosQrDisplay extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.copy_outlined,
-                            size: 16, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.copy_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: 10),
                         Text(
                           ip,
@@ -290,7 +311,9 @@ class _PosQrDisplay extends StatelessWidget {
                 const Text(
                   'Tap to copy — use if kitchen tablet needs manual entry',
                   style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Divider(),
@@ -298,17 +321,20 @@ class _PosQrDisplay extends StatelessWidget {
                 const Text(
                   'Pairing key',
                   style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.3),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.3,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'Required for manual pairing — not needed if scanning the QR code',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 GestureDetector(
@@ -324,7 +350,9 @@ class _PosQrDisplay extends StatelessWidget {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -333,8 +361,11 @@ class _PosQrDisplay extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.key_outlined,
-                            size: 16, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.key_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: 10),
                         Flexible(
                           child: Text(
@@ -352,7 +383,9 @@ class _PosQrDisplay extends StatelessWidget {
                         const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(6),
@@ -360,9 +393,10 @@ class _PosQrDisplay extends StatelessWidget {
                           child: const Text(
                             'Copy',
                             style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                       ],
@@ -423,31 +457,39 @@ class _KitchenSetupBody extends StatelessWidget {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha:0.1),
+                  color: AppColors.success.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle_outline,
-                    size: 44, color: AppColors.success),
+                child: const Icon(
+                  Icons.check_circle_outline,
+                  size: 44,
+                  color: AppColors.success,
+                ),
               ),
               const SizedBox(height: 20),
-              const Text('Connected to POS!',
-                  style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary)),
+              const Text(
+                'Connected to POS!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(resolvedIp ?? '',
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 16,
-                      letterSpacing: 1,
-                      color: AppColors.textSecondary)),
+              Text(
+                resolvedIp ?? '',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 16,
+                  letterSpacing: 1,
+                  color: AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Orders will now flow directly to this screen,\neven without internet.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -459,11 +501,13 @@ class _KitchenSetupBody extends StatelessWidget {
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('Open Kitchen Display',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Open Kitchen Display',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ],
@@ -480,9 +524,13 @@ class _KitchenSetupBody extends StatelessWidget {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 24),
-            Text('Connecting to POS at $resolvedIp...',
-                style: const TextStyle(
-                    fontSize: 15, color: AppColors.textSecondary)),
+            Text(
+              'Connecting to POS at $resolvedIp...',
+              style: const TextStyle(
+                fontSize: 15,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ],
         ),
       );
@@ -499,8 +547,7 @@ class _KitchenSetupBody extends StatelessWidget {
             child: SafeArea(
               child: IconButton.filled(
                 icon: const Icon(Icons.close),
-                style:
-                    IconButton.styleFrom(backgroundColor: Colors.black54),
+                style: IconButton.styleFrom(backgroundColor: Colors.black54),
                 onPressed: onStopScan,
               ),
             ),
@@ -531,16 +578,20 @@ class _KitchenSetupBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 16),
-          const Icon(Icons.qr_code_scanner,
-              size: 72, color: AppColors.textSecondary),
+          const Icon(
+            Icons.qr_code_scanner,
+            size: 72,
+            color: AppColors.textSecondary,
+          ),
           const SizedBox(height: 24),
           const Text(
             'Connect to POS',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary),
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -554,15 +605,17 @@ class _KitchenSetupBody extends StatelessWidget {
             height: 52,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Scan QR Code',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+              label: const Text(
+                'Scan QR Code',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
               onPressed: onStartScan,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -572,9 +625,13 @@ class _KitchenSetupBody extends StatelessWidget {
               Expanded(child: Divider()),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Text('or enter IP manually',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
+                child: Text(
+                  'or enter IP manually',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
               Expanded(child: Divider()),
             ],
@@ -592,14 +649,18 @@ class _KitchenSetupBody extends StatelessWidget {
                       child: TextFormField(
                         controller: manualController,
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                         decoration: InputDecoration(
                           labelText: 'POS IP address',
                           hintText: '192.168.1.x',
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 14),
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
@@ -624,10 +685,13 @@ class _KitchenSetupBody extends StatelessWidget {
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        child: const Text('Connect',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        child: const Text(
+                          'Connect',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ],
@@ -639,9 +703,12 @@ class _KitchenSetupBody extends StatelessWidget {
                     labelText: 'Pairing key',
                     hintText: 'Shown below the QR code on the POS screen',
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {

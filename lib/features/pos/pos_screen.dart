@@ -45,12 +45,7 @@ final posActiveIndexProvider = _activeIndexProvider;
 
 // ── Layout mode ───────────────────────────────────────────────────────────────
 
-enum _Layout {
-  phonePortrait,
-  phoneLandscape,
-  tabletPortrait,
-  tabletLandscape,
-}
+enum _Layout { phonePortrait, phoneLandscape, tabletPortrait, tabletLandscape }
 
 _Layout _layoutOf(BuildContext context) {
   final size = MediaQuery.sizeOf(context);
@@ -112,24 +107,24 @@ class POSScreen extends ConsumerWidget {
       body: PinLockOverlay(
         child: switch (layout) {
           _Layout.phonePortrait || _Layout.tabletPortrait => _PortraitShell(
-              featureManager: fm,
-              screens: screens,
-              activeIndex: safeIndex,
-              layout: layout,
-              onSelect: (i) {
-                ref.read(_activeIndexProvider.notifier).state = i;
-                ref.read(posSearchQueryProvider.notifier).state = '';
-              },
-            ),
+            featureManager: fm,
+            screens: screens,
+            activeIndex: safeIndex,
+            layout: layout,
+            onSelect: (i) {
+              ref.read(_activeIndexProvider.notifier).state = i;
+              ref.read(posSearchQueryProvider.notifier).state = '';
+            },
+          ),
           _Layout.phoneLandscape || _Layout.tabletLandscape => _LandscapeShell(
-              featureManager: fm,
-              screens: screens,
-              activeIndex: safeIndex,
-              layout: layout,
-                onSelect: (i) {
-                ref.read(_activeIndexProvider.notifier).state = i;
-                ref.read(posSearchQueryProvider.notifier).state = '';
-              },
+            featureManager: fm,
+            screens: screens,
+            activeIndex: safeIndex,
+            layout: layout,
+            onSelect: (i) {
+              ref.read(_activeIndexProvider.notifier).state = i;
+              ref.read(posSearchQueryProvider.notifier).state = '';
+            },
           ),
         },
       ),
@@ -220,12 +215,13 @@ class _PortraitShell extends ConsumerWidget {
         index: activeIndex,
         children: screens.map((s) => s.widget).toList(),
       ),
-      floatingActionButton: isPOS && itemCount > 0
-          ? _CartFAB(
-              itemCount: itemCount,
-              onTap: () => _showCartSheet(context),
-            )
-          : null,
+      floatingActionButton:
+          isPOS && itemCount > 0
+              ? _CartFAB(
+                itemCount: itemCount,
+                onTap: () => _showCartSheet(context),
+              )
+              : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _BottomNav(
         screens: screens,
@@ -243,21 +239,22 @@ class _PortraitShell extends ConsumerWidget {
   Future<void> _doLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text('You will be returned to the login screen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Log out?'),
+            content: const Text('You will be returned to the login screen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Log out'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -282,37 +279,41 @@ class _PortraitShell extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (ctx, _) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 4),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+      builder:
+          (_) => DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            minChildSize: 0.4,
+            maxChildSize: 0.95,
+            expand: false,
+            builder:
+                (ctx, _) => Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 10, bottom: 4),
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Expanded(
+                        child: CartPanel(
+                          featureManager: featureManager,
+                          onTabAdded: () => Navigator.of(ctx).pop(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: CartPanel(
-                  featureManager: featureManager,
-                  onTabAdded: () => Navigator.of(ctx).pop(),
-                ),
-              ),
-            ],
           ),
-        ),
-      ),
     );
   }
 }
@@ -402,7 +403,8 @@ class _POSMainState extends ConsumerState<_POSMain> {
       final barcode = _barcodeBuffer.toString().trim();
       _barcodeBuffer.clear();
       if (barcode.isNotEmpty) _handleBarcode(barcode);
-      return barcode.isNotEmpty; // only consume if we actually handled a barcode
+      return barcode
+          .isNotEmpty; // only consume if we actually handled a barcode
     }
 
     final char = event.character;
@@ -430,38 +432,48 @@ class _POSMainState extends ConsumerState<_POSMain> {
     if (!mounted) return;
 
     if (match == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No product found for barcode: $barcode'),
-        backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 2),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No product found for barcode: $barcode'),
+          backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
     if (match.hasVariants) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${match.name} has variants. Tap it in the grid to choose one.'),
-        backgroundColor: AppColors.info,
-        duration: const Duration(seconds: 2),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${match.name} has variants. Tap it in the grid to choose one.',
+          ),
+          backgroundColor: AppColors.info,
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
     if (match.trackInventory && match.stockQuantity <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${match.name} is out of stock.'),
-        backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 2),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${match.name} is out of stock.'),
+          backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
     ref.read(cartProvider.notifier).addProduct(match);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${match.name} added to cart'),
-      backgroundColor: AppColors.success,
-      duration: const Duration(milliseconds: 800),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${match.name} added to cart'),
+        backgroundColor: AppColors.success,
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
   }
 
   void _openCameraScanner() {
@@ -469,18 +481,20 @@ class _POSMainState extends ConsumerState<_POSMain> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _BarcodeScannerSheet(
-        onDetect: (barcode) {
-          Navigator.pop(context);
-          _handleBarcode(barcode);
-        },
-      ),
+      builder:
+          (_) => _BarcodeScannerSheet(
+            onDetect: (barcode) {
+              Navigator.pop(context);
+              _handleBarcode(barcode);
+            },
+          ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isPortrait = widget.layout == _Layout.phonePortrait ||
+    final isPortrait =
+        widget.layout == _Layout.phonePortrait ||
         widget.layout == _Layout.tabletPortrait;
 
     final productArea = Column(
@@ -493,9 +507,10 @@ class _POSMainState extends ConsumerState<_POSMain> {
         if (widget.featureManager.hasFeature('tables')) const TableSelector(),
         const CategoryBar(),
         Expanded(
-          child: ref.watch(posViewModeProvider) == PosViewMode.promos
-              ? const PromoGrid()
-              : const ProductGrid(),
+          child:
+              ref.watch(posViewModeProvider) == PosViewMode.promos
+                  ? const PromoGrid()
+                  : const ProductGrid(),
         ),
       ],
     );
@@ -560,15 +575,17 @@ class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
             child: Text(
               'Scan Barcode or QR Code',
               style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
             child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(20),
+              ),
               child: MobileScanner(
                 controller: _controller,
                 onDetect: (capture) {
@@ -630,9 +647,7 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
       ),
       child: Container(
         height: 38,
@@ -654,8 +669,9 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
                 decoration: InputDecoration(
                   hintText: 'Search products or scan barcode…',
                   hintStyle: TextStyle(
-                      color: AppColors.textSecondary.withValues(alpha:0.7),
-                      fontSize: 13),
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 13,
+                  ),
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
@@ -667,7 +683,11 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
                 onTap: _clear,
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               )
             else
@@ -675,8 +695,11 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
                 onTap: widget.onCameraTap,
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.qr_code_scanner_rounded,
-                      size: 16, color: AppColors.textSecondary),
+                  child: Icon(
+                    Icons.qr_code_scanner_rounded,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
           ],
@@ -685,7 +708,6 @@ class _PhoneSearchBarState extends ConsumerState<_PhoneSearchBar> {
     );
   }
 }
-
 
 // ── Bottom nav ────────────────────────────────────────────────────────────────
 
@@ -719,8 +741,9 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _reveal(animate: false));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _reveal(animate: false),
+    );
   }
 
   @override
@@ -740,12 +763,16 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
   void _reveal({bool animate = true}) {
     if (!mounted || !_scroll.hasClients) return;
     final max = _scroll.position.maxScrollExtent;
-    final target = (widget.activeIndex * _itemW - (_viewport - _itemW) / 2)
-        .clamp(0.0, max)
-        .toDouble();
+    final target =
+        (widget.activeIndex * _itemW - (_viewport - _itemW) / 2)
+            .clamp(0.0, max)
+            .toDouble();
     if (animate) {
-      _scroll.animateTo(target,
-          duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     } else {
       _scroll.jumpTo(target);
     }
@@ -766,14 +793,17 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: isActive
-                    ? _accent.withValues(alpha: 0.1)
-                    : Colors.transparent,
+                color:
+                    isActive
+                        ? _accent.withValues(alpha: 0.1)
+                        : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(screen.icon,
-                  size: 22,
-                  color: isActive ? _accent : Colors.grey.shade400),
+              child: Icon(
+                screen.icon,
+                size: 22,
+                color: isActive ? _accent : Colors.grey.shade400,
+              ),
             ),
             const SizedBox(height: 2),
             Padding(
@@ -820,21 +850,21 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
             children: [
               // Scrolling nav items
               Expanded(
-                child: LayoutBuilder(builder: (context, c) {
-                  _viewport = c.maxWidth;
-                  final n = widget.screens.length;
-                  final even = n == 0 ? _minItemWidth : c.maxWidth / n;
-                  _itemW = even < _minItemWidth ? _minItemWidth : even;
-                  return SingleChildScrollView(
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < n; i++) _navItem(i),
-                      ],
-                    ),
-                  );
-                }),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    _viewport = c.maxWidth;
+                    final n = widget.screens.length;
+                    final even = n == 0 ? _minItemWidth : c.maxWidth / n;
+                    _itemW = even < _minItemWidth ? _minItemWidth : even;
+                    return SingleChildScrollView(
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [for (var i = 0; i < n; i++) _navItem(i)],
+                      ),
+                    );
+                  },
+                ),
               ),
 
               // Pinned: divider, Lock, Logout
@@ -852,13 +882,20 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.lock_outline_rounded,
-                          size: 20, color: Colors.grey.shade400),
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 20,
+                        color: Colors.grey.shade400,
+                      ),
                       const SizedBox(height: 2),
-                      Text('Lock',
-                          maxLines: 1,
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey.shade400)),
+                      Text(
+                        'Lock',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -872,13 +909,20 @@ class _BottomNavState extends ConsumerState<_BottomNav> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.logout_rounded,
-                            size: 20, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.logout_rounded,
+                          size: 20,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 2),
-                        Text('Logout',
-                            maxLines: 1,
-                            style: TextStyle(
-                                fontSize: 10, color: Colors.grey.shade400)),
+                        Text(
+                          'Logout',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -912,7 +956,7 @@ class _CartFAB extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F3460).withValues(alpha:0.35),
+              color: const Color(0xFF0F3460).withValues(alpha: 0.35),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -925,7 +969,7 @@ class _CartFAB extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Center(
@@ -950,8 +994,11 @@ class _CartFAB extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 12, color: Colors.white70),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 12,
+              color: Colors.white70,
+            ),
           ],
         ),
       ),
@@ -979,21 +1026,22 @@ class _AdaptiveSidebar extends ConsumerWidget {
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text('You will be returned to the login screen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Log out?'),
+            content: const Text('You will be returned to the login screen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Log out'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -1019,14 +1067,19 @@ class _AdaptiveSidebar extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CloseShiftScreen(
-          onShiftClosed: () {
-            ref.read(activeStaffProvider.notifier).logout();
-            ref.read(appLockedProvider.notifier).state = true;
-            Navigator.pushNamedAndRemoveUntil(context, '/pos', (_) => false);
-          },
-          onCancel: () => Navigator.pop(context),
-        ),
+        builder:
+            (_) => CloseShiftScreen(
+              onShiftClosed: () {
+                ref.read(activeStaffProvider.notifier).logout();
+                ref.read(appLockedProvider.notifier).state = true;
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/pos',
+                  (_) => false,
+                );
+              },
+              onCancel: () => Navigator.pop(context),
+            ),
       ),
     );
   }
@@ -1053,8 +1106,11 @@ class _AdaptiveSidebar extends ConsumerWidget {
               color: accent,
               borderRadius: BorderRadius.circular(compact ? 9 : 12),
             ),
-            child: Icon(Icons.bolt,
-                color: Colors.white, size: compact ? 20 : 28),
+            child: Icon(
+              Icons.bolt,
+              color: Colors.white,
+              size: compact ? 20 : 28,
+            ),
           ),
 
           SizedBox(height: compact ? 6 : 12),
@@ -1067,9 +1123,9 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 height: compact ? 26 : 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _roleColor(activeStaff.role).withValues(alpha:0.2),
+                  color: _roleColor(activeStaff.role).withValues(alpha: 0.2),
                   border: Border.all(
-                    color: _roleColor(activeStaff.role).withValues(alpha:0.6),
+                    color: _roleColor(activeStaff.role).withValues(alpha: 0.6),
                     width: 1.5,
                   ),
                 ),
@@ -1092,61 +1148,72 @@ class _AdaptiveSidebar extends ConsumerWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 8),
               child: Column(
-                children: screens.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final screen = entry.value;
-                  final isActive = activeIndex == i;
+                children:
+                    screens.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final screen = entry.value;
+                      final isActive = activeIndex == i;
 
-                  return Tooltip(
-                    message: screen.label,
-                    child: GestureDetector(
-                      onTap: () => onSelect(i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: EdgeInsets.symmetric(
-                          vertical: compact ? 2 : 4,
-                          horizontal: compact ? 6 : 10,
-                        ),
-                        padding: EdgeInsets.symmetric(
-                            vertical: compact ? 8 : 12),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? accent.withValues(alpha:0.15)
-                              : Colors.transparent,
-                          borderRadius:
-                              BorderRadius.circular(compact ? 8 : 10),
-                          border: isActive
-                              ? Border.all(color: accent.withValues(alpha:0.4))
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              screen.icon,
-                              color: isActive
-                                  ? accent
-                                  : Colors.white.withValues(alpha:0.4),
-                              size: compact ? 20 : 24,
+                      return Tooltip(
+                        message: screen.label,
+                        child: GestureDetector(
+                          onTap: () => onSelect(i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            margin: EdgeInsets.symmetric(
+                              vertical: compact ? 2 : 4,
+                              horizontal: compact ? 6 : 10,
                             ),
-                            if (!compact) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                screen.label,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: isActive
-                                      ? accent
-                                      : Colors.white.withValues(alpha:0.4),
-                                ),
+                            padding: EdgeInsets.symmetric(
+                              vertical: compact ? 8 : 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  isActive
+                                      ? accent.withValues(alpha: 0.15)
+                                      : Colors.transparent,
+                              borderRadius: BorderRadius.circular(
+                                compact ? 8 : 10,
                               ),
-                            ],
-                          ],
+                              border:
+                                  isActive
+                                      ? Border.all(
+                                        color: accent.withValues(alpha: 0.4),
+                                      )
+                                      : null,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  screen.icon,
+                                  color:
+                                      isActive
+                                          ? accent
+                                          : Colors.white.withValues(alpha: 0.4),
+                                  size: compact ? 20 : 24,
+                                ),
+                                if (!compact) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    screen.label,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color:
+                                          isActive
+                                              ? accent
+                                              : Colors.white.withValues(
+                                                alpha: 0.4,
+                                              ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                      );
+                    }).toList(),
               ),
             ),
           ),
@@ -1160,27 +1227,29 @@ class _AdaptiveSidebar extends ConsumerWidget {
                 child: GestureDetector(
                   onTap: () => _showCloseShift(context, ref),
                   child: Container(
-                    margin: EdgeInsets.symmetric(
-                        horizontal: compact ? 6 : 10),
-                    padding: EdgeInsets.symmetric(
-                        vertical: compact ? 8 : 10),
-                    child: Column(children: [
-                      Icon(
-                        Icons.lock_clock_outlined,
-                        color: const Color(0xFFE94560).withValues(alpha:0.8),
-                        size: compact ? 18 : 22,
-                      ),
-                      if (!compact) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Close',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: const Color(0xFFE94560).withValues(alpha:0.8),
-                          ),
+                    margin: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
+                    padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.lock_clock_outlined,
+                          color: const Color(0xFFE94560).withValues(alpha: 0.8),
+                          size: compact ? 18 : 22,
                         ),
+                        if (!compact) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Close',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: const Color(
+                                0xFFE94560,
+                              ).withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ],
                       ],
-                    ]),
+                    ),
                   ),
                 ),
               );
@@ -1199,58 +1268,62 @@ class _AdaptiveSidebar extends ConsumerWidget {
               child: Container(
                 margin: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
                 padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-                child: Column(children: [
-                  Icon(
-                    Icons.lock_outline_rounded,
-                    color: Colors.white.withValues(alpha:0.4),
-                    size: compact ? 18 : 22,
-                  ),
-                  if (!compact) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Lock',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Colors.white.withValues(alpha:0.4),
-                      ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      color: Colors.white.withValues(alpha: 0.4),
+                      size: compact ? 18 : 22,
                     ),
+                    if (!compact) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Lock',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
                   ],
-                ]),
+                ),
               ),
             ),
           ),
 
           if (ref.watch(activeStaffTabsProvider).contains('settings'))
-          Tooltip(
-            message: 'Log out',
-            child: GestureDetector(
-              onTap: () => _logout(context, ref),
-              child: Container(
-                margin: EdgeInsets.symmetric(
-                  vertical: compact ? 4 : 8,
-                  horizontal: compact ? 6 : 10,
-                ),
-                padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-                child: Column(children: [
-                  Icon(
-                    Icons.logout_rounded,
-                    color: Colors.white.withValues(alpha:0.4),
-                    size: compact ? 18 : 22,
+            Tooltip(
+              message: 'Log out',
+              child: GestureDetector(
+                onTap: () => _logout(context, ref),
+                child: Container(
+                  margin: EdgeInsets.symmetric(
+                    vertical: compact ? 4 : 8,
+                    horizontal: compact ? 6 : 10,
                   ),
-                  if (!compact) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Colors.white.withValues(alpha:0.4),
+                  padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.logout_rounded,
+                        color: Colors.white.withValues(alpha: 0.4),
+                        size: compact ? 18 : 22,
                       ),
-                    ),
-                  ],
-                ]),
+                      if (!compact) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Logout',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.white.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
 
           SizedBox(height: compact ? 4 : 8),
         ],
@@ -1259,11 +1332,11 @@ class _AdaptiveSidebar extends ConsumerWidget {
   }
 
   Color _roleColor(StaffRole role) => switch (role) {
-        StaffRole.owner   => const Color(0xFFE94560),
-        StaffRole.manager => const Color(0xFF4CAF50),
-        StaffRole.cashier => const Color(0xFF2196F3),
-        StaffRole.kitchen => const Color(0xFFFF9800),
-      };
+    StaffRole.owner => const Color(0xFFE94560),
+    StaffRole.manager => const Color(0xFF4CAF50),
+    StaffRole.cashier => const Color(0xFF2196F3),
+    StaffRole.kitchen => const Color(0xFFFF9800),
+  };
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────

@@ -21,13 +21,19 @@ class PromoGrid extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.local_offer_outlined,
-                size: 40, color: AppColors.textSecondary.withValues(alpha: 0.25)),
+            Icon(
+              Icons.local_offer_outlined,
+              size: 40,
+              color: AppColors.textSecondary.withValues(alpha: 0.25),
+            ),
             const SizedBox(height: 10),
-            Text('No promos available right now',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary.withValues(alpha: 0.5))),
+            Text(
+              'No promos available right now',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
+              ),
+            ),
           ],
         ),
       );
@@ -58,16 +64,18 @@ class _PromoCard extends ConsumerWidget {
     final components = <PromoComponent>[];
     void addFrom(List<PromoItem> items, int multiplier) {
       for (final i in items) {
-        components.add(PromoComponent(
-          promoId: promo.id,
-          productId: i.productId,
-          variantId: i.variantId,
-          productName: i.productName ?? 'Unknown product',
-          variantName: i.variantName,
-          quantity: i.quantity * multiplier,
-          trackInventory: i.productTrackInventory ?? false,
-          sendToKitchen: i.productSendToKitchen ?? true,
-        ));
+        components.add(
+          PromoComponent(
+            promoId: promo.id,
+            productId: i.productId,
+            variantId: i.variantId,
+            productName: i.productName ?? 'Unknown product',
+            variantName: i.variantName,
+            quantity: i.quantity * multiplier,
+            trackInventory: i.productTrackInventory ?? false,
+            sendToKitchen: i.productSendToKitchen ?? true,
+          ),
+        );
       }
     }
 
@@ -84,16 +92,27 @@ class _PromoCard extends ConsumerWidget {
   /// same "cache, not a live round-trip" tradeoff as the barcode-scan
   /// add-to-cart path in pos_screen.dart. Final authority is still
   /// CheckoutService at checkout time.
-  String? _checkLiveStock(List<Product> liveProducts, List<PromoComponent> components) {
+  String? _checkLiveStock(
+    List<Product> liveProducts,
+    List<PromoComponent> components,
+  ) {
     for (final c in components) {
       if (!c.trackInventory) continue;
-      final product = liveProducts.where((p) => p.id == c.productId).firstOrNull;
+      final product =
+          liveProducts.where((p) => p.id == c.productId).firstOrNull;
       if (product == null) continue;
-      final available = c.variantId != null
-          ? product.variants.where((v) => v.id == c.variantId).firstOrNull?.stockQuantity
-          : product.stockQuantity;
+      final available =
+          c.variantId != null
+              ? product.variants
+                  .where((v) => v.id == c.variantId)
+                  .firstOrNull
+                  ?.stockQuantity
+              : product.stockQuantity;
       if (available != null && c.quantity > available) {
-        final label = c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName;
+        final label =
+            c.variantName != null
+                ? '${c.productName} (${c.variantName})'
+                : c.productName;
         return '$label only has $available in stock (this needs ${c.quantity}).';
       }
     }
@@ -127,36 +146,56 @@ class _PromoCard extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  isBundle ? Icons.card_giftcard_rounded : Icons.local_offer_rounded,
+                  isBundle
+                      ? Icons.card_giftcard_rounded
+                      : Icons.local_offer_rounded,
                   size: 16,
                   color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(promo.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Text(
+                promo.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 isBundle
                     ? '$itemCount item${itemCount == 1 ? '' : 's'}'
                     : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const Spacer(),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('\u20b1${promo.effectivePrice.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                  Text(
+                    '\u20b1${promo.effectivePrice.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
                   if (promo.savings > 0) ...[
                     const SizedBox(width: 6),
-                    Text('Save \u20b1${promo.savings.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.success)),
+                    Text(
+                      'Save \u20b1${promo.savings.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.success,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -173,19 +212,23 @@ class _PromoCard extends ConsumerWidget {
     final error = _checkLiveStock(liveProducts, components);
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 2),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
     ref.read(cartProvider.notifier).addPromo(promo, components);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${promo.name} added to cart'),
-      backgroundColor: AppColors.success,
-      duration: const Duration(milliseconds: 800),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${promo.name} added to cart'),
+        backgroundColor: AppColors.success,
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
   }
 }

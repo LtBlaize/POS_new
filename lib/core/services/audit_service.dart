@@ -16,20 +16,20 @@ import 'sync_queue_service.dart';
 // ── Action type constants ─────────────────────────────────────────────────────
 
 class AuditAction {
-  static const voidItem        = 'void_item';
-  static const voidOrder       = 'void_order';
+  static const voidItem = 'void_item';
+  static const voidOrder = 'void_order';
   static const discountApplied = 'discount_applied';
   static const managerOverride = 'manager_override';
-  static const priceOverride   = 'price_override';
-  static const shiftOpen       = 'shift_open';
-  static const shiftClose      = 'shift_close';
-  static const staffLogin      = 'staff_login';
-  static const staffLogout     = 'staff_logout';
+  static const priceOverride = 'price_override';
+  static const shiftOpen = 'shift_open';
+  static const shiftClose = 'shift_close';
+  static const staffLogin = 'staff_login';
+  static const staffLogout = 'staff_logout';
   static const settingsChanged = 'settings_changed';
-  static const orderRefund     = 'order_refund';
+  static const orderRefund = 'order_refund';
   static const inventoryAdjust = 'inventory_adjust';
-  static const creditAdded     = 'credit_added';
-  static const creditPaid      = 'credit_paid';
+  static const creditAdded = 'credit_added';
+  static const creditPaid = 'credit_paid';
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -86,7 +86,9 @@ class AuditService {
           return;
         } catch (_) {}
       }
-      await _ref.read(syncQueueServiceProvider).enqueue(
+      await _ref
+          .read(syncQueueServiceProvider)
+          .enqueue(
             operation: 'insert_audit_log',
             tableName: 'audit_logs',
             recordId: row['id'] as String,

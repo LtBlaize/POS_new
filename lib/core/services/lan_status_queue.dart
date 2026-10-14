@@ -46,27 +46,27 @@ class _PendingPatch {
     this.attempts = 0,
     int? queuedAtMs,
     DateTime? nextAttemptAt,
-  })  : queuedAtMs = queuedAtMs ?? DateTime.now().millisecondsSinceEpoch,
-        nextAttemptAt = nextAttemptAt ?? DateTime.now();
+  }) : queuedAtMs = queuedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+       nextAttemptAt = nextAttemptAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'orderId': orderId,
-        'round': round,
-        'status': status,
-        'attempts': attempts,
-        'queuedAtMs': queuedAtMs,
-      };
+    'orderId': orderId,
+    'round': round,
+    'status': status,
+    'attempts': attempts,
+    'queuedAtMs': queuedAtMs,
+  };
 
   // Due immediately on load — after a restart, a patch shouldn't have to
   // wait out a backoff window it was already partway through.
   factory _PendingPatch.fromJson(Map<String, dynamic> json) => _PendingPatch(
-        orderId: json['orderId'] as String,
-        round: json['round'] as int?,
-        status: json['status'] as String,
-        attempts: json['attempts'] as int? ?? 0,
-        queuedAtMs: json['queuedAtMs'] as int?,
-        nextAttemptAt: DateTime.now(),
-      );
+    orderId: json['orderId'] as String,
+    round: json['round'] as int?,
+    status: json['status'] as String,
+    attempts: json['attempts'] as int? ?? 0,
+    queuedAtMs: json['queuedAtMs'] as int?,
+    nextAttemptAt: DateTime.now(),
+  );
 }
 
 class LanStatusQueue {
@@ -98,7 +98,10 @@ class LanStatusQueue {
   /// indefinitely until the POS acknowledges it — never dropped.
   void enqueue(String orderId, String status, {int? round}) {
     _withReady(() async {
-      final existing = _queue.where((p) => p.orderId == orderId && p.round == round).firstOrNull;
+      final existing =
+          _queue
+              .where((p) => p.orderId == orderId && p.round == round)
+              .firstOrNull;
       if (existing != null) {
         // A newer status supersedes the old one and gets a fresh attempt
         // immediately, instead of waiting out the prior entry's backoff.
@@ -106,7 +109,9 @@ class LanStatusQueue {
         existing.attempts = 0;
         existing.nextAttemptAt = DateTime.now();
       } else {
-        _queue.add(_PendingPatch(orderId: orderId, round: round, status: status));
+        _queue.add(
+          _PendingPatch(orderId: orderId, round: round, status: status),
+        );
       }
       await _persist();
       _updateCount();
@@ -136,7 +141,9 @@ class LanStatusQueue {
         ..addAll(list.map(_PendingPatch.fromJson));
       _updateCount();
       if (_queue.isNotEmpty) {
-        debugPrint('[LanQueue] Restored ${_queue.length} pending patch(es) from disk');
+        debugPrint(
+          '[LanQueue] Restored ${_queue.length} pending patch(es) from disk',
+        );
         _ensureTimer();
       }
     } catch (e) {
@@ -182,24 +189,34 @@ class LanStatusQueue {
       var changed = false;
 
       for (final patch in List.of(_queue)) {
-        if (patch.nextAttemptAt.isAfter(now)) continue; // backoff not elapsed yet
+        if (patch.nextAttemptAt.isAfter(now))
+          continue; // backoff not elapsed yet
 
         patch.attempts++;
-        final ok = await _client.patchStatus(patch.orderId, patch.status, round: patch.round);
+        final ok = await _client.patchStatus(
+          patch.orderId,
+          patch.status,
+          round: patch.round,
+        );
 
         if (ok) {
-          debugPrint('[LanQueue] POS acknowledged ${patch.orderId} → ${patch.status}');
+          debugPrint(
+            '[LanQueue] POS acknowledged ${patch.orderId} → ${patch.status}',
+          );
           _queue.remove(patch);
         } else {
           // Reschedule further out — never removed, never given up on.
           // Exponent capped so the backoff calc stays cheap; the delay
           // itself is separately capped at _maxDelay below.
           final exp = math.min(patch.attempts - 1, 10);
-          final delayMs = (_baseDelay.inMilliseconds * (1 << exp))
-              .clamp(_baseDelay.inMilliseconds, _maxDelay.inMilliseconds);
+          final delayMs = (_baseDelay.inMilliseconds * (1 << exp)).clamp(
+            _baseDelay.inMilliseconds,
+            _maxDelay.inMilliseconds,
+          );
           patch.nextAttemptAt = now.add(Duration(milliseconds: delayMs));
           debugPrint(
-              '[LanQueue] ${patch.orderId} attempt ${patch.attempts} failed — retrying in ${delayMs ~/ 1000}s');
+            '[LanQueue] ${patch.orderId} attempt ${patch.attempts} failed — retrying in ${delayMs ~/ 1000}s',
+          );
         }
         changed = true;
       }

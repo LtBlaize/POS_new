@@ -13,8 +13,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:async';
 
-final parkedOrderServiceProvider =
-    Provider<ParkedOrderService>((ref) => ParkedOrderService(ref));
+final parkedOrderServiceProvider = Provider<ParkedOrderService>(
+  (ref) => ParkedOrderService(ref),
+);
+
 // ParkedOrderService is intentionally a thin shell.
 // All logic lives in ParkedOrderNotifier below.
 // Use parkedOrderProvider to access parked order state and actions.
@@ -74,7 +76,10 @@ class ParkedOrderNotifier extends StateNotifier<ParkedOrderState> {
     final parked = ParkedOrder(
       id: id,
       businessId: businessId,
-      label: label.trim().isEmpty ? 'Order ${state.orders.length + 1}' : label.trim(),
+      label:
+          label.trim().isEmpty
+              ? 'Order ${state.orders.length + 1}'
+              : label.trim(),
       items: items,
       orderDiscountAmount: orderDiscountAmount,
       orderDiscountType: orderDiscountType,
@@ -94,7 +99,9 @@ class ParkedOrderNotifier extends StateNotifier<ParkedOrderState> {
     // for the live cart is redundant past this point. Clear it directly
     // rather than assuming the caller does — prevents a restart from
     // silently restoring items that are already sitting in the parked list.
-    unawaited(SharedPreferences.getInstance().then((p) => p.remove('draft_cart_v1')));
+    unawaited(
+      SharedPreferences.getInstance().then((p) => p.remove('draft_cart_v1')),
+    );
 
     debugPrint('[ParkedOrders] Parked: ${parked.label}');
   }
@@ -168,5 +175,5 @@ class ParkedOrderNotifier extends StateNotifier<ParkedOrderState> {
 
 final parkedOrderProvider =
     StateNotifierProvider<ParkedOrderNotifier, ParkedOrderState>(
-  (ref) => ParkedOrderNotifier(ref),
-);
+      (ref) => ParkedOrderNotifier(ref),
+    );

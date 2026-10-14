@@ -49,7 +49,9 @@ class _SubFilterBarState extends ConsumerState<_SubFilterBar> {
   @override
   void initState() {
     super.initState();
-    _searchCtrl = TextEditingController(text: ref.read(businessFilterProvider).search);
+    _searchCtrl = TextEditingController(
+      text: ref.read(businessFilterProvider).search,
+    );
   }
 
   @override
@@ -82,7 +84,11 @@ class _SubFilterBarState extends ConsumerState<_SubFilterBar> {
               onSubmitted: (v) => _updateFilter((f) => f.copyWith(search: v)),
               decoration: InputDecoration(
                 hintText: 'Search by name…',
-                prefixIcon: const Icon(Icons.search, size: 18, color: AdminColors.textMuted),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 18,
+                  color: AdminColors.textMuted,
+                ),
                 isDense: true,
                 filled: true,
                 fillColor: AdminColors.surface,
@@ -90,41 +96,66 @@ class _SubFilterBarState extends ConsumerState<_SubFilterBar> {
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: AdminColors.border),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ),
           plansAsync.when(
             loading: () => const SizedBox(width: 140, height: 40),
             error: (_, __) => const SizedBox.shrink(),
-            data: (plans) => _SubDropdown<String?>(
-              value: filter.plan,
-              hint: 'All plans',
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All plans')),
-                ...plans.map((p) => DropdownMenuItem(value: p, child: Text(p))),
-              ],
-              onChanged: (v) => _updateFilter((f) => f.copyWith(plan: v)),
-            ),
+            data:
+                (plans) => _SubDropdown<String?>(
+                  value: filter.plan,
+                  hint: 'All plans',
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All plans'),
+                    ),
+                    ...plans.map(
+                      (p) => DropdownMenuItem(value: p, child: Text(p)),
+                    ),
+                  ],
+                  onChanged: (v) => _updateFilter((f) => f.copyWith(plan: v)),
+                ),
           ),
           _SubDropdown<ActiveFilter>(
             value: filter.activeFilter,
             hint: 'Status',
             items: const [
-              DropdownMenuItem(value: ActiveFilter.all, child: Text('All statuses')),
-              DropdownMenuItem(value: ActiveFilter.active, child: Text('Active')),
-              DropdownMenuItem(value: ActiveFilter.inactive, child: Text('Inactive')),
+              DropdownMenuItem(
+                value: ActiveFilter.all,
+                child: Text('All statuses'),
+              ),
+              DropdownMenuItem(
+                value: ActiveFilter.active,
+                child: Text('Active'),
+              ),
+              DropdownMenuItem(
+                value: ActiveFilter.inactive,
+                child: Text('Inactive'),
+              ),
             ],
-            onChanged: (v) => _updateFilter((f) => f.copyWith(activeFilter: v ?? ActiveFilter.all)),
+            onChanged:
+                (v) => _updateFilter(
+                  (f) => f.copyWith(activeFilter: v ?? ActiveFilter.all),
+                ),
           ),
           FilterChip(
             label: const Text('Trial expiring ≤7d'),
             selected: filter.trialExpiringSoon,
-            onSelected: (v) => _updateFilter((f) => f.copyWith(trialExpiringSoon: v)),
+            onSelected:
+                (v) => _updateFilter((f) => f.copyWith(trialExpiringSoon: v)),
             selectedColor: AdminColors.infoBg,
             checkmarkColor: AdminColors.info,
             labelStyle: TextStyle(
-              color: filter.trialExpiringSoon ? AdminColors.info : AdminColors.textSecondary,
+              color:
+                  filter.trialExpiringSoon
+                      ? AdminColors.info
+                      : AdminColors.textSecondary,
               fontSize: 12,
             ),
             side: const BorderSide(color: AdminColors.border),
@@ -139,7 +170,10 @@ class _SubFilterBarState extends ConsumerState<_SubFilterBar> {
                 _searchCtrl.clear();
                 _updateFilter((_) => const BusinessFilter());
               },
-              child: const Text('Clear filters', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                'Clear filters',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -152,28 +186,40 @@ class _SubDropdown<T> extends StatelessWidget {
   final String hint;
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
-  const _SubDropdown({required this.value, required this.hint, required this.items, required this.onChanged});
+  const _SubDropdown({
+    required this.value,
+    required this.hint,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AdminColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AdminColors.border),
+    height: 40,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: AdminColors.surface,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: AdminColors.border),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: value,
+        hint: Text(
+          hint,
+          style: const TextStyle(fontSize: 13, color: AdminColors.textMuted),
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<T>(
-            value: value,
-            hint: Text(hint, style: const TextStyle(fontSize: 13, color: AdminColors.textMuted)),
-            items: items,
-            onChanged: onChanged,
-            style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary),
-            icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: AdminColors.textMuted),
-          ),
+        items: items,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary),
+        icon: const Icon(
+          Icons.keyboard_arrow_down,
+          size: 18,
+          color: AdminColors.textMuted,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 // ── List body ────────────────────────────────────────────────────────────
@@ -187,13 +233,20 @@ class _SubscriptionListBody extends ConsumerWidget {
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(
-        child: Text('Could not load subscriptions', style: TextStyle(color: AdminColors.textMuted)),
-      ),
+      error:
+          (_, __) => const Center(
+            child: Text(
+              'Could not load subscriptions',
+              style: TextStyle(color: AdminColors.textMuted),
+            ),
+          ),
       data: (page) {
         if (page.items.isEmpty) {
           return const Center(
-            child: Text('No businesses match these filters', style: TextStyle(color: AdminColors.textMuted)),
+            child: Text(
+              'No businesses match these filters',
+              style: TextStyle(color: AdminColors.textMuted),
+            ),
           );
         }
         return Column(
@@ -204,8 +257,11 @@ class _SubscriptionListBody extends ConsumerWidget {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 itemCount: page.items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: AdminColors.divider),
-                itemBuilder: (context, i) => _SubscriptionRow(item: page.items[i]),
+                separatorBuilder:
+                    (_, __) =>
+                        const Divider(height: 1, color: AdminColors.divider),
+                itemBuilder:
+                    (context, i) => _SubscriptionRow(item: page.items[i]),
               ),
             ),
           ],
@@ -215,26 +271,32 @@ class _SubscriptionListBody extends ConsumerWidget {
   }
 
   Widget _headerRow() => const Padding(
-        padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
-        child: Row(
-          children: [
-            Expanded(flex: 3, child: _HeaderLabel('Business')),
-            Expanded(flex: 2, child: _HeaderLabel('Plan')),
-            Expanded(flex: 2, child: _HeaderLabel('Status')),
-            Expanded(flex: 2, child: _HeaderLabel('Expires')),
-            SizedBox(width: 30),
-          ],
-        ),
-      );
+    padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+    child: Row(
+      children: [
+        Expanded(flex: 3, child: _HeaderLabel('Business')),
+        Expanded(flex: 2, child: _HeaderLabel('Plan')),
+        Expanded(flex: 2, child: _HeaderLabel('Status')),
+        Expanded(flex: 2, child: _HeaderLabel('Expires')),
+        SizedBox(width: 30),
+      ],
+    ),
+  );
 }
 
 class _HeaderLabel extends StatelessWidget {
   final String text;
   const _HeaderLabel(this.text);
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          fontSize: 11, fontWeight: FontWeight.w600, color: AdminColors.textMuted, letterSpacing: 0.3));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: AdminColors.textMuted,
+      letterSpacing: 0.3,
+    ),
+  );
 }
 
 class _SubscriptionRow extends StatelessWidget {
@@ -244,10 +306,13 @@ class _SubscriptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = computeAccessStatus(item);
-    final (pillBg, pillFg) = AdminColors.statusPillColors(accessStatusPillKey(status));
-    final relevantDate = status == AccessStatus.paidActive
-        ? item.subscriptionExpiresAt
-        : status == AccessStatus.trialActive
+    final (pillBg, pillFg) = AdminColors.statusPillColors(
+      accessStatusPillKey(status),
+    );
+    final relevantDate =
+        status == AccessStatus.paidActive
+            ? item.subscriptionExpiresAt
+            : status == AccessStatus.trialActive
             ? item.trialEndsAt
             : (item.subscriptionExpiresAt ?? item.trialEndsAt);
 
@@ -262,29 +327,56 @@ class _SubscriptionRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AdminColors.textPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(item.businessType,
-                      style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                  Text(
+                    item.businessType,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AdminColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
             Expanded(
               flex: 2,
-              child: Text(item.subscriptionPlan,
-                  style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary)),
+              child: Text(
+                item.subscriptionPlan,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AdminColors.textPrimary,
+                ),
+              ),
             ),
             Expanded(
               flex: 2,
               child: Container(
                 alignment: Alignment.centerLeft,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: pillBg, borderRadius: BorderRadius.circular(20)),
-                  child: Text(accessStatusLabel(status),
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: pillFg)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: pillBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    accessStatusLabel(status),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: pillFg,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -292,11 +384,18 @@ class _SubscriptionRow extends StatelessWidget {
               flex: 2,
               child: Text(
                 relevantDate != null ? _fmtDate(relevantDate) : '—',
-                style: const TextStyle(fontSize: 13, color: AdminColors.textSecondary),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AdminColors.textSecondary,
+                ),
               ),
             ),
             const SizedBox(width: 12),
-            const Icon(Icons.chevron_right, size: 18, color: AdminColors.textMuted),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AdminColors.textMuted,
+            ),
           ],
         ),
       ),
@@ -330,22 +429,47 @@ class _SubPaginationBar extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${result.totalCount} businesses',
-                  style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+              Text(
+                '${result.totalCount} businesses',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AdminColors.textSecondary,
+                ),
+              ),
               Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.chevron_left, size: 20),
-                    color: page > 0 ? AdminColors.textPrimary : AdminColors.textMuted,
-                    onPressed: page > 0 ? () => ref.read(businessPageProvider.notifier).state = page - 1 : null,
+                    color:
+                        page > 0
+                            ? AdminColors.textPrimary
+                            : AdminColors.textMuted,
+                    onPressed:
+                        page > 0
+                            ? () =>
+                                ref.read(businessPageProvider.notifier).state =
+                                    page - 1
+                            : null,
                   ),
-                  Text('Page ${page + 1} of $totalPages',
-                      style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                  Text(
+                    'Page ${page + 1} of $totalPages',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AdminColors.textSecondary,
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right, size: 20),
-                    color: page + 1 < totalPages ? AdminColors.textPrimary : AdminColors.textMuted,
+                    color:
+                        page + 1 < totalPages
+                            ? AdminColors.textPrimary
+                            : AdminColors.textMuted,
                     onPressed:
-                        page + 1 < totalPages ? () => ref.read(businessPageProvider.notifier).state = page + 1 : null,
+                        page + 1 < totalPages
+                            ? () =>
+                                ref.read(businessPageProvider.notifier).state =
+                                    page + 1
+                            : null,
                   ),
                 ],
               ),

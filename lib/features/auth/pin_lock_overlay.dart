@@ -18,8 +18,9 @@ import '../../core/services/connectivity_service.dart';
 
 final appLockedProvider = StateProvider<bool>((ref) => true);
 
-final inactivityProvider =
-    NotifierProvider<InactivityNotifier, void>(InactivityNotifier.new);
+final inactivityProvider = NotifierProvider<InactivityNotifier, void>(
+  InactivityNotifier.new,
+);
 
 class InactivityNotifier extends Notifier<void> {
   @override
@@ -48,7 +49,8 @@ _PinLayout _pinLayoutOf(BuildContext context) {
   final h = size.height;
   final portrait = h >= w;
 
-  if (w < 600) return portrait ? _PinLayout.phonePortrait : _PinLayout.phoneLandscape;
+  if (w < 600)
+    return portrait ? _PinLayout.phonePortrait : _PinLayout.phoneLandscape;
   if (portrait) return _PinLayout.tabletPortrait;
   return _PinLayout.tabletLandscape;
 }
@@ -86,11 +88,11 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
   Future<void> _handleUnlock() async {
     final staff = _selectedStaff;
     setState(() => _selectedStaff = null);
-      if (staff?.role == StaffRole.kitchen) {
-    ref.read(appLockedProvider.notifier).state = false;
-    _resetTimer();
-    return;
-  }
+    if (staff?.role == StaffRole.kitchen) {
+      ref.read(appLockedProvider.notifier).state = false;
+      _resetTimer();
+      return;
+    }
 
     // Claim session — kicks any other device watching this staff
     final businessId = ref.read(businessProvider)?.id ?? '';
@@ -106,23 +108,25 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
         }
       }
       // Start watching — if another device claims later, lock this device
-      ref.read(staffSessionServiceProvider).startWatching(
-        staffId: staff.id,
-        onKicked: () {
-          if (mounted) {
-            setState(() => _wasKicked = true);
-            ref.read(staffSessionServiceProvider).stopWatching();
-            ref.read(activeStaffProvider.notifier).logout();
-            // Show kicked message briefly then lock
-            Future.delayed(const Duration(seconds: 3), () {
+      ref
+          .read(staffSessionServiceProvider)
+          .startWatching(
+            staffId: staff.id,
+            onKicked: () {
               if (mounted) {
-                setState(() => _wasKicked = false);
-                ref.read(appLockedProvider.notifier).state = true;
+                setState(() => _wasKicked = true);
+                ref.read(staffSessionServiceProvider).stopWatching();
+                ref.read(activeStaffProvider.notifier).logout();
+                // Show kicked message briefly then lock
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) {
+                    setState(() => _wasKicked = false);
+                    ref.read(appLockedProvider.notifier).state = true;
+                  }
+                });
               }
-            });
-          }
-        },
-      );
+            },
+          );
     }
 
     try {
@@ -130,7 +134,8 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
           .read(currentShiftProvider.future)
           .timeout(const Duration(seconds: 10));
       debugPrint(
-          '[ShiftGate] shift after unlock: ${shift?.id} status: ${shift?.status}');
+        '[ShiftGate] shift after unlock: ${shift?.id} status: ${shift?.status}',
+      );
       if (!mounted) return;
       if (shift == null) {
         setState(() => _showShiftGate = true);
@@ -141,9 +146,13 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
     } catch (e) {
       debugPrint('[ShiftGate] shift load failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Couldn't load your shift. Check the connection and try again."),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't load your shift. Check the connection and try again.",
+          ),
+        ),
+      );
     }
   }
 
@@ -177,22 +186,27 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.devices_other,
-                        color: Color(0xFFE94560), size: 48),
+                    const Icon(
+                      Icons.devices_other,
+                      color: Color(0xFFE94560),
+                      size: 48,
+                    ),
                     const SizedBox(height: 16),
                     const Text(
                       'Account opened on another device',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700),
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'This device will lock in a moment...',
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.4),
-                          fontSize: 13),
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -232,9 +246,9 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
   String _pin = '';
   bool _error = false;
 
-  static const _bg      = Color(0xFF0F1223);
+  static const _bg = Color(0xFF0F1223);
 
-  static const _accent  = Color(0xFFE94560);
+  static const _accent = Color(0xFFE94560);
 
   void _onKey(String digit) {
     if (_pin.length >= 4) return;
@@ -259,11 +273,13 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
       if (ref.read(isOnlineProvider)) {
         ref.read(rolePermissionsProvider.notifier).refresh();
       }
-      ref.read(auditServiceProvider).log(
-        actionType:  AuditAction.staffLogin,
-        description: '${staff.name} logged in (${staff.role.label})',
-        metadata:    {'role': staff.role.value},
-      );
+      ref
+          .read(auditServiceProvider)
+          .log(
+            actionType: AuditAction.staffLogin,
+            description: '${staff.name} logged in (${staff.role.label})',
+            metadata: {'role': staff.role.value},
+          );
       // Silently upgrade legacy unsalted PIN to PBKDF2 on first login
       if (staff.needsPinUpgrade) {
         _upgradePinHash(staff, _pin);
@@ -296,11 +312,11 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
   }
 
   Color _roleColor(StaffRole role) => switch (role) {
-        StaffRole.owner   => const Color(0xFFE94560),
-        StaffRole.manager => const Color(0xFF4CAF50),
-        StaffRole.cashier => const Color(0xFF2196F3),
-        StaffRole.kitchen => const Color(0xFFFF9800),
-      };
+    StaffRole.owner => const Color(0xFFE94560),
+    StaffRole.manager => const Color(0xFF4CAF50),
+    StaffRole.cashier => const Color(0xFF2196F3),
+    StaffRole.kitchen => const Color(0xFFFF9800),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -317,7 +333,10 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
       layout: layout,
       onStaffSelected: (s) {
         widget.onStaffSelected(s);
-        setState(() { _pin = ''; _error = false; });
+        setState(() {
+          _pin = '';
+          _error = false;
+        });
       },
     );
 
@@ -339,33 +358,33 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
           child: switch (layout) {
             // ── Phone portrait: staff on top, PIN below, scrollable ──
             _PinLayout.phonePortrait => _PhonePortraitLayout(
-                staffPanel: staffPanel,
-                pinPanel: pinPanel,
-              ),
+              staffPanel: staffPanel,
+              pinPanel: pinPanel,
+            ),
 
             // ── Phone landscape: staff left (narrow), PIN right ──────
             _PinLayout.phoneLandscape => _SideBySideLayout(
-                staffPanel: staffPanel,
-                pinPanel: pinPanel,
-                staffFlex: 2,
-                pinFlex: 3,
-                compact: true,
-              ),
+              staffPanel: staffPanel,
+              pinPanel: pinPanel,
+              staffFlex: 2,
+              pinFlex: 3,
+              compact: true,
+            ),
 
             // ── Tablet portrait: staff top half, PIN bottom half ─────
             _PinLayout.tabletPortrait => _TabletPortraitLayout(
-                staffPanel: staffPanel,
-                pinPanel: pinPanel,
-              ),
+              staffPanel: staffPanel,
+              pinPanel: pinPanel,
+            ),
 
             // ── Tablet/desktop landscape: classic two-panel ──────────
             _PinLayout.tabletLandscape => _SideBySideLayout(
-                staffPanel: staffPanel,
-                pinPanel: pinPanel,
-                staffFlex: 1,
-                pinFlex: 1,
-                compact: false,
-              ),
+              staffPanel: staffPanel,
+              pinPanel: pinPanel,
+              staffFlex: 1,
+              pinFlex: 1,
+              compact: false,
+            ),
           },
         ),
       ),
@@ -375,54 +394,61 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
   void _showForgotPin() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reset PIN',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        content: const Text(
-          'A password reset link will be sent to your business '
-          'account email address.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await Supabase.instance.client.auth.resetPasswordForEmail(
-                  Supabase.instance.client.auth.currentUser?.email ?? '',
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Reset email sent.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (_) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Resetting a PIN needs an internet connection.'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _PinScreenState._accent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: const Text('Send Reset Email'),
+            title: const Text(
+              'Reset PIN',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            content: const Text(
+              'A password reset link will be sent to your business '
+              'account email address.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await Supabase.instance.client.auth.resetPasswordForEmail(
+                      Supabase.instance.client.auth.currentUser?.email ?? '',
+                    );
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Reset email sent.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Resetting a PIN needs an internet connection.',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _PinScreenState._accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Send Reset Email'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -433,8 +459,10 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
 class _PhonePortraitLayout extends StatelessWidget {
   final Widget staffPanel;
   final Widget pinPanel;
-  const _PhonePortraitLayout(
-      {required this.staffPanel, required this.pinPanel});
+  const _PhonePortraitLayout({
+    required this.staffPanel,
+    required this.pinPanel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -454,8 +482,10 @@ class _PhonePortraitLayout extends StatelessWidget {
 class _TabletPortraitLayout extends StatelessWidget {
   final Widget staffPanel;
   final Widget pinPanel;
-  const _TabletPortraitLayout(
-      {required this.staffPanel, required this.pinPanel});
+  const _TabletPortraitLayout({
+    required this.staffPanel,
+    required this.pinPanel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -495,7 +525,7 @@ class _SideBySideLayout extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               border: Border(
-                right: BorderSide(color: Colors.white.withValues(alpha:0.06)),
+                right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
               ),
             ),
             child: staffPanel,
@@ -525,8 +555,7 @@ class _StaffPanel extends StatelessWidget {
   });
 
   bool get _isPhone =>
-      layout == _PinLayout.phonePortrait ||
-      layout == _PinLayout.phoneLandscape;
+      layout == _PinLayout.phonePortrait || layout == _PinLayout.phoneLandscape;
   bool get _isLandscape =>
       layout == _PinLayout.phoneLandscape ||
       layout == _PinLayout.tabletLandscape;
@@ -540,8 +569,7 @@ class _StaffPanel extends StatelessWidget {
 
     Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize:
-          _isLandscape ? MainAxisSize.min : MainAxisSize.max,
+      mainAxisSize: _isLandscape ? MainAxisSize.min : MainAxisSize.max,
       children: [
         // Logo
         Container(
@@ -549,18 +577,20 @@ class _StaffPanel extends StatelessWidget {
           height: logoSize,
           decoration: BoxDecoration(
             color: const Color(0xFFE94560),
-            borderRadius:
-                BorderRadius.circular(_isPhone ? 10 : 14),
+            borderRadius: BorderRadius.circular(_isPhone ? 10 : 14),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFE94560).withValues(alpha:0.4),
+                color: const Color(0xFFE94560).withValues(alpha: 0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Icon(Icons.bolt,
-              color: Colors.white, size: _isPhone ? 22 : 28),
+          child: Icon(
+            Icons.bolt,
+            color: Colors.white,
+            size: _isPhone ? 22 : 28,
+          ),
         ),
         SizedBox(height: _isPhone ? 16 : 24),
 
@@ -577,7 +607,7 @@ class _StaffPanel extends StatelessWidget {
         Text(
           'Select your profile to continue',
           style: TextStyle(
-            color: Colors.white.withValues(alpha:0.4),
+            color: Colors.white.withValues(alpha: 0.4),
             fontSize: _isPhone ? 12 : 13,
           ),
         ),
@@ -590,48 +620,51 @@ class _StaffPanel extends StatelessWidget {
               color: const Color(0xFF1A1F35),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: staffStillLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    'No staff found.\nPlease contact the owner.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.4),
-                      fontSize: 13,
+            child:
+                staffStillLoading
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : Text(
+                      'No staff found.\nPlease contact the owner.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
           )
         else
           // Phone landscape: horizontal scroll row to save vertical space
           layout == _PinLayout.phoneLandscape
               ? _CompactStaffRow(
-                  staffList: staffList,
-                  selected: selected,
-                  onTap: onStaffSelected,
-                )
+                staffList: staffList,
+                selected: selected,
+                onTap: onStaffSelected,
+              )
               : Wrap(
-                  spacing: 16,
-                  runSpacing: _isPhone ? 12 : 20,
-                  alignment: WrapAlignment.center,
-                  children: staffList
-                      .map((s) => _StaffAvatar(
+                spacing: 16,
+                runSpacing: _isPhone ? 12 : 20,
+                alignment: WrapAlignment.center,
+                children:
+                    staffList
+                        .map(
+                          (s) => _StaffAvatar(
                             staff: s,
                             selected: selected?.id == s.id,
                             compact: _isPhone,
                             onTap: () => onStaffSelected(s),
-                          ))
-                      .toList(),
-                ),
+                          ),
+                        )
+                        .toList(),
+              ),
       ],
     );
 
     if (_isLandscape) {
       return SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-            horizontal: hPad, vertical: vPad),
+        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
         child: content,
       );
     }
@@ -660,17 +693,18 @@ class _CompactStaffRow extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: staffList.map((s) {
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: _StaffAvatar(
-              staff: s,
-              selected: selected?.id == s.id,
-              compact: true,
-              onTap: () => onTap(s),
-            ),
-          );
-        }).toList(),
+        children:
+            staffList.map((s) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _StaffAvatar(
+                  staff: s,
+                  selected: selected?.id == s.id,
+                  compact: true,
+                  onTap: () => onTap(s),
+                ),
+              );
+            }).toList(),
       ),
     );
   }
@@ -700,8 +734,7 @@ class _PinPanel extends StatelessWidget {
   });
 
   bool get _isPhone =>
-      layout == _PinLayout.phonePortrait ||
-      layout == _PinLayout.phoneLandscape;
+      layout == _PinLayout.phonePortrait || layout == _PinLayout.phoneLandscape;
 
   @override
   Widget build(BuildContext context) {
@@ -714,170 +747,183 @@ class _PinPanel extends StatelessWidget {
     return Center(
       child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-        child: selected == null
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.touch_app_outlined,
-                    color: Colors.white.withValues(alpha:0.15),
-                    size: _isPhone ? 36 : 48,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Select a profile\nto enter your PIN',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.25),
-                      fontSize: _isPhone ? 13 : 14,
+        child:
+            selected == null
+                ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.touch_app_outlined,
+                      color: Colors.white.withValues(alpha: 0.15),
+                      size: _isPhone ? 36 : 48,
                     ),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Staff chip
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: _isPhone ? 14 : 20,
-                      vertical: _isPhone ? 10 : 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1F35),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color:
-                            roleColor(selected!.role).withValues(alpha:0.3),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Select a profile\nto enter your PIN',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        fontSize: _isPhone ? 13 : 14,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: _isPhone ? 14 : 18,
-                          backgroundColor:
-                              roleColor(selected!.role).withValues(alpha:0.2),
-                          child: Text(
-                            selected!.name[0].toUpperCase(),
-                            style: TextStyle(
-                              color: roleColor(selected!.role),
-                              fontWeight: FontWeight.w800,
-                              fontSize: _isPhone ? 12 : 16,
+                  ],
+                )
+                : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Staff chip
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: _isPhone ? 14 : 20,
+                        vertical: _isPhone ? 10 : 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1F35),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: roleColor(
+                            selected!.role,
+                          ).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: _isPhone ? 14 : 18,
+                            backgroundColor: roleColor(
+                              selected!.role,
+                            ).withValues(alpha: 0.2),
+                            child: Text(
+                              selected!.name[0].toUpperCase(),
+                              style: TextStyle(
+                                color: roleColor(selected!.role),
+                                fontWeight: FontWeight.w800,
+                                fontSize: _isPhone ? 12 : 16,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              selected!.name,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: _isPhone ? 13 : 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              selected!.role.label,
-                              style: TextStyle(
-                                color: roleColor(selected!.role)
-                                    .withValues(alpha:0.8),
-                                fontSize: _isPhone ? 10 : 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: _isPhone ? 20 : 28),
-
-                  // PIN dots
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(4, (i) {
-                      final filled = i < pin.length;
-                      final dotSize = _isPhone ? 11.0 : 14.0;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: EdgeInsets.symmetric(
-                            horizontal: _isPhone ? 6 : 8),
-                        width: filled ? dotSize + 2 : dotSize,
-                        height: filled ? dotSize + 2 : dotSize,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: error
-                              ? Colors.red
-                              : filled
-                                  ? roleColor(selected!.role)
-                                  : Colors.white.withValues(alpha:0.15),
-                          boxShadow: filled && !error
-                              ? [
-                                  BoxShadow(
-                                    color: roleColor(selected!.role)
-                                        .withValues(alpha:0.5),
-                                    blurRadius: 8,
-                                  )
-                                ]
-                              : null,
-                        ),
-                      );
-                    }),
-                  ),
-
-                  SizedBox(
-                    height: _isPhone ? 22 : 28,
-                    child: Center(
-                      child: error
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.error_outline,
-                                    color: Colors.red, size: 13),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Incorrect PIN — try again',
-                                  style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: _isPhone ? 11 : 12),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                selected!.name,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: _isPhone ? 13 : 14,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              ],
-                            )
-                          : Text(
-                              'Enter your 4-digit PIN',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.25),
-                                fontSize: _isPhone ? 10 : 11,
                               ),
-                            ),
-                    ),
-                  ),
-
-                  SizedBox(height: _isPhone ? 4 : 8),
-                  _Numpad(
-                    onKey: onKey,
-                    onDelete: onDelete,
-                    keySize: keySize,
-                    fontSize: keyFontSize,
-                    spacing: _isPhone ? 6.0 : 10.0,
-                  ),
-                  SizedBox(height: _isPhone ? 8 : 16),
-
-                  TextButton(
-                    onPressed: onForgotPin,
-                    child: Text(
-                      'Forgot PIN?',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.3),
-                        fontSize: _isPhone ? 11 : 12,
+                              Text(
+                                selected!.role.label,
+                                style: TextStyle(
+                                  color: roleColor(
+                                    selected!.role,
+                                  ).withValues(alpha: 0.8),
+                                  fontSize: _isPhone ? 10 : 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
+
+                    SizedBox(height: _isPhone ? 20 : 28),
+
+                    // PIN dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (i) {
+                        final filled = i < pin.length;
+                        final dotSize = _isPhone ? 11.0 : 14.0;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          margin: EdgeInsets.symmetric(
+                            horizontal: _isPhone ? 6 : 8,
+                          ),
+                          width: filled ? dotSize + 2 : dotSize,
+                          height: filled ? dotSize + 2 : dotSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                error
+                                    ? Colors.red
+                                    : filled
+                                    ? roleColor(selected!.role)
+                                    : Colors.white.withValues(alpha: 0.15),
+                            boxShadow:
+                                filled && !error
+                                    ? [
+                                      BoxShadow(
+                                        color: roleColor(
+                                          selected!.role,
+                                        ).withValues(alpha: 0.5),
+                                        blurRadius: 8,
+                                      ),
+                                    ]
+                                    : null,
+                          ),
+                        );
+                      }),
+                    ),
+
+                    SizedBox(
+                      height: _isPhone ? 22 : 28,
+                      child: Center(
+                        child:
+                            error
+                                ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      color: Colors.red,
+                                      size: 13,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Incorrect PIN — try again',
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontSize: _isPhone ? 11 : 12,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : Text(
+                                  'Enter your 4-digit PIN',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    fontSize: _isPhone ? 10 : 11,
+                                  ),
+                                ),
+                      ),
+                    ),
+
+                    SizedBox(height: _isPhone ? 4 : 8),
+                    _Numpad(
+                      onKey: onKey,
+                      onDelete: onDelete,
+                      keySize: keySize,
+                      fontSize: keyFontSize,
+                      spacing: _isPhone ? 6.0 : 10.0,
+                    ),
+                    SizedBox(height: _isPhone ? 8 : 16),
+
+                    TextButton(
+                      onPressed: onForgotPin,
+                      child: Text(
+                        'Forgot PIN?',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: _isPhone ? 11 : 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -899,7 +945,7 @@ class _StaffAvatar extends StatelessWidget {
   });
 
   static const _roleColors = {
-    StaffRole.owner:   Color(0xFFE94560),
+    StaffRole.owner: Color(0xFFE94560),
     StaffRole.manager: Color(0xFF4CAF50),
     StaffRole.cashier: Color(0xFF2196F3),
     StaffRole.kitchen: Color(0xFFFF9800),
@@ -928,19 +974,19 @@ class _StaffAvatar extends StatelessWidget {
                   color: selected ? color : Colors.transparent,
                   width: 2.5,
                 ),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha:0.4),
-                          blurRadius: 12,
-                        )
-                      ]
-                    : null,
+                boxShadow:
+                    selected
+                        ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.4),
+                            blurRadius: 12,
+                          ),
+                        ]
+                        : null,
               ),
               child: CircleAvatar(
                 radius: radius,
-                backgroundColor:
-                    color.withValues(alpha:selected ? 0.9 : 0.15),
+                backgroundColor: color.withValues(alpha: selected ? 0.9 : 0.15),
                 child: Text(
                   staff.name[0].toUpperCase(),
                   style: TextStyle(
@@ -958,12 +1004,12 @@ class _StaffAvatar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha:0.45),
+                color:
+                    selected
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.45),
                 fontSize: nameSize,
-                fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
             const SizedBox(height: 2),
@@ -1005,32 +1051,36 @@ class _Numpad extends StatelessWidget {
       ['1', '2', '3'],
       ['4', '5', '6'],
       ['7', '8', '9'],
-      ['',  '0', 'del'],
+      ['', '0', 'del'],
     ];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: rows.map((row) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: spacing),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: row.map((k) {
-              if (k.isEmpty) return SizedBox(width: keySize);
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: spacing * 0.8),
-                child: _NumKey(
-                  label: k,
-                  size: keySize,
-                  fontSize: fontSize,
-                  onTap: k == 'del' ? onDelete : () => onKey(k),
-                  isDelete: k == 'del',
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      }).toList(),
+      children:
+          rows.map((row) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: spacing),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children:
+                    row.map((k) {
+                      if (k.isEmpty) return SizedBox(width: keySize);
+                      return Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: spacing * 0.8,
+                        ),
+                        child: _NumKey(
+                          label: k,
+                          size: keySize,
+                          fontSize: fontSize,
+                          onTap: k == 'del' ? onDelete : () => onKey(k),
+                          isDelete: k == 'del',
+                        ),
+                      );
+                    }).toList(),
+              ),
+            );
+          }).toList(),
     );
   }
 }
@@ -1072,29 +1122,30 @@ class _NumKeyState extends State<_NumKey> {
         height: widget.size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _pressed
-              ? Colors.white.withValues(alpha:0.18)
-              : Colors.white.withValues(alpha:0.07),
+          color:
+              _pressed
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : Colors.white.withValues(alpha: 0.07),
           border: Border.all(
-            color:
-                Colors.white.withValues(alpha:_pressed ? 0.2 : 0.06),
+            color: Colors.white.withValues(alpha: _pressed ? 0.2 : 0.06),
           ),
         ),
         child: Center(
-          child: widget.isDelete
-              ? Icon(
-                  Icons.backspace_outlined,
-                  color: Colors.white.withValues(alpha:0.6),
-                  size: widget.size * 0.3,
-                )
-              : Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: widget.fontSize,
-                    fontWeight: FontWeight.w500,
+          child:
+              widget.isDelete
+                  ? Icon(
+                    Icons.backspace_outlined,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    size: widget.size * 0.3,
+                  )
+                  : Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: widget.fontSize,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
         ),
       ),
     );

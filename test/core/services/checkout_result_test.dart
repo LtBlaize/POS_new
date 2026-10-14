@@ -16,13 +16,13 @@ import 'package:flutter_application_1/core/models/order.dart';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 Order makeOrder() => Order(
-      id: 'o-1',
-      businessId: 'biz-1',
-      orderNumber: 1,
-      subtotal: 200.0,
-      totalAmount: 224.0,
-      createdAt: DateTime(2024, 6, 1),
-    );
+  id: 'o-1',
+  businessId: 'biz-1',
+  orderNumber: 1,
+  subtotal: 200.0,
+  totalAmount: 224.0,
+  createdAt: DateTime(2024, 6, 1),
+);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -125,8 +125,11 @@ void main() {
   // We test this as a pure function to nail the non-cash behaviour.
 
   group('tender/change calculation rules', () {
-    double calcTendered(PaymentMethod method, double tendered, double subtotal) =>
-        method == PaymentMethod.cash ? tendered : subtotal;
+    double calcTendered(
+      PaymentMethod method,
+      double tendered,
+      double subtotal,
+    ) => method == PaymentMethod.cash ? tendered : subtotal;
 
     double calcChange(PaymentMethod method, double change) =>
         method == PaymentMethod.cash ? change : 0.0;
@@ -204,8 +207,13 @@ void main() {
     test('null stays null', () => expect(cleanRef(null), isNull));
     test('blank string becomes null', () => expect(cleanRef('   '), isNull));
     test('empty string becomes null', () => expect(cleanRef(''), isNull));
-    test('valid ref is trimmed', () => expect(cleanRef('  GC-123  '), 'GC-123'));
-    test('valid ref with no spaces is unchanged', () =>
-        expect(cleanRef('GC-123'), 'GC-123'));
+    test(
+      'valid ref is trimmed',
+      () => expect(cleanRef('  GC-123  '), 'GC-123'),
+    );
+    test(
+      'valid ref with no spaces is unchanged',
+      () => expect(cleanRef('GC-123'), 'GC-123'),
+    );
   });
 }

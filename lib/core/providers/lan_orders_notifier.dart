@@ -10,9 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/lan_client_service.dart';
 import '../../core/services/lan_status_queue.dart';
 import '../../core/services/local_db_service.dart';
+import '../../core/services/kitchen_alert_service.dart';
 import '../../core/models/order.dart';
 import '../../core/models/cart_item.dart'; // adjust path as needed
-import '../../core/models/product.dart';   // adjust path as needed
+import '../../core/models/product.dart'; // adjust path as needed
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -33,18 +34,18 @@ class KitchenState {
     List<Order>? orders,
     LanConnectionState? connection,
     String? error,
-  }) =>
-      KitchenState(
-        orders: orders ?? this.orders,
-        connection: connection ?? this.connection,
-        error: error,
-      );
+  }) => KitchenState(
+    orders: orders ?? this.orders,
+    connection: connection ?? this.connection,
+    error: error,
+  );
 }
 
 // ── Notifier ───────────────────────────────────────────────────────────────
 
-final kitchenStateProvider =
-    NotifierProvider<KitchenNotifier, KitchenState>(KitchenNotifier.new);
+final kitchenStateProvider = NotifierProvider<KitchenNotifier, KitchenState>(
+  KitchenNotifier.new,
+);
 
 class KitchenNotifier extends Notifier<KitchenState> {
   String? _businessId;
@@ -61,13 +62,18 @@ class KitchenNotifier extends Notifier<KitchenState> {
     // mid-outage shows in-progress orders instead of an empty screen
     // while LAN/WS is still reconnecting.
     try {
-      final cached = await ref.read(localDbServiceProvider).getOrders(businessId);
-      final active = cached
-          .where((o) =>
-              o.status == OrderStatus.pending ||
-              o.status == OrderStatus.preparing ||
-              o.status == OrderStatus.ready)
-          .toList();
+      final cached = await ref
+          .read(localDbServiceProvider)
+          .getOrders(businessId);
+      final active =
+          cached
+              .where(
+                (o) =>
+                    o.status == OrderStatus.pending ||
+                    o.status == OrderStatus.preparing ||
+                    o.status == OrderStatus.ready,
+              )
+              .toList();
       if (active.isNotEmpty) {
         state = state.copyWith(orders: active);
       }
@@ -75,11 +81,13 @@ class KitchenNotifier extends Notifier<KitchenState> {
       debugPrint('[Kitchen] Local cache hydrate failed: $e');
     }
 
-    ref.read(lanClientServiceProvider).connect(
-      businessId: businessId,
-      onOrders: _handleOrders,
-      onEvent: _handleEvent,
-    );
+    ref
+        .read(lanClientServiceProvider)
+        .connect(
+          businessId: businessId,
+          onOrders: _handleOrders,
+          onEvent: _handleEvent,
+        );
   }
 
   void _handleOrders(List<Map<String, dynamic>> raw) {
@@ -90,6 +98,16 @@ class KitchenNotifier extends Notifier<KitchenState> {
       connection: LanConnectionState.connected,
       error: null,
     );
+
+    // Kitchen alert: a snapshot pushed by the POS over LAN counts as "received".
+    // Fire-and-forget; deduped by order:round keys; never throws.
+    ref
+        .read(kitchenAlertEngineProvider)
+        .handleSnapshot(
+          orders,
+          source: 'lan',
+          autoEnabled: true, // LAN mode only runs on a dedicated kitchen device
+        );
 
     // Mirror the server's active-order snapshot locally so it survives
     // a reboot. Fire-and-forget — UI state above is already updated.
@@ -107,20 +125,22 @@ class KitchenNotifier extends Notifier<KitchenState> {
 
   /// Called by the kitchen card to advance one round of an order.
   Future<void> advanceRound(String orderId, int round, String next) async {
-    final updated = state.orders.map((o) {
-      if (o.id != orderId) return o;
-      final items = [
-        for (final i in o.items)
-          (i.round == round && i.kitchenStatus != 'served')
-              ? i.withKitchenStatus(next)
-              : i,
-      ];
-      return o.copyWith(
-        items: items,
-        status: OrderStatusX.fromString(
-            deriveOrderStatus(items.map((i) => i.kitchenStatus))),
-      );
-    }).toList();
+    final updated =
+        state.orders.map((o) {
+          if (o.id != orderId) return o;
+          final items = [
+            for (final i in o.items)
+              (i.round == round && i.kitchenStatus != 'served')
+                  ? i.withKitchenStatus(next)
+                  : i,
+          ];
+          return o.copyWith(
+            items: items,
+            status: OrderStatusX.fromString(
+              deriveOrderStatus(items.map((i) => i.kitchenStatus)),
+            ),
+          );
+        }).toList();
     state = state.copyWith(orders: updated);
 
     final ok = await ref
@@ -134,20 +154,22 @@ class KitchenNotifier extends Notifier<KitchenState> {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   Order _parseOrder(Map<String, dynamic> m, String businessId) {
-    final items = (m['items'] as List).map((i) {
-      final map = i as Map<String, dynamic>;
-      return CartItem(
-        product: Product(
-          id: '',
-          businessId: '',
-          name: map['product_name'] as String,
-          price: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
-        ),
-        quantity: map['quantity'] as int,
-        round: (map['round'] as int?) ?? 1,
-        kitchenStatus: (map['kitchen_status'] as String?) ?? 'pending',        
-      );
-    }).toList();
+    final items =
+        (m['items'] as List).map((i) {
+          final map = i as Map<String, dynamic>;
+          return CartItem(
+            product: Product(
+              id: '',
+              businessId: '',
+              name: map['product_name'] as String,
+              sendToKitchen: map['send_to_kitchen'] as bool? ?? true,
+              price: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
+            ),
+            quantity: map['quantity'] as int,
+            round: (map['round'] as int?) ?? 1,
+            kitchenStatus: (map['kitchen_status'] as String?) ?? 'pending',
+          );
+        }).toList();
 
     return Order(
       id: m['id'] as String,
@@ -163,6 +185,4 @@ class KitchenNotifier extends Notifier<KitchenState> {
       items: items,
     );
   }
-
-
 }

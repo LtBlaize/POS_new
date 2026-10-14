@@ -44,10 +44,10 @@ final connectivityStatusProvider = Provider<ConnectivityStatus>((ref) {
 });
 
 enum ConnectivityStatus {
-  full,          // ● Green:  Internet ✓  LAN ✓
-  lanOnly,       // ● Amber:  Internet ✗  LAN ✓  (local only, syncs later)
-  internetOnly,  // ● Blue:   Internet ✓  LAN ✗  (POS server not started?)
-  none,          // ● Red:    Internet ✗  LAN ✗
+  full, // ● Green:  Internet ✓  LAN ✓
+  lanOnly, // ● Amber:  Internet ✗  LAN ✓  (local only, syncs later)
+  internetOnly, // ● Blue:   Internet ✓  LAN ✗  (POS server not started?)
+  none, // ● Red:    Internet ✗  LAN ✗
 }
 
 /// Service singleton — call connectivityService.init() once in main().
@@ -76,7 +76,7 @@ class ConnectivityService {
   //   8.8.8.8   = Google Public DNS (port 53)  — almost never blocked
   //   1.1.1.1   = Cloudflare DNS (port 53)     — very reliable
   //   142.250.x = Google (port 80)             — hostname fallback
-    static const _probeTargets = <(String, int)>[
+  static const _probeTargets = <(String, int)>[
     ('qsdbufdixhyqlbygrncp.supabase.co', 443), // <-- put your real project host
   ];
   static const _probeTimeout = Duration(seconds: 3);
@@ -102,18 +102,22 @@ class ConnectivityService {
     await _probeLan();
 
     // React to interface-level changes (WiFi ↔ mobile ↔ none)
-    _sub = Connectivity().onConnectivityChanged.listen((_) async {
-      await _probeInternet();
-      await _probeLan();
-    }, onError: (Object e) {
-      debugPrint('[Connectivity] listener error (ignored): $e');
-    });
+    _sub = Connectivity().onConnectivityChanged.listen(
+      (_) async {
+        await _probeInternet();
+        await _probeLan();
+      },
+      onError: (Object e) {
+        debugPrint('[Connectivity] listener error (ignored): $e');
+      },
+    );
 
     // Periodic polls — catches captive portals and flaky connections
-    _internetPollTimer =
-        Timer.periodic(_internetPollInterval, (_) => _probeInternet());
-    _lanPollTimer =
-        Timer.periodic(_lanPollInterval, (_) => _probeLan());
+    _internetPollTimer = Timer.periodic(
+      _internetPollInterval,
+      (_) => _probeInternet(),
+    );
+    _lanPollTimer = Timer.periodic(_lanPollInterval, (_) => _probeLan());
   }
 
   void dispose() {
@@ -135,11 +139,7 @@ class ConnectivityService {
 
     for (final (host, port) in _probeTargets) {
       try {
-        final sock = await Socket.connect(
-          host,
-          port,
-          timeout: _probeTimeout,
-        );
+        final sock = await Socket.connect(host, port, timeout: _probeTimeout);
         sock.destroy();
         online = true;
         break; // one success is enough
@@ -168,11 +168,7 @@ class ConnectivityService {
 
     bool reachable;
     try {
-      final sock = await Socket.connect(
-        ip,
-        _lanPort,
-        timeout: _lanTimeout,
-      );
+      final sock = await Socket.connect(ip, _lanPort, timeout: _lanTimeout);
       sock.destroy();
       reachable = true;
     } catch (_) {
@@ -191,7 +187,9 @@ class ConnectivityService {
       if (_consecutiveLanFailures >= _lanFailureThreshold &&
           !_ref.read(needsRepairProvider)) {
         _ref.read(needsRepairProvider.notifier).state = true;
-        debugPrint('[Connectivity] LAN unreachable $_consecutiveLanFailures× — flagging for re-pair');
+        debugPrint(
+          '[Connectivity] LAN unreachable $_consecutiveLanFailures× — flagging for re-pair',
+        );
       }
     }
 
@@ -204,7 +202,8 @@ class ConnectivityService {
     if (_ref.read(isLanConnectedProvider) != reachable) {
       _ref.read(isLanConnectedProvider.notifier).state = reachable;
       debugPrint(
-          '[Connectivity] LAN: ${reachable ? "reachable" : "unreachable"}');
+        '[Connectivity] LAN: ${reachable ? "reachable" : "unreachable"}',
+      );
     }
   }
 

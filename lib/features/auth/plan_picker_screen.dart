@@ -28,15 +28,20 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
   }
 
   // Utang is retail-only (hidden in restaurant mode). Display filter only.
-  List<_Feature> _forType(List<_Feature> f) => _isRestaurant
-      ? f.where((x) => x.label != 'Credits (utang)').toList()
-      : f.where((x) =>
-          !x.label.startsWith('Kitchen display') &&
-          !x.label.startsWith('Table') &&
-          !x.label.startsWith('Tables') &&
-          !x.label.startsWith('Multi-station kitchen') &&
-          !x.label.startsWith('Unlimited tables')).toList();
-  bool   _isLoading    = false;
+  List<_Feature> _forType(List<_Feature> f) =>
+      _isRestaurant
+          ? f.where((x) => x.label != 'Credits (utang)').toList()
+          : f
+              .where(
+                (x) =>
+                    !x.label.startsWith('Kitchen display') &&
+                    !x.label.startsWith('Table') &&
+                    !x.label.startsWith('Tables') &&
+                    !x.label.startsWith('Multi-station kitchen') &&
+                    !x.label.startsWith('Unlimited tables'),
+              )
+              .toList();
+  bool _isLoading = false;
   String? _error;
 
   Future<void> _submit() async {
@@ -48,25 +53,28 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
 
     setState(() {
       _isLoading = true;
-      _error     = null;
+      _error = null;
     });
 
     try {
       ref.read(pendingSelectedPlanProvider.notifier).state = _selectedPlan;
 
-      await ref.read(authServiceProvider).completeRegistration(
-            userId:       userId,
-            fullName:     ref.read(pendingFullNameProvider) ?? '',
+      await ref
+          .read(authServiceProvider)
+          .completeRegistration(
+            userId: userId,
+            fullName: ref.read(pendingFullNameProvider) ?? '',
             businessName: ref.read(pendingBusinessNameProvider) ?? '',
             businessType: ref.read(pendingBusinessTypeProvider) ?? 'retail',
-            ownerPin:     ref.read(pendingOwnerPinProvider) ??
+            ownerPin:
+                ref.read(pendingOwnerPinProvider) ??
                 (throw Exception('PIN missing')),
             selectedPlan: _selectedPlan,
           );
 
-      ref.read(pendingUserIdProvider.notifier).state       = null;
-      ref.read(pendingOwnerPinProvider.notifier).state     = null;
-      ref.read(pendingFullNameProvider.notifier).state     = null;
+      ref.read(pendingUserIdProvider.notifier).state = null;
+      ref.read(pendingOwnerPinProvider.notifier).state = null;
+      ref.read(pendingFullNameProvider.notifier).state = null;
       ref.read(pendingBusinessNameProvider.notifier).state = null;
       ref.read(pendingBusinessTypeProvider.notifier).state = null;
       ref.read(pendingSelectedPlanProvider.notifier).state = 'growth';
@@ -79,14 +87,15 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
       // freshly-inserted profile/business rows are visible.
       ref.invalidate(profileProvider);
       if (mounted) {
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil('/pending', (route) => false);
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/pending', (route) => false);
       }
     } catch (e) {
       debugPrint('[PlanPicker] completeRegistration error: $e');
       if (mounted) {
         setState(() {
-          _error     = 'Could not complete setup. Please try again.';
+          _error = 'Could not complete setup. Please try again.';
           _isLoading = false;
         });
       }
@@ -174,30 +183,32 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
           const SizedBox(height: 24),
 
           // Side-by-side on wide windows, stacked on narrow ones.
-          LayoutBuilder(builder: (context, c) {
-            if (c.maxWidth >= 720) {
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < cards.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      Expanded(child: cards[i]),
+          LayoutBuilder(
+            builder: (context, c) {
+              if (c.maxWidth >= 720) {
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        Expanded(child: cards[i]),
+                      ],
                     ],
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < cards.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 12),
+                    cards[i],
                   ],
-                ),
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < cards.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 12),
-                  cards[i],
                 ],
-              ],
-            );
-          }),
+              );
+            },
+          ),
 
           AuthErrorSlot(_error),
           const SizedBox(height: 24),
@@ -225,11 +236,11 @@ class _PlanPickerScreenState extends ConsumerState<PlanPickerScreen> {
   }
 
   String get _ctaLabel => switch (_selectedPlan) {
-        'starter' => 'Start 7-day trial',
-        'growth' => 'Start 7-day trial',
-        'pro' => 'Start 7-day trial',
-        _ => 'Continue',
-      };
+    'starter' => 'Start 7-day trial',
+    'growth' => 'Start 7-day trial',
+    'pro' => 'Start 7-day trial',
+    _ => 'Continue',
+  };
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
@@ -265,9 +276,10 @@ class _PlanCard extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: isSelected
-                ? AuthColors.accent.withValues(alpha: 0.10)
-                : AuthColors.field,
+            color:
+                isSelected
+                    ? AuthColors.accent.withValues(alpha: 0.10)
+                    : AuthColors.field,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected ? AuthColors.accentLight : AuthColors.border,
@@ -286,24 +298,32 @@ class _PlanCard extends StatelessWidget {
                       runSpacing: 6,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(title,
-                            style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AuthColors.textPrimary)),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AuthColors.textPrimary,
+                          ),
+                        ),
                         if (isBestValue)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AuthColors.accent,
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text('Best value',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
+                            child: const Text(
+                              'Best value',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -315,66 +335,81 @@ class _PlanCard extends StatelessWidget {
                     height: 22,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isSelected
-                          ? AuthColors.accent
-                          : Colors.transparent,
+                      color:
+                          isSelected ? AuthColors.accent : Colors.transparent,
                       border: Border.all(
-                        color: isSelected
-                            ? AuthColors.accentLight
-                            : AuthColors.textMuted,
+                        color:
+                            isSelected
+                                ? AuthColors.accentLight
+                                : AuthColors.textMuted,
                         width: 2,
                       ),
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check, size: 14, color: Colors.white)
-                        : null,
+                    child:
+                        isSelected
+                            ? const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.white,
+                            )
+                            : null,
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              Text(price,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AuthColors.textPrimary)),
+              Text(
+                price,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AuthColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(description,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: AuthColors.textSecondary)),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: AuthColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 14),
               Container(height: 1, color: AuthColors.border),
               const SizedBox(height: 12),
-              ...features.map((f) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          f.included
-                              ? Icons.check_circle_rounded
-                              : Icons.remove_circle_outline_rounded,
-                          size: 16,
-                          color: f.included
-                              ? AuthColors.accentLight
-                              : AuthColors.textMuted,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            f.label,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: f.included
-                                  ? AuthColors.textPrimary
-                                  : AuthColors.textMuted,
-                            ),
+              ...features.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        f.included
+                            ? Icons.check_circle_rounded
+                            : Icons.remove_circle_outline_rounded,
+                        size: 16,
+                        color:
+                            f.included
+                                ? AuthColors.accentLight
+                                : AuthColors.textMuted,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          f.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color:
+                                f.included
+                                    ? AuthColors.textPrimary
+                                    : AuthColors.textMuted,
                           ),
                         ),
-                      ],
-                    ),
-                  )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),

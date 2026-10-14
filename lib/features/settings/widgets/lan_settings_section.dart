@@ -31,7 +31,9 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
     // which nothing in the real pairing flow (ip_setup_screen.dart) ever
     // wrote to — so this field could show blank/stale even when a device
     // was genuinely paired.
-    _ipController = TextEditingController(text: ref.read(cashierIpProvider) ?? '');
+    _ipController = TextEditingController(
+      text: ref.read(cashierIpProvider) ?? '',
+    );
     _keyController = TextEditingController();
     _loadSavedKey();
   }
@@ -95,29 +97,36 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
     // partway, the previously-saved pairing is what main.dart will reload
     // on next restart regardless, since only Save touches SharedPreferences.
     ref.read(cashierIpProvider.notifier).state = ip;
-    LanClientService.setPosKey(key); // set even if empty — surfaces as unauthorized, not a false "reachable"
+    LanClientService.setPosKey(
+      key,
+    ); // set even if empty — surfaces as unauthorized, not a false "reachable"
 
     final result = await ref.read(lanClientServiceProvider).ping();
     setState(() => _testing = false);
     if (!mounted) return;
 
     final (message, color) = switch (result) {
-      LanPingResult.ok => ('✓ Paired — $ip is reachable and the key is valid', AppColors.success),
+      LanPingResult.ok => (
+        '✓ Paired — $ip is reachable and the key is valid',
+        AppColors.success,
+      ),
       LanPingResult.unauthorized => (
-          '✗ Reached $ip, but the pairing key is wrong',
-          Colors.orange.shade700
-        ),
+        '✗ Reached $ip, but the pairing key is wrong',
+        Colors.orange.shade700,
+      ),
       LanPingResult.unreachable => (
-          '✗ Cannot reach POS at $ip — check IP and WiFi',
-          Colors.red
-        ),
+        '✗ Cannot reach POS at $ip — check IP and WiFi',
+        Colors.red,
+      ),
     };
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: color,
-      duration: const Duration(seconds: 3),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -159,24 +168,32 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
               Text(
                 'This device IP: ',
                 style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
               ),
               localIpAsync.when(
-                data: (ip) => SelectableText(
-                  ip,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-                loading: () => const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-                error: (_, _) => const Text('Unavailable',
-                    style: TextStyle(fontSize: 12)),
+                data:
+                    (ip) => SelectableText(
+                      ip,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                loading:
+                    () => const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                error:
+                    (_, _) => const Text(
+                      'Unavailable',
+                      style: TextStyle(fontSize: 12),
+                    ),
               ),
               const Spacer(),
               // POS server status dot
@@ -193,9 +210,10 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
                 serverRunning ? 'Server running' : 'Server off',
                 style: TextStyle(
                   fontSize: 11,
-                  color: serverRunning
-                      ? AppColors.success
-                      : AppColors.textSecondary,
+                  color:
+                      serverRunning
+                          ? AppColors.success
+                          : AppColors.textSecondary,
                 ),
               ),
             ],
@@ -208,9 +226,10 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
         const Text(
           'POS IP Address',
           style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -224,14 +243,16 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
               child: TextField(
                 controller: _ipController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(
-                    fontSize: 13, fontFamily: 'monospace'),
+                style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: '192.168.1.100',
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.clear, size: 16),
                     onPressed: _clear,
@@ -242,18 +263,18 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
             const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: _save,
-              icon: Icon(
-                  _saved ? Icons.check : Icons.save_outlined,
-                  size: 16),
+              icon: Icon(_saved ? Icons.check : Icons.save_outlined, size: 16),
               label: Text(_saved ? 'Saved!' : 'Save'),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _saved ? AppColors.success : AppColors.primary,
+                backgroundColor: _saved ? AppColors.success : AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 11),
+                  horizontal: 14,
+                  vertical: 11,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
@@ -262,9 +283,10 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
         const Text(
           'Pairing Key',
           style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -274,39 +296,44 @@ class _LanSettingsSectionState extends ConsumerState<LanSettingsSection> {
         const SizedBox(height: 8),
         _loadingKey
             ? const SizedBox(
-                height: 20,
-                child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2)))
+              height: 20,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
             : TextField(
-                controller: _keyController,
-                style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: 'e.g. 3f9a1c2b-...',
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+              controller: _keyController,
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                hintText: 'e.g. 3f9a1c2b-...',
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
+            ),
         const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: _testing ? null : _testConnection,
-            icon: _testing
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.network_check, size: 16),
+            icon:
+                _testing
+                    ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.network_check, size: 16),
             label: Text(_testing ? 'Testing...' : 'Test connection'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
           ),
         ),

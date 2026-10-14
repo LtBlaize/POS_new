@@ -51,13 +51,12 @@ Map<String, dynamic> order({
   required String method,
   String status = 'completed',
   String? paidAt,
-}) =>
-    {
-      'total_amount': amount,
-      'payment_method': method,
-      'status': status,
-      'paid_at': paidAt,
-    };
+}) => {
+  'total_amount': amount,
+  'payment_method': method,
+  'status': status,
+  'paid_at': paidAt,
+};
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -86,27 +85,32 @@ void main() {
     test('non-completed but has paid_at IS counted', () {
       // An order might be in 'preparing' status but already have paid_at
       final t = ShiftTotals();
-      t.tallyOrder(order(
-        amount: 100,
-        method: 'cash',
-        status: 'preparing',
-        paidAt: '2024-06-15T10:00:00Z',
-      ));
+      t.tallyOrder(
+        order(
+          amount: 100,
+          method: 'cash',
+          status: 'preparing',
+          paidAt: '2024-06-15T10:00:00Z',
+        ),
+      );
       expect(t.totalSales, 100.0);
     });
 
-    test('null payment_method defaults to empty string → goes to otherSales', () {
-      final t = ShiftTotals();
-      t.tallyOrder({
-        'total_amount': 50.0,
-        'payment_method': null,
-        'status': 'completed',
-        'paid_at': null,
-      });
-      expect(t.totalSales, 50.0);
-      expect(t.otherSales, 50.0);
-      expect(t.cashSales, 0.0);
-    });
+    test(
+      'null payment_method defaults to empty string → goes to otherSales',
+      () {
+        final t = ShiftTotals();
+        t.tallyOrder({
+          'total_amount': 50.0,
+          'payment_method': null,
+          'status': 'completed',
+          'paid_at': null,
+        });
+        expect(t.totalSales, 50.0);
+        expect(t.otherSales, 50.0);
+        expect(t.cashSales, 0.0);
+      },
+    );
   });
 
   // ── Payment method bucketing ──────────────────────────────────────────────
@@ -182,11 +186,13 @@ void main() {
 
     test('mixed shift: cash + gcash + maya + card totals are correct', () {
       final t = ShiftTotals();
-      t.tallyOrder(order(amount: 100, method: 'cash'));  // cash
+      t.tallyOrder(order(amount: 100, method: 'cash')); // cash
       t.tallyOrder(order(amount: 200, method: 'gcash')); // gcash bucket
-      t.tallyOrder(order(amount: 300, method: 'maya'));  // gcash bucket
-      t.tallyOrder(order(amount: 400, method: 'card'));  // other
-      t.tallyOrder(order(amount: 50, method: 'cash', status: 'cancelled')); // excluded
+      t.tallyOrder(order(amount: 300, method: 'maya')); // gcash bucket
+      t.tallyOrder(order(amount: 400, method: 'card')); // other
+      t.tallyOrder(
+        order(amount: 50, method: 'cash', status: 'cancelled'),
+      ); // excluded
 
       expect(t.totalSales, 1000.0);
       expect(t.cashSales, 100.0);

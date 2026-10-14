@@ -82,9 +82,9 @@ class Profile {
   // Convenience getters
   BusinessType? get businessType => business?.businessType;
   bool get isRestaurant => business?.businessType.isRestaurant ?? false;
-  bool get isRetail     => business?.businessType.isRetail ?? false;
-  bool get isOwner      => role == UserRole.owner;
-  bool get isManager    => role == UserRole.manager;
+  bool get isRetail => business?.businessType.isRetail ?? false;
+  bool get isOwner => role == UserRole.owner;
+  bool get isManager => role == UserRole.manager;
   bool get canManageInventory =>
       role == UserRole.owner || role == UserRole.manager;
 
@@ -114,11 +114,11 @@ enum UserRole {
 
   String get displayName {
     return switch (this) {
-      UserRole.owner        => 'Owner',
-      UserRole.manager      => 'Manager',
-      UserRole.cashier      => 'Cashier',
+      UserRole.owner => 'Owner',
+      UserRole.manager => 'Manager',
+      UserRole.cashier => 'Cashier',
       UserRole.kitchenStaff => 'Kitchen Staff',
-      UserRole.waiter       => 'Waiter',
+      UserRole.waiter => 'Waiter',
     };
   }
 }

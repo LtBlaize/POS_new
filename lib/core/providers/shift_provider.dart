@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/shift.dart';
 import '../services/shift_service.dart';
-import '../providers/staff_provider.dart';          // ← activeStaffProvider lives here
+import '../providers/staff_provider.dart'; // ← activeStaffProvider lives here
 import '../providers/app_context_provider.dart';
 import '../services/sync_queue_service.dart';
 
@@ -12,7 +12,8 @@ import '../services/sync_queue_service.dart';
 
 final currentShiftProvider =
     AsyncNotifierProvider<CurrentShiftNotifier, CashierShift?>(
-        CurrentShiftNotifier.new);
+      CurrentShiftNotifier.new,
+    );
 
 class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   @override
@@ -24,10 +25,9 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     final staff = ref.watch(activeStaffProvider);
     if (staff == null) return null;
 
-    final shift = await ref.read(shiftServiceProvider).getOpenShift(
-          businessId: businessId,
-          staffId: staff.id,
-        );
+    final shift = await ref
+        .read(shiftServiceProvider)
+        .getOpenShift(businessId: businessId, staffId: staff.id);
     if (shift == null) return null;
     return ref.read(shiftServiceProvider).withLiveTotals(shift);
   }
@@ -41,7 +41,9 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     ref.invalidateSelf();
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      return ref.read(shiftServiceProvider).openShift(
+      return ref
+          .read(shiftServiceProvider)
+          .openShift(
             businessId: businessId,
             staffId: staff.id,
             staffName: staff.name,
@@ -58,7 +60,9 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     if (currentShift == null) return null;
     debugPrint('[ShiftClose] Closing shift: ${currentShift.id}');
 
-    final closed = await ref.read(shiftServiceProvider).closeShift(
+    final closed = await ref
+        .read(shiftServiceProvider)
+        .closeShift(
           shiftId: currentShift.id,
           actualCashCount: actualCashCount,
           notes: notes,

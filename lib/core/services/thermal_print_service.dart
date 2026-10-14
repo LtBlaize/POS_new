@@ -108,8 +108,8 @@ class ThermalPrintService {
 }
 
 String paymentLabel(PaymentMethod? method) => switch (method) {
-      PaymentMethod.card => 'Card',
-      PaymentMethod.gcash => 'GCash',
-      PaymentMethod.maya => 'Maya',
-      _ => 'Cash',
-    };
+  PaymentMethod.card => 'Card',
+  PaymentMethod.gcash => 'GCash',
+  PaymentMethod.maya => 'Maya',
+  _ => 'Cash',
+};

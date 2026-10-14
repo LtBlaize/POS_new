@@ -72,7 +72,8 @@ class ThermalTransport {
       throw Exception('No printer selected. Pick one in Settings > Printer.');
     }
     if (kind == 'system') {
-      if (!_isWindows) throw Exception('System printers are only supported on Windows.');
+      if (!_isWindows)
+        throw Exception('System printers are only supported on Windows.');
       _sendWindowsRaw(id, bytes);
     } else {
       await _sendBluetooth(id, bytes);
@@ -94,7 +95,9 @@ class ThermalTransport {
     if (!await PrintBluetoothThermal.connectionStatus) {
       final ok = await PrintBluetoothThermal.connect(macPrinterAddress: mac);
       if (!ok) {
-        throw Exception('Could not connect to the printer. Is it on and paired?');
+        throw Exception(
+          'Could not connect to the printer. Is it on and paired?',
+        );
       }
     }
     final ok = await PrintBluetoothThermal.writeBytes(bytes.toList());

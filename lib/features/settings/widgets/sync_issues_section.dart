@@ -4,7 +4,6 @@
 // retries) so a failed payment/order sync is visible instead of vanishing.
 // POS device only — sync_queue only exists on the cashier.
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,29 +44,36 @@ class _SyncIssuesSectionState extends ConsumerState<SyncIssuesSection> {
     if (!mounted) return;
     setState(() => _busyIds.remove(id));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Retrying...'), duration: Duration(seconds: 2)),
+      const SnackBar(
+        content: Text('Retrying...'),
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 
   Future<void> _discard(int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard this entry?'),
-        content: const Text(
-            'This change will be permanently dropped and will never sync to the server.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Discard this entry?'),
+            content: const Text(
+              'This change will be permanently dropped and will never sync to the server.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade600,
+                ),
+                child: const Text('Discard'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -111,22 +117,25 @@ class _SyncIssuesSectionState extends ConsumerState<SyncIssuesSection> {
       children: [
         Row(
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 15, color: Colors.red),
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 15,
+              color: Colors.red,
+            ),
             const SizedBox(width: 6),
             const Text(
               'SYNC ISSUES',
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.3),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.3,
+              ),
             ),
             if (_entries.isNotEmpty) ...[
               const SizedBox(width: 6),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(10),
@@ -134,9 +143,10 @@ class _SyncIssuesSectionState extends ConsumerState<SyncIssuesSection> {
                 child: Text(
                   '${_entries.length}',
                   style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.red.shade700),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.red.shade700,
+                  ),
                 ),
               ),
             ],
@@ -170,17 +180,19 @@ class _SyncIssuesSectionState extends ConsumerState<SyncIssuesSection> {
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
           ),
-          ..._entries.map((e) => _FailedEntryTile(
-                title: _describe(e),
-                tableName: e['table_name'] as String,
-                recordId: e['record_id'] as String,
-                lastError: e['last_error'] as String?,
-                retries: e['retries'] as int,
-                createdAt: e['created_at'] as String,
-                busy: _busyIds.contains(e['id'] as int),
-                onRetry: () => _retry(e['id'] as int),
-                onDiscard: () => _discard(e['id'] as int),
-              )),
+          ..._entries.map(
+            (e) => _FailedEntryTile(
+              title: _describe(e),
+              tableName: e['table_name'] as String,
+              recordId: e['record_id'] as String,
+              lastError: e['last_error'] as String?,
+              retries: e['retries'] as int,
+              createdAt: e['created_at'] as String,
+              busy: _busyIds.contains(e['id'] as int),
+              onRetry: () => _retry(e['id'] as int),
+              onDiscard: () => _discard(e['id'] as int),
+            ),
+          ),
         ],
       ],
     );
@@ -212,12 +224,12 @@ class _FailedEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shortId =
-        recordId.length > 8 ? recordId.substring(0, 8) : recordId;
+    final shortId = recordId.length > 8 ? recordId.substring(0, 8) : recordId;
     final when = DateTime.tryParse(createdAt);
-    final whenLabel = when == null
-        ? ''
-        : '${when.month}/${when.day} ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
+    final whenLabel =
+        when == null
+            ? ''
+            : '${when.month}/${when.day} ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -236,15 +248,18 @@ class _FailedEntryTile extends StatelessWidget {
                 child: Text(
                   title,
                   style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               Text(
                 whenLabel,
                 style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary),
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -252,9 +267,10 @@ class _FailedEntryTile extends StatelessWidget {
           Text(
             '$tableName · #$shortId · $retries failed attempt${retries == 1 ? '' : 's'}',
             style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-                fontFamily: 'monospace'),
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              fontFamily: 'monospace',
+            ),
           ),
           if (lastError != null && lastError!.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -271,20 +287,24 @@ class _FailedEntryTile extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: busy ? null : onRetry,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.refresh_rounded, size: 14),
+                  icon:
+                      busy
+                          ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.refresh_rounded, size: 14),
                   label: const Text('Retry', style: TextStyle(fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.4)),
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -293,14 +313,14 @@ class _FailedEntryTile extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: busy ? null : onDiscard,
                   icon: const Icon(Icons.delete_outline_rounded, size: 14),
-                  label:
-                      const Text('Discard', style: TextStyle(fontSize: 12)),
+                  label: const Text('Discard', style: TextStyle(fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red.shade600,
                     side: BorderSide(color: Colors.red.shade200),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),

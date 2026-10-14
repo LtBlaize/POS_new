@@ -6,12 +6,12 @@ import '../../../../shared/widgets/app_colors.dart';
 import '../../../../shared/components/receipt_widgets.dart';
 
 String _splitLegLabel(PaymentMethod m) => switch (m) {
-      PaymentMethod.cash => 'Cash',
-      PaymentMethod.gcash => 'GCash',
-      PaymentMethod.maya => 'Maya',
-      PaymentMethod.card => 'Card',
-      PaymentMethod.credit => 'Utang',
-    };
+  PaymentMethod.cash => 'Cash',
+  PaymentMethod.gcash => 'GCash',
+  PaymentMethod.maya => 'Maya',
+  PaymentMethod.card => 'Card',
+  PaymentMethod.credit => 'Utang',
+};
 
 List<Widget> _retailItemRows(dynamic item) {
   if (!item.isPromo) {
@@ -20,16 +20,28 @@ List<Widget> _retailItemRows(dynamic item) {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
-            Text('${item.quantity}×',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            Text(
+              '${item.quantity}×',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(item.product.name,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+              child: Text(
+                item.product.name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ),
-            Text('₱${item.total.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(
+              '₱${item.total.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ),
@@ -41,17 +53,29 @@ List<Widget> _retailItemRows(dynamic item) {
       padding: const EdgeInsets.only(top: 4, bottom: 2),
       child: Row(
         children: [
-          Text('${item.quantity}×',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w700)),
+          Text(
+            '${item.quantity}×',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(item.product.name,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w700)),
+            child: Text(
+              item.product.name,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          Text('₱${item.total.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(
+            '₱${item.total.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     ),
@@ -101,34 +125,39 @@ class RetailReceiptView extends StatelessWidget {
                 padding: const EdgeInsets.all(24),
                 decoration: const BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.check_circle_outline,
-                        color: Colors.white, size: 40),
+                    const Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.white,
+                      size: 40,
+                    ),
                     const SizedBox(height: 8),
                     const Text(
                       'Payment Successful',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800),
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Receipt #${order.orderNumber.toString().padLeft(6, '0')}',
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.75),
-                          fontSize: 12),
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       formatDateTime(order.createdAt),
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.6),
-                          fontSize: 11),
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -158,8 +187,7 @@ class RetailReceiptView extends StatelessWidget {
                     if (order.discountAmount > 0)
                       ReceiptRow(
                         label: 'Discount',
-                        value:
-                            '-₱${order.discountAmount.toStringAsFixed(2)}',
+                        value: '-₱${order.discountAmount.toStringAsFixed(2)}',
                         valueColor: AppColors.success,
                       ),
                     if (order.tipAmount > 0)
@@ -219,9 +247,10 @@ class RetailReceiptView extends StatelessWidget {
                       'Thank you for shopping with us!',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontStyle: FontStyle.italic),
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
@@ -233,12 +262,15 @@ class RetailReceiptView extends StatelessWidget {
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: const Text(
                           'New Transaction',
                           style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),

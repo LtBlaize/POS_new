@@ -7,18 +7,18 @@ import '../config/access_enforcement_flag.dart';
 class AppFeature {
   AppFeature._();
 
-  static const String pos       = 'pos';
-  static const String orders    = 'orders';
+  static const String pos = 'pos';
+  static const String orders = 'orders';
   static const String inventory = 'inventory';
-  static const String credits   = 'credits';
-  static const String shifts    = 'shifts';
-  static const String reports   = 'reports';
-  static const String kitchen   = 'kitchen';
-  static const String tables    = 'tables';
-  static const String barcode   = 'barcode';
-  static const String excelExport   = 'excel_export';
-  static const String auditExport   = 'audit_export';
-  static const String customRoles   = 'custom_roles';
+  static const String credits = 'credits';
+  static const String shifts = 'shifts';
+  static const String reports = 'reports';
+  static const String kitchen = 'kitchen';
+  static const String tables = 'tables';
+  static const String barcode = 'barcode';
+  static const String excelExport = 'excel_export';
+  static const String auditExport = 'audit_export';
+  static const String customRoles = 'custom_roles';
 }
 
 // ── Plan limits ───────────────────────────────────────────────────────────────
@@ -102,10 +102,10 @@ const _proLimits = PlanLimits(
 );
 
 PlanLimits limitsFor(SubscriptionPlan plan) => switch (plan) {
-      SubscriptionPlan.starter => _starterLimits,
-      SubscriptionPlan.growth  => _growthLimits,
-      SubscriptionPlan.pro     => _proLimits,
-    };
+  SubscriptionPlan.starter => _starterLimits,
+  SubscriptionPlan.growth => _growthLimits,
+  SubscriptionPlan.pro => _proLimits,
+};
 
 // ── FeatureManager ────────────────────────────────────────────────────────────
 
@@ -122,11 +122,11 @@ class FeatureManager {
     this._business, {
     this.configBarcodeEnabled = false,
     this.configKitchenEnabled = false,
-    this.configTablesEnabled  = false,
+    this.configTablesEnabled = false,
   });
 
   bool get isOnActiveTrial => _business?.isOnActiveTrial ?? false;
-  int  get trialDaysLeft   => _business?.trialDaysLeft   ?? 0;
+  int get trialDaysLeft => _business?.trialDaysLeft ?? 0;
 
   SubscriptionPlan get currentPlan =>
       _business?.subscriptionPlan ?? SubscriptionPlan.starter;
@@ -179,16 +179,17 @@ class FeatureManager {
   }
 
   // ── Convenience getters ─────────────────────────────────────────────────────
-  bool get canAccessReports    => hasFeature(AppFeature.reports);
-  bool get canAccessKitchen    => hasFeature(AppFeature.kitchen);
-    bool get canAccessTables     => hasFeature(AppFeature.tables);
+  bool get canAccessReports => hasFeature(AppFeature.reports);
+  bool get canAccessKitchen => hasFeature(AppFeature.kitchen);
+  bool get canAccessTables => hasFeature(AppFeature.tables);
+
   /// Restaurant mode = kitchen or tables enabled. Drives Open Tickets and
   /// hides Utang.
   bool get isRestaurantMode =>
       hasFeature(AppFeature.kitchen) || hasFeature(AppFeature.tables);
-  bool get canExportExcel      => hasFeature(AppFeature.excelExport);
-  bool get canExportAuditLog   => hasFeature(AppFeature.auditExport);
-  bool get canEditCustomRoles  => hasFeature(AppFeature.customRoles);
+  bool get canExportExcel => hasFeature(AppFeature.excelExport);
+  bool get canExportAuditLog => hasFeature(AppFeature.auditExport);
+  bool get canEditCustomRoles => hasFeature(AppFeature.customRoles);
 
   // ── Limit checks (call before insert operations) ────────────────────────────
   bool canAddTerminal(int currentCount) =>

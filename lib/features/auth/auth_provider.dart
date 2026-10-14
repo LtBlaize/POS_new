@@ -59,16 +59,20 @@ final authStateProvider = StreamProvider<User?>((ref) {
       // signedOut event, which still passes the filter below. So dropping
       // errors here never hides a real sign-out.
       .handleError((Object error, StackTrace stack) {
-        debugPrint('[Auth] Ignoring auth stream error (not a sign-out): $error');
+        debugPrint(
+          '[Auth] Ignoring auth stream error (not a sign-out): $error',
+        );
       })
-      .where((event) =>
-          // Only react to these four meaningful transitions.
-          // tokenRefreshed, userUpdated, passwordRecovery etc. are filtered out.
-          event.event == AuthChangeEvent.signedIn      ||
-          event.event == AuthChangeEvent.signedOut     ||
-          event.event == AuthChangeEvent.initialSession ||
-          // ignore: deprecated_member_use
-          event.event == AuthChangeEvent.userDeleted)
+      .where(
+        (event) =>
+            // Only react to these four meaningful transitions.
+            // tokenRefreshed, userUpdated, passwordRecovery etc. are filtered out.
+            event.event == AuthChangeEvent.signedIn ||
+            event.event == AuthChangeEvent.signedOut ||
+            event.event == AuthChangeEvent.initialSession ||
+            // ignore: deprecated_member_use
+            event.event == AuthChangeEvent.userDeleted,
+      )
       .map((event) => event.session?.user)
       // Deduplicate: only emit when the user ID actually changes.
       // This prevents profileProvider from rebuilding when Supabase fires
@@ -89,7 +93,8 @@ Map<String, dynamic> _applyOfflineGrace(Map<String, dynamic> m) {
   DateTime? d(String k) => DateTime.tryParse(b[k] as String? ?? '');
   final sub = d('subscription_expires_at');
   final trial = d('trial_ends_at');
-  final active = (sub != null && sub.isAfter(now)) ||
+  final active =
+      (sub != null && sub.isAfter(now)) ||
       (trial != null && trial.isAfter(now));
   if (!active && now.isBefore(graceEnd)) {
     b['subscription_expires_at'] = graceEnd.toIso8601String();
@@ -100,13 +105,17 @@ Map<String, dynamic> _applyOfflineGrace(Map<String, dynamic> m) {
 final profileProvider = FutureProvider<Profile?>((ref) async {
   // Use currentUser directly as fallback — authStateProvider.future may
   // never resolve if initialSession fired before this provider was watched.
-  final userAsync = await ref.watch(authStateProvider.future).timeout(
-    const Duration(seconds: 3),
-    onTimeout: () {
-      debugPrint('[Profile] authState timeout — falling back to currentUser');
-      return Supabase.instance.client.auth.currentUser;
-    },
-  );
+  final userAsync = await ref
+      .watch(authStateProvider.future)
+      .timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint(
+            '[Profile] authState timeout — falling back to currentUser',
+          );
+          return Supabase.instance.client.auth.currentUser;
+        },
+      );
   debugPrint('[Profile] authState resolved, user: ${userAsync?.id}');
   final user = userAsync;
   if (user == null) {
@@ -136,14 +145,17 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
         if (next && prev == false) ref.invalidateSelf();
       });
       return Profile.fromMap(
-          _applyOfflineGrace(Map<String, dynamic>.from(cached)));
+        _applyOfflineGrace(Map<String, dynamic>.from(cached)),
+      );
     }
     rethrow; // no cache = first run on this device
   }
 
   if (map != null) {
-    await local.setKv(
-        cacheKey, {...map, '_verified_at': DateTime.now().toIso8601String()});
+    await local.setKv(cacheKey, {
+      ...map,
+      '_verified_at': DateTime.now().toIso8601String(),
+    });
   }
   return map != null ? Profile.fromMap(map) : null;
 });
@@ -156,7 +168,9 @@ final businessProvider = Provider<Business?>((ref) {
   return ref.watch(profileProvider).value?.business;
 });
 
-final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((
+  ref,
+) async {
   final businessId = ref.watch(businessProvider.select((b) => b?.id));
   if (businessId == null) return null;
   final client = ref.watch(supabaseClientProvider);
@@ -165,7 +179,9 @@ final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
   try {
     final row = await client
         .from('business_configs')
-        .select('enable_barcode_scanner, enable_kitchen_display, enable_table_management, low_stock_threshold')
+        .select(
+          'enable_barcode_scanner, enable_kitchen_display, enable_table_management, low_stock_threshold',
+        )
         .eq('business_id', businessId)
         .maybeSingle()
         .timeout(Duration(seconds: ref.read(isOnlineProvider) ? 5 : 1));
@@ -183,27 +199,30 @@ final featureConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 
 final featureManagerProvider = Provider<FeatureManager>((ref) {
   final business = ref.watch(businessProvider);
-  final config   = ref.watch(featureConfigProvider).value;
-  debugPrint('[FM] business=${business?.id} type=${business?.businessType.value} '
-      'plan=${business?.subscriptionPlan.value} trialEndsAt=${business?.trialEndsAt} '
-      'isOnActiveTrial=${business?.isOnActiveTrial}');
+  final config = ref.watch(featureConfigProvider).value;
+  debugPrint(
+    '[FM] business=${business?.id} type=${business?.businessType.value} '
+    'plan=${business?.subscriptionPlan.value} trialEndsAt=${business?.trialEndsAt} '
+    'isOnActiveTrial=${business?.isOnActiveTrial}',
+  );
   debugPrint('[FM] config=$config');
   final fm = FeatureManager(
     business,
     configBarcodeEnabled: config?['enable_barcode_scanner'] as bool? ?? false,
-    configKitchenEnabled: config?['enable_kitchen_display']  as bool? ?? false,
-    configTablesEnabled:  config?['enable_table_management'] as bool? ?? false,
+    configKitchenEnabled: config?['enable_kitchen_display'] as bool? ?? false,
+    configTablesEnabled: config?['enable_table_management'] as bool? ?? false,
   );
   // Keep the LAN server's terminal cap in sync whenever plan/business changes.
   ref.read(lanServerServiceProvider).maxTerminals = fm.limits.maxTerminals;
-  debugPrint('[FM] hasCoreAccess=${fm.hasCoreAccess} plan=${fm.currentPlan.value} hasFeature(kitchen)=${fm.hasFeature('kitchen')}');
+  debugPrint(
+    '[FM] hasCoreAccess=${fm.hasCoreAccess} plan=${fm.currentPlan.value} hasFeature(kitchen)=${fm.hasFeature('kitchen')}',
+  );
   return fm;
 });
 
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService(ref.watch(supabaseClientProvider));
 });
-
 
 // ── AuthService ───────────────────────────────────────────────────────────────
 
@@ -244,10 +263,7 @@ class AuthService {
   // by the authStateProvider listener in MyApp (main.dart).
   // This eliminates the race between imperative Navigator calls and
   // the auth stream firing — the previous cause of the redirect loop.
-  Future<void> login({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> login({required String email, required String password}) async {
     await _client.auth
         .signInWithPassword(email: email, password: password)
         .timeout(const Duration(seconds: 10));
@@ -300,15 +316,14 @@ class AuthService {
       throw Exception('Session could not be established. Please try again.');
     }
 
-    debugPrint('[Auth] OTP verified, session: ${_client.auth.currentSession!.user.id}');
+    debugPrint(
+      '[Auth] OTP verified, session: ${_client.auth.currentSession!.user.id}',
+    );
   }
 
   // ── Resend OTP ────────────────────────────────────────────────────────────────
   Future<void> resendOtp({required String email}) async {
-    await _client.auth.resend(
-      type: OtpType.signup,
-      email: email,
-    );
+    await _client.auth.resend(type: OtpType.signup, email: email);
     debugPrint('[Auth] OTP resent to $email');
   }
 
@@ -348,9 +363,9 @@ class AuthService {
       // (trg_set_business_trial_defaults) so the client can never
       // influence its own trial period.
       await _client.from('businesses').insert({
-        'id':                businessId,
-        'name':              businessName,
-        'business_type':     businessType,
+        'id': businessId,
+        'name': businessName,
+        'business_type': businessType,
         'subscription_plan': selectedPlan,
       });
       debugPrint('[Auth] Business inserted: $businessId');
@@ -380,15 +395,23 @@ class AuthService {
 
       // 4. Business config
       debugPrint('[Auth] Inserting business_config...');
-      final rolePermissions = businessType == 'restaurant'
-          ? {
-              'manager': ['pos', 'orders', 'kitchen', 'inventory', 'reports', 'settings'],
-              'cashier': ['pos', 'orders', 'settings'],
-              'kitchen': ['kitchen'],
-            }
-          : {
-              'cashier': ['pos', 'orders', 'utang'],
-            };
+      final rolePermissions =
+          businessType == 'restaurant'
+              ? {
+                'manager': [
+                  'pos',
+                  'orders',
+                  'kitchen',
+                  'inventory',
+                  'reports',
+                  'settings',
+                ],
+                'cashier': ['pos', 'orders', 'settings'],
+                'kitchen': ['kitchen'],
+              }
+              : {
+                'cashier': ['pos', 'orders', 'utang'],
+              };
 
       await _client.from('business_configs').insert({
         'business_id': businessId,

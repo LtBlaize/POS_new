@@ -92,8 +92,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       ),
       body: ordersAsync.when(
         skipLoadingOnReload: true,
-        loading: () =>
-            const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           final businessId = ref.read(activeBusinessIdProvider);
           if (businessId != null) {
@@ -106,12 +105,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_off_outlined,
-                          size: 48, color: Colors.grey),
+                      const Icon(
+                        Icons.cloud_off_outlined,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(height: 12),
-                      Text('Error: $e',
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          textAlign: TextAlign.center),
+                      Text(
+                        'Error: $e',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         onPressed: () => ref.invalidate(ordersStreamProvider),
@@ -128,11 +135,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.cloud_off_outlined,
-                    size: 48, color: Colors.grey),
+                const Icon(
+                  Icons.cloud_off_outlined,
+                  size: 48,
+                  color: Colors.grey,
+                ),
                 const SizedBox(height: 12),
-                const Text('Offline — no cached orders yet',
-                    style: TextStyle(color: Colors.grey)),
+                const Text(
+                  'Offline — no cached orders yet',
+                  style: TextStyle(color: Colors.grey),
+                ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () => ref.invalidate(ordersStreamProvider),
@@ -167,19 +179,25 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
     );
   }
 
-  List<Order> _filterActive(List<Order> orders) => orders
-      .where((o) =>
-          o.status == OrderStatus.pending ||
-          o.status == OrderStatus.preparing ||
-          o.status == OrderStatus.ready ||
-          (o.status == OrderStatus.completed && o.paidAt == null))
-      .toList();
+  List<Order> _filterActive(List<Order> orders) =>
+      orders
+          .where(
+            (o) =>
+                o.status == OrderStatus.pending ||
+                o.status == OrderStatus.preparing ||
+                o.status == OrderStatus.ready ||
+                (o.status == OrderStatus.completed && o.paidAt == null),
+          )
+          .toList();
 
-  List<Order> _filterCompleted(List<Order> orders) => orders
-      .where((o) =>
-          (o.status == OrderStatus.completed && o.paidAt != null) ||
-          o.status == OrderStatus.cancelled)
-      .toList();
+  List<Order> _filterCompleted(List<Order> orders) =>
+      orders
+          .where(
+            (o) =>
+                (o.status == OrderStatus.completed && o.paidAt != null) ||
+                o.status == OrderStatus.cancelled,
+          )
+          .toList();
 }
 
 // ── Order list ────────────────────────────────────────────────────────────────
@@ -198,28 +216,42 @@ class _OrderList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
       return Center(
-        child: Text(emptyText,
-            style: const TextStyle(color: AppColors.textSecondary)),
+        child: Text(
+          emptyText,
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
       );
     }
 
     final width = MediaQuery.sizeOf(context).width;
 
     if (width >= 900) {
-      return GridView.builder(
+      // Two columns, but each card sizes to its content. A fixed-aspect
+      // GridView clipped the footer (Pay Now) on orders with many items.
+      final rowCount = (orders.length + 1) ~/ 2;
+      Widget card(int i) => _OrderCard(
+        key: ValueKey('${orders[i].id}-${orders[i].status}'),
+        order: orders[i],
+        featureManager: featureManager,
+      );
+      return ListView.separated(
         padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.4,
-        ),
-        itemCount: orders.length,
-        itemBuilder: (_, i) => _OrderCard(
-          key: ValueKey('${orders[i].id}-${orders[i].status}'),
-          order: orders[i],
-          featureManager: featureManager,
-        ),
+        itemCount: rowCount,
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
+        itemBuilder: (_, row) {
+          final a = row * 2;
+          final b = a + 1;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card(a)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: b < orders.length ? card(b) : const SizedBox.shrink(),
+              ),
+            ],
+          );
+        },
       );
     }
 
@@ -227,11 +259,12 @@ class _OrderList extends StatelessWidget {
       padding: EdgeInsets.all(width < 600 ? 12 : 16),
       itemCount: orders.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (_, i) => _OrderCard(
-        key: ValueKey('${orders[i].id}-${orders[i].status}'),
-        order: orders[i],
-        featureManager: featureManager,
-      ),
+      itemBuilder:
+          (_, i) => _OrderCard(
+            key: ValueKey('${orders[i].id}-${orders[i].status}'),
+            order: orders[i],
+            featureManager: featureManager,
+          ),
     );
   }
 }
@@ -241,33 +274,37 @@ class _OrderList extends StatelessWidget {
 class _OrderCard extends ConsumerWidget {
   final Order order;
   final FeatureManager featureManager;
-  const _OrderCard(
-      {super.key, required this.order, required this.featureManager});
+  const _OrderCard({
+    super.key,
+    required this.order,
+    required this.featureManager,
+  });
 
   Color _accentColor(OrderStatus s, {bool isPaid = false}) {
     final hasKitchen = featureManager.hasFeature('kitchen');
     return switch (s) {
-        OrderStatus.pending => (isPaid && !hasKitchen)
+      OrderStatus.pending =>
+        (isPaid && !hasKitchen)
             ? const Color(0xFF6B7280)
             : const Color(0xFFF59E0B),
-        OrderStatus.preparing => const Color(0xFF3B82F6),
-        OrderStatus.ready => const Color(0xFF10B981),
-        OrderStatus.completed =>
-          isPaid ? const Color(0xFF6B7280) : const Color(0xFFEF4444),
-        OrderStatus.cancelled => const Color(0xFF9CA3AF),
-      };
+      OrderStatus.preparing => const Color(0xFF3B82F6),
+      OrderStatus.ready => const Color(0xFF10B981),
+      OrderStatus.completed =>
+        isPaid ? const Color(0xFF6B7280) : const Color(0xFFEF4444),
+      OrderStatus.cancelled => const Color(0xFF9CA3AF),
+    };
   }
 
   String _statusLabel(OrderStatus s, {bool isPaid = false}) {
     final hasKitchen = featureManager.hasFeature('kitchen');
     return switch (s) {
-      OrderStatus.pending => isPaid
-          ? (hasKitchen ? 'Paid · In Queue' : 'Completed')
-          : 'Unpaid · Pending',
+      OrderStatus.pending =>
+        isPaid
+            ? (hasKitchen ? 'Paid · In Queue' : 'Completed')
+            : 'Unpaid · Pending',
       OrderStatus.preparing => 'Preparing',
       OrderStatus.ready => 'Ready to serve',
-      OrderStatus.completed =>
-        isPaid ? 'Paid · Completed' : 'Served · Unpaid',
+      OrderStatus.completed => isPaid ? 'Paid · Completed' : 'Served · Unpaid',
       OrderStatus.cancelled => 'Cancelled',
     };
   }
@@ -285,14 +322,14 @@ class _OrderCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accent =
-        _accentColor(order.status, isPaid: order.paidAt != null);
+    final accent = _accentColor(order.status, isPaid: order.paidAt != null);
     final isPaid = order.paidAt != null;
     final isNarrow = MediaQuery.sizeOf(context).width < 600;
 
     // Determine if current staff can void (manager / owner only)
     final activeStaff = ref.watch(activeStaffProvider);
-    final canVoid = _canVoid &&
+    final canVoid =
+        _canVoid &&
         activeStaff != null &&
         (activeStaff.role == StaffRole.owner ||
             activeStaff.role == StaffRole.manager);
@@ -308,7 +345,7 @@ class _OrderCard extends ConsumerWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -324,7 +361,8 @@ class _OrderCard extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: accent,
                 borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(12)),
+                  left: Radius.circular(12),
+                ),
               ),
             ),
 
@@ -346,26 +384,33 @@ class _OrderCard extends ConsumerWidget {
                               ? 'Order #${order.orderNumber} · ${order.customerName}'
                               : 'Order #${order.orderNumber}',
                           style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: isNarrow ? 13 : 15,
-                              color: AppColors.textPrimary),
+                            fontWeight: FontWeight.w800,
+                            fontSize: isNarrow ? 13 : 15,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 3),
+                            horizontal: 9,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: accent.withValues(alpha:0.1),
+                            color: accent.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: accent.withValues(alpha:0.3)),
+                              color: accent.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Text(
-                            _statusLabel(order.status,
-                                isPaid: order.paidAt != null),
+                            _statusLabel(
+                              order.status,
+                              isPaid: order.paidAt != null,
+                            ),
                             style: TextStyle(
-                                fontSize: isNarrow ? 10 : 11,
-                                fontWeight: FontWeight.w700,
-                                color: accent),
+                              fontSize: isNarrow ? 10 : 11,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                            ),
                           ),
                         ),
                       ],
@@ -373,86 +418,93 @@ class _OrderCard extends ConsumerWidget {
 
                     const SizedBox(height: 3),
                     Text(
-                     featureManager.isRestaurantMode
+                      featureManager.isRestaurantMode
                           ? '${_whereLabel(ref, order)} · ${_formatTime(order.createdAt)}'
                           : _formatTime(order.createdAt),
                       style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary),
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
 
                     const SizedBox(height: 10),
 
                     // Items — with void button when allowed
                     if (order.items.isNotEmpty) ...[
-                      ...order.items.map((item) => Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 3),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: accent.withValues(alpha:0.1),
-                                    borderRadius:
-                                        BorderRadius.circular(5),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '${item.quantity}',
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          color: accent),
+                      ...order.items.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${item.quantity}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: accent,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 7),
-                                Expanded(
-                                  child: Text(
-                                    item.product.name,
-                                    style: TextStyle(
-                                        fontSize: isNarrow ? 12 : 13,
-                                        color: AppColors.textPrimary),
-                                    overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  item.product.name,
+                                  style: TextStyle(
+                                    fontSize: isNarrow ? 12 : 13,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '₱${item.total.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              // ── Void button ───────────────────
+                              // Promo lines can't be safely voided item-
+                              // by-item — no clean way to isolate "this
+                              // cart line" in local storage, and voiding
+                              // one component out of a promo is an
+                              // unresolved product question (see
+                              // orders_screen notes). Void the whole
+                              // order instead.
+                              if (canVoid && !item.isPromo) ...[
+                                const SizedBox(width: 6),
+                                _VoidItemButton(
+                                  orderId: order.id,
+                                  businessId: businessId,
+                                  item: item,
+                                ),
+                              ] else if (canVoid && item.isPromo) ...[
+                                const SizedBox(width: 6),
+                                Tooltip(
+                                  message:
+                                      'Promo items can\'t be voided individually — use "Void Order" below.',
+                                  child: Icon(
+                                    Icons.lock_outline,
+                                    size: 14,
+                                    color: AppColors.textSecondary.withValues(
+                                      alpha: 0.4,
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  '₱${item.total.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary),
-                                ),
-                                // ── Void button ───────────────────
-                                // Promo lines can't be safely voided item-
-                                // by-item — no clean way to isolate "this
-                                // cart line" in local storage, and voiding
-                                // one component out of a promo is an
-                                // unresolved product question (see
-                                // orders_screen notes). Void the whole
-                                // order instead.
-                                if (canVoid && !item.isPromo) ...[
-                                  const SizedBox(width: 6),
-                                  _VoidItemButton(
-                                    orderId: order.id,
-                                    businessId: businessId,
-                                    item: item,
-                                  ),
-                                ] else if (canVoid && item.isPromo) ...[
-                                  const SizedBox(width: 6),
-                                  Tooltip(
-                                    message:
-                                        'Promo items can\'t be voided individually — use "Void Order" below.',
-                                    child: Icon(Icons.lock_outline,
-                                        size: 14,
-                                        color: AppColors.textSecondary
-                                            .withValues(alpha: 0.4)),
-                                  ),
-                                ],
                               ],
-                            ),
-                          )),
+                            ],
+                          ),
+                        ),
+                      ),
                       const Divider(height: 14),
                     ],
 
@@ -463,8 +515,9 @@ class _OrderCard extends ConsumerWidget {
                           child: Text(
                             'Total: ₱${order.totalAmount.toStringAsFixed(2)}',
                             style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: isNarrow ? 13 : 14),
+                              fontWeight: FontWeight.w800,
+                              fontSize: isNarrow ? 13 : 14,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -473,17 +526,19 @@ class _OrderCard extends ConsumerWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.check_circle,
-                                  size: 13,
-                                  color: Color(0xFF6B7280)),
+                              const Icon(
+                                Icons.check_circle,
+                                size: 13,
+                                color: Color(0xFF6B7280),
+                              ),
                               const SizedBox(width: 4),
                               Text(
-                                order.paymentMethod!.value
-                                    .toUpperCase(),
+                                order.paymentMethod!.value.toUpperCase(),
                                 style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF6B7280)),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               _ReprintButton(order: order),
@@ -499,8 +554,9 @@ class _OrderCard extends ConsumerWidget {
                             _PrintBillButton(order: order),
                           const SizedBox(width: 8),
                           _PayNowButton(
-                              order: order,
-                              featureManager: featureManager),
+                            order: order,
+                            featureManager: featureManager,
+                          ),
                         ],
                         if (_canVoidOrder &&
                             activeStaff != null &&
@@ -524,7 +580,9 @@ class _OrderCard extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
@@ -535,8 +593,9 @@ class _OrderCard extends ConsumerWidget {
                               child: Text(
                                 'Tendered: ₱${order.amountTendered!.toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary),
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -544,9 +603,10 @@ class _OrderCard extends ConsumerWidget {
                             Text(
                               'Change: ₱${order.changeAmount!.toStringAsFixed(2)}',
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
                             ),
                           ],
                         ),
@@ -575,9 +635,10 @@ class _OrderCard extends ConsumerWidget {
   }
 
   String _formatTime(DateTime dt) {
-    final h = dt.hour == 0
-        ? 12
-        : dt.hour > 12
+    final h =
+        dt.hour == 0
+            ? 12
+            : dt.hour > 12
             ? dt.hour - 12
             : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
@@ -614,21 +675,27 @@ class _VoidItemButton extends ConsumerWidget {
         if (result != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Row(children: [
-                const Icon(Icons.check_circle_outline,
-                    color: Colors.white, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${item.product.name} voided — '
-                    '${result.record.reason}',
+              content: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.white,
+                    size: 16,
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${item.product.name} voided — '
+                      '${result.record.reason}',
+                    ),
+                  ),
+                ],
+              ),
               backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               margin: const EdgeInsets.all(16),
             ),
           );
@@ -640,13 +707,15 @@ class _VoidItemButton extends ConsumerWidget {
           width: 26,
           height: 26,
           decoration: BoxDecoration(
-            color: AppColors.danger.withValues(alpha:0.08),
+            color: AppColors.danger.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(7),
-            border:
-                Border.all(color: AppColors.danger.withValues(alpha:0.25)),
+            border: Border.all(color: AppColors.danger.withValues(alpha: 0.25)),
           ),
-          child: Icon(Icons.remove_circle_outline,
-              size: 14, color: AppColors.danger),
+          child: Icon(
+            Icons.remove_circle_outline,
+            size: 14,
+            color: AppColors.danger,
+          ),
         ),
       ),
     );
@@ -680,54 +749,61 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Void Entire Order?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This will cancel Order #${widget.order.orderNumber} '
-              'and reverse all inventory. This cannot be undone.',
-              style: const TextStyle(fontSize: 13),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Void Entire Order?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will cancel Order #${widget.order.orderNumber} '
+                  'and reverse all inventory. This cannot be undone.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: reasonController,
+                  decoration: InputDecoration(
+                    labelText: 'Reason',
+                    hintText: 'e.g. Customer cancelled',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: reasonController,
-              decoration: InputDecoration(
-                labelText: 'Reason',
-                hintText: 'e.g. Customer cancelled',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Void Order'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Void Order'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true || !mounted) return;
 
-    final reason = reasonController.text.trim().isEmpty
-        ? 'Voided by staff'
-        : reasonController.text.trim();
+    final reason =
+        reasonController.text.trim().isEmpty
+            ? 'Voided by staff'
+            : reasonController.text.trim();
 
     setState(() => _loading = true);
     try {
-      await ref.read(orderServiceProvider).voidOrder(
+      await ref
+          .read(orderServiceProvider)
+          .voidOrder(
             orderId: widget.order.id,
             businessId: widget.businessId,
             reason: reason,
@@ -735,20 +811,22 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
             voidedByStaffName: widget.staffName,
             items: widget.order.items,
           );
-        await ref.read(auditServiceProvider).log(
-        actionType: AuditAction.voidOrder,
-        entityType: 'order',
-        entityId: widget.order.id,
-        description:
-            'Voided Order #${widget.order.orderNumber} — reason: $reason',
-        metadata: {
-          'order_id': widget.order.id,
-          'order_number': widget.order.orderNumber,
-          'total': widget.order.totalAmount,
-          'customer_name': widget.order.customerName,
-          'reason': reason,
-        },
-      );  
+      await ref
+          .read(auditServiceProvider)
+          .log(
+            actionType: AuditAction.voidOrder,
+            entityType: 'order',
+            entityId: widget.order.id,
+            description:
+                'Voided Order #${widget.order.orderNumber} — reason: $reason',
+            metadata: {
+              'order_id': widget.order.id,
+              'order_number': widget.order.orderNumber,
+              'total': widget.order.totalAmount,
+              'customer_name': widget.order.customerName,
+              'reason': reason,
+            },
+          );
 
       // Release the table if nothing else is open on it.
       final tableId = widget.order.tableId;
@@ -756,11 +834,13 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
         final name = ref.read(tableProvider).tableNameForUuid(tableId);
         final others = (ref.read(ordersStreamProvider).asData?.value ??
                 const <Order>[])
-            .any((o) =>
-                o.id != widget.order.id &&
-                o.tableId == tableId &&
-                o.paidAt == null &&
-                o.status != OrderStatus.cancelled);
+            .any(
+              (o) =>
+                  o.id != widget.order.id &&
+                  o.tableId == tableId &&
+                  o.paidAt == null &&
+                  o.status != OrderStatus.cancelled,
+            );
         if (name != null && !others) {
           ref.read(tableProvider.notifier).freeTable(name);
         }
@@ -769,12 +849,12 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Order #${widget.order.orderNumber} voided'),
+            content: Text('Order #${widget.order.orderNumber} voided'),
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -782,9 +862,7 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -796,26 +874,27 @@ class _VoidOrderButtonState extends ConsumerState<_VoidOrderButton> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2));
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     }
     return GestureDetector(
       onTap: _confirmVoid,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha:0.08),
+          color: Colors.red.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.red.withValues(alpha:0.25)),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
         ),
         child: const Text(
           'Void Order',
           style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Colors.red),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.red,
+          ),
         ),
       ),
     );
@@ -839,8 +918,9 @@ class _ReprintButtonState extends ConsumerState<_ReprintButton> {
     setState(() => _loading = true);
     try {
       final receiptService = ref.read(receiptServiceProvider);
-      final receipt =
-          await receiptService.fetchReceiptForOrder(widget.order.id);
+      final receipt = await receiptService.fetchReceiptForOrder(
+        widget.order.id,
+      );
 
       if (!mounted) return;
 
@@ -857,27 +937,26 @@ class _ReprintButtonState extends ConsumerState<_ReprintButton> {
       // Show receipt preview dialog
       await showDialog(
         context: context,
-        builder: (ctx) => _ReceiptPreviewDialog(
-          receipt: receipt,
-          order: widget.order,
-          onPrint: () async {
-            await ThermalPrintService.printReceipt(
+        builder:
+            (ctx) => _ReceiptPreviewDialog(
+              receipt: receipt,
               order: widget.order,
-              tendered: widget.order.amountTendered ?? widget.order.totalAmount,
-              change: widget.order.changeAmount ?? 0.0,
-              businessName: receipt['business_name'] as String? ?? '',
-            );
-            await receiptService.markReprinted(receipt['id'] as String);
-          },
-        ),
+              onPrint: () async {
+                await ThermalPrintService.printReceipt(
+                  order: widget.order,
+                  tendered:
+                      widget.order.amountTendered ?? widget.order.totalAmount,
+                  change: widget.order.changeAmount ?? 0.0,
+                  businessName: receipt['business_name'] as String? ?? '',
+                );
+                await receiptService.markReprinted(receipt['id'] as String);
+              },
+            ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -889,9 +968,10 @@ class _ReprintButtonState extends ConsumerState<_ReprintButton> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2));
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     }
     return Tooltip(
       message: 'Reprint receipt',
@@ -904,8 +984,11 @@ class _ReprintButtonState extends ConsumerState<_ReprintButton> {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: AppColors.divider),
           ),
-          child: const Icon(Icons.receipt_outlined,
-              size: 14, color: AppColors.textSecondary),
+          child: const Icon(
+            Icons.receipt_outlined,
+            size: 14,
+            color: AppColors.textSecondary,
+          ),
         ),
       ),
     );
@@ -928,14 +1011,16 @@ class _ReceiptPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reprintCount = receipt['reprint_count'] as int? ?? 0;
-    final issuedAt = receipt['issued_at'] != null
-        ? DateTime.parse(receipt['issued_at'] as String).toLocal()
-        : order.createdAt;
+    final issuedAt =
+        receipt['issued_at'] != null
+            ? DateTime.parse(receipt['issued_at'] as String).toLocal()
+            : order.createdAt;
 
     String fmt(DateTime dt) {
-      final h = dt.hour > 12
-          ? dt.hour - 12
-          : dt.hour == 0
+      final h =
+          dt.hour > 12
+              ? dt.hour - 12
+              : dt.hour == 0
               ? 12
               : dt.hour;
       final m = dt.minute.toString().padLeft(2, '0');
@@ -944,8 +1029,7 @@ class _ReceiptPreviewDialog extends StatelessWidget {
     }
 
     return Dialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SizedBox(
         width: 360,
         child: Column(
@@ -956,45 +1040,53 @@ class _ReceiptPreviewDialog extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
               decoration: const BoxDecoration(
                 color: Color(0xFF1F2937),
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_outlined,
-                      color: Colors.white, size: 18),
+                  const Icon(
+                    Icons.receipt_outlined,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      receipt['receipt_number'] as String? ??
-                          'Receipt',
+                      receipt['receipt_number'] as String? ?? 'Receipt',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700),
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   if (reprintCount > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha:0.2),
+                        color: Colors.orange.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         'Reprint #$reprintCount',
                         style: const TextStyle(
-                            color: Colors.orange,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600),
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 18),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -1011,11 +1103,11 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                   // Business name
                   Center(
                     child: Text(
-                      receipt['business_name'] as String? ??
-                          'My Business',
+                      receipt['business_name'] as String? ?? 'My Business',
                       style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   if (receipt['business_address'] != null) ...[
@@ -1024,8 +1116,9 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                       child: Text(
                         receipt['business_address'] as String,
                         style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary),
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1035,66 +1128,80 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // Order info
-                  _ReceiptLine('Order #',
-                      '${order.orderNumber}'),
+                  _ReceiptLine('Order #', '${order.orderNumber}'),
                   _ReceiptLine('Date', fmt(issuedAt)),
                   if (order.paymentMethod != null)
-                    _ReceiptLine('Payment',
-                        order.paymentMethod!.value.toUpperCase()),
+                    _ReceiptLine(
+                      'Payment',
+                      order.paymentMethod!.value.toUpperCase(),
+                    ),
                   if (receipt['reference_number'] != null)
-                    _ReceiptLine('Ref #',
-                        receipt['reference_number'] as String),
+                    _ReceiptLine(
+                      'Ref #',
+                      receipt['reference_number'] as String,
+                    ),
                   const SizedBox(height: 8),
                   const Divider(),
                   const SizedBox(height: 8),
 
                   // Items
-                  ...order.items.map((item) => Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          children: [
-                            Text('${item.quantity}×',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color:
-                                        AppColors.textSecondary)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(item.product.name,
-                                  style: const TextStyle(
-                                      fontSize: 12)),
+                  ...order.items.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${item.quantity}×',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
                             ),
-                            Text(
-                              '₱${item.total.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontSize: 12),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              item.product.name,
+                              style: const TextStyle(fontSize: 12),
                             ),
-                          ],
-                        ),
-                      )),
+                          ),
+                          Text(
+                            '₱${item.total.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   const Divider(),
                   const SizedBox(height: 8),
 
                   // Totals
                   if (order.discountAmount > 0)
-                    _ReceiptLine('Discount',
-                        '−₱${order.discountAmount.toStringAsFixed(2)}'),
+                    _ReceiptLine(
+                      'Discount',
+                      '−₱${order.discountAmount.toStringAsFixed(2)}',
+                    ),
                   if (order.taxAmount > 0)
-                    _ReceiptLine('Tax',
-                        '₱${order.taxAmount.toStringAsFixed(2)}'),
+                    _ReceiptLine(
+                      'Tax',
+                      '₱${order.taxAmount.toStringAsFixed(2)}',
+                    ),
                   _ReceiptLine(
                     'Total',
                     '₱${order.totalAmount.toStringAsFixed(2)}',
                     bold: true,
                   ),
                   if (order.amountTendered != null)
-                    _ReceiptLine('Tendered',
-                        '₱${order.amountTendered!.toStringAsFixed(2)}'),
+                    _ReceiptLine(
+                      'Tendered',
+                      '₱${order.amountTendered!.toStringAsFixed(2)}',
+                    ),
                   if (order.changeAmount != null)
-                    _ReceiptLine('Change',
-                        '₱${order.changeAmount!.toStringAsFixed(2)}'),
+                    _ReceiptLine(
+                      'Change',
+                      '₱${order.changeAmount!.toStringAsFixed(2)}',
+                    ),
 
                   if (receipt['footer_text'] != null) ...[
                     const SizedBox(height: 12),
@@ -1102,8 +1209,9 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                       child: Text(
                         receipt['footer_text'] as String,
                         style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary),
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1114,19 +1222,17 @@ class _ReceiptPreviewDialog extends StatelessWidget {
 
             // Actions
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: const Text('Close'),
                     ),
@@ -1146,18 +1252,15 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.print_outlined,
-                          size: 16),
+                      icon: const Icon(Icons.print_outlined, size: 16),
                       label: const Text('Print'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFF1F2937),
+                        backgroundColor: const Color(0xFF1F2937),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
@@ -1185,21 +1288,21 @@ class _ReceiptLine extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: bold
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                  fontWeight: bold
-                      ? FontWeight.w700
-                      : FontWeight.normal)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: bold
-                      ? FontWeight.w800
-                      : FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: bold ? AppColors.textPrimary : AppColors.textSecondary,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -1234,15 +1337,18 @@ class _PrintBillButtonState extends ConsumerState<_PrintBillButton> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(children: [
-              Icon(Icons.print_outlined, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Bill sent to printer'),
-            ]),
+            content: const Row(
+              children: [
+                Icon(Icons.print_outlined, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text('Bill sent to printer'),
+              ],
+            ),
             backgroundColor: const Color(0xFF1F2937),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -1265,9 +1371,10 @@ class _PrintBillButtonState extends ConsumerState<_PrintBillButton> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2));
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     }
     return Tooltip(
       message: 'Print bill',
@@ -1279,20 +1386,25 @@ class _PrintBillButtonState extends ConsumerState<_PrintBillButton> {
             color: const Color(0xFF1F2937).withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: const Color(0xFF1F2937).withValues(alpha: 0.25)),
+              color: const Color(0xFF1F2937).withValues(alpha: 0.25),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.receipt_long_outlined,
-                  size: 13, color: Color(0xFF1F2937)),
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 13,
+                color: Color(0xFF1F2937),
+              ),
               SizedBox(width: 5),
               Text(
                 'Bill',
                 style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1F2937)),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1F2937),
+                ),
               ),
             ],
           ),
@@ -1326,8 +1438,9 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
       }
 
       if (ref.read(cartProvider).isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Send or hold the current cart first.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Send or hold the current cart first.')),
+        );
         return;
       }
       final cartNotifier = ref.read(cartProvider.notifier);
@@ -1339,9 +1452,10 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
       );
 
       final tableNotifier = ref.read(tableProvider.notifier);
-      final tableName = order.tableId == null
-          ? null
-          : ref.read(tableProvider).tableNameForUuid(order.tableId!);
+      final tableName =
+          order.tableId == null
+              ? null
+              : ref.read(tableProvider).tableNameForUuid(order.tableId!);
       if (tableName != null) {
         if (ref.read(tableProvider).selectedTableName != tableName) {
           tableNotifier.selectTable(tableName);
@@ -1357,20 +1471,19 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
       final paid = await showDialog<Order>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => CheckoutDialog(
-          featureManager: widget.featureManager,
-          existingOrderId: order.id,
-          existingOrder: order, // enables Print Bill
-        ),
+        builder:
+            (_) => CheckoutDialog(
+              featureManager: widget.featureManager,
+              existingOrderId: order.id,
+              existingOrder: order, // enables Print Bill
+            ),
       );
       // Cancelled: don't leave the ticket's lines sitting in the cart.
       if (paid == null) cartNotifier.clear();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1382,29 +1495,33 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2));
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     }
 
     return GestureDetector(
       onTap: _openCheckout,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xFF10B981),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text('Pay Now',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.white)),
+        child: const Text(
+          'Pay Now',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
       ),
     );
   }
 }
+
 // ── Add Items (open ticket) ───────────────────────────────────────────────────
 class _AddItemsButton extends ConsumerWidget {
   final Order order;
@@ -1418,14 +1535,18 @@ class _AddItemsButton extends ConsumerWidget {
       child: GestureDetector(
         onTap: () {
           if (ref.read(cartProvider).isNotEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Send or hold the current cart first.')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Send or hold the current cart first.'),
+              ),
+            );
             return;
           }
           final tables = ref.read(tableProvider);
-          final tableName = order.tableId == null
-              ? null
-              : tables.tableNameForUuid(order.tableId!);
+          final tableName =
+              order.tableId == null
+                  ? null
+                  : tables.tableNameForUuid(order.tableId!);
           ref.read(openTabProvider.notifier).state = OpenTab(
             orderId: order.id,
             orderNumber: order.orderNumber,

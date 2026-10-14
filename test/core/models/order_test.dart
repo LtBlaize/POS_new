@@ -11,26 +11,26 @@ import 'package:flutter_application_1/core/models/order.dart';
 
 /// Minimal valid order map (matches DB column names exactly).
 Map<String, dynamic> baseMap() => {
-      'id': 'order-abc',
-      'business_id': 'biz-1',
-      'table_id': null,
-      'cashier_id': null,
-      'order_number': 42,
-      'order_type': 'walk_in',
-      'status': 'pending',
-      'subtotal': 200.0,
-      'tax_amount': 24.0,
-      'discount_amount': 10.0,
-      'tip_amount': 5.0,
-      'total_amount': 219.0,
-      'payment_method': null,
-      'amount_tendered': null,
-      'change_amount': null,
-      'reference_number': null,
-      'notes': null,
-      'paid_at': null,
-      'created_at': '2024-06-15T08:30:00.000Z',
-    };
+  'id': 'order-abc',
+  'business_id': 'biz-1',
+  'table_id': null,
+  'cashier_id': null,
+  'order_number': 42,
+  'order_type': 'walk_in',
+  'status': 'pending',
+  'subtotal': 200.0,
+  'tax_amount': 24.0,
+  'discount_amount': 10.0,
+  'tip_amount': 5.0,
+  'total_amount': 219.0,
+  'payment_method': null,
+  'amount_tendered': null,
+  'change_amount': null,
+  'reference_number': null,
+  'notes': null,
+  'paid_at': null,
+  'created_at': '2024-06-15T08:30:00.000Z',
+};
 
 Order makeOrder({
   double subtotal = 100,
@@ -40,20 +40,19 @@ Order makeOrder({
   double totalAmount = 112,
   OrderStatus status = OrderStatus.pending,
   PaymentMethod? paymentMethod,
-}) =>
-    Order(
-      id: 'o-1',
-      businessId: 'biz-1',
-      orderNumber: 1,
-      subtotal: subtotal,
-      taxAmount: taxAmount,
-      discountAmount: discountAmount,
-      tipAmount: tipAmount,
-      totalAmount: totalAmount,
-      status: status,
-      paymentMethod: paymentMethod,
-      createdAt: DateTime(2024, 6, 1),
-    );
+}) => Order(
+  id: 'o-1',
+  businessId: 'biz-1',
+  orderNumber: 1,
+  subtotal: subtotal,
+  taxAmount: taxAmount,
+  discountAmount: discountAmount,
+  tipAmount: tipAmount,
+  totalAmount: totalAmount,
+  status: status,
+  paymentMethod: paymentMethod,
+  createdAt: DateTime(2024, 6, 1),
+);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -177,9 +176,11 @@ void main() {
 
     test('integer numeric fields are coerced to double', () {
       // Supabase sometimes returns int for numeric columns
-      final map = baseMap()
-        ..['subtotal'] = 200   // int
-        ..['total_amount'] = 219; // int
+      final map =
+          baseMap()
+            ..['subtotal'] =
+                200 // int
+            ..['total_amount'] = 219; // int
       final order = Order.fromMap(map);
       expect(order.subtotal, isA<double>());
       expect(order.totalAmount, isA<double>());

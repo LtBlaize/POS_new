@@ -15,7 +15,8 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../dashboard/admin_dashboard_providers.dart' show RecentPayment, AdminActivityEntry;
+import '../dashboard/admin_dashboard_providers.dart'
+    show RecentPayment, AdminActivityEntry;
 
 const int kBusinessesPageSize = 20;
 
@@ -29,7 +30,8 @@ class BusinessFilter {
   final String search;
   final String? plan; // null = all plans
   final ActiveFilter activeFilter;
-  final bool trialExpiringSoon; // trial_ends_at within next 7 days, still active
+  final bool
+  trialExpiringSoon; // trial_ends_at within next 7 days, still active
 
   const BusinessFilter({
     this.search = '',
@@ -43,13 +45,12 @@ class BusinessFilter {
     Object? plan = _sentinel,
     ActiveFilter? activeFilter,
     bool? trialExpiringSoon,
-  }) =>
-      BusinessFilter(
-        search: search ?? this.search,
-        plan: plan == _sentinel ? this.plan : plan as String?,
-        activeFilter: activeFilter ?? this.activeFilter,
-        trialExpiringSoon: trialExpiringSoon ?? this.trialExpiringSoon,
-      );
+  }) => BusinessFilter(
+    search: search ?? this.search,
+    plan: plan == _sentinel ? this.plan : plan as String?,
+    activeFilter: activeFilter ?? this.activeFilter,
+    trialExpiringSoon: trialExpiringSoon ?? this.trialExpiringSoon,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -60,12 +61,15 @@ class BusinessFilter {
       other.trialExpiringSoon == trialExpiringSoon;
 
   @override
-  int get hashCode => Object.hash(search, plan, activeFilter, trialExpiringSoon);
+  int get hashCode =>
+      Object.hash(search, plan, activeFilter, trialExpiringSoon);
 }
 
 const _sentinel = Object();
 
-final businessFilterProvider = StateProvider<BusinessFilter>((_) => const BusinessFilter());
+final businessFilterProvider = StateProvider<BusinessFilter>(
+  (_) => const BusinessFilter(),
+);
 final businessPageProvider = StateProvider<int>((_) => 0); // 0-indexed
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -100,7 +104,8 @@ class BusinessListPage {
   const BusinessListPage({required this.items, required this.totalCount});
   static const empty = BusinessListPage(items: [], totalCount: 0);
 
-  int get totalPages => (totalCount / kBusinessesPageSize).ceil().clamp(1, 1 << 30);
+  int get totalPages =>
+      (totalCount / kBusinessesPageSize).ceil().clamp(1, 1 << 30);
 }
 
 class StaffSummary {
@@ -162,15 +167,19 @@ class BusinessDetail {
 // LIST PROVIDER
 // ─────────────────────────────────────────────────────────────────────────
 
-final businessListProvider =
-    FutureProvider.autoDispose<BusinessListPage>((ref) async {
+final businessListProvider = FutureProvider.autoDispose<BusinessListPage>((
+  ref,
+) async {
   final filter = ref.watch(businessFilterProvider);
   final page = ref.watch(businessPageProvider);
 
   try {
     final client = Supabase.instance.client;
-    var query = client.from('businesses').select(
-        'id, name, business_type, subscription_plan, is_active, trial_ends_at, subscription_expires_at, created_at');
+    var query = client
+        .from('businesses')
+        .select(
+          'id, name, business_type, subscription_plan, is_active, trial_ends_at, subscription_expires_at, created_at',
+        );
 
     if (filter.search.trim().isNotEmpty) {
       query = query.ilike('name', '%${filter.search.trim()}%');
@@ -198,22 +207,30 @@ final businessListProvider =
         .count(CountOption.exact);
 
     final rows = (response.data as List).cast<Map<String, dynamic>>();
-    final items = rows
-        .map((r) => BusinessListItem(
-              id: r['id'] as String,
-              name: r['name'] as String,
-              businessType: r['business_type'] as String? ?? 'unknown',
-              subscriptionPlan: r['subscription_plan'] as String? ?? 'unknown',
-              isActive: r['is_active'] as bool? ?? false,
-              trialEndsAt: r['trial_ends_at'] != null
-                  ? DateTime.parse(r['trial_ends_at'] as String).toLocal()
-                  : null,
-              subscriptionExpiresAt: r['subscription_expires_at'] != null
-                  ? DateTime.parse(r['subscription_expires_at'] as String).toLocal()
-                  : null,
-              createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-            ))
-        .toList();
+    final items =
+        rows
+            .map(
+              (r) => BusinessListItem(
+                id: r['id'] as String,
+                name: r['name'] as String,
+                businessType: r['business_type'] as String? ?? 'unknown',
+                subscriptionPlan:
+                    r['subscription_plan'] as String? ?? 'unknown',
+                isActive: r['is_active'] as bool? ?? false,
+                trialEndsAt:
+                    r['trial_ends_at'] != null
+                        ? DateTime.parse(r['trial_ends_at'] as String).toLocal()
+                        : null,
+                subscriptionExpiresAt:
+                    r['subscription_expires_at'] != null
+                        ? DateTime.parse(
+                          r['subscription_expires_at'] as String,
+                        ).toLocal()
+                        : null,
+                createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+              ),
+            )
+            .toList();
 
     return BusinessListPage(items: items, totalCount: response.count);
   } catch (_) {
@@ -224,15 +241,18 @@ final businessListProvider =
 // Distinct plan values for the filter dropdown — pulled from live data
 // rather than hardcoded, since we don't know the real enum values (flagged
 // in Phase 5 too). Small table, fine to pull all rows for this.
-final businessPlanOptionsProvider = FutureProvider.autoDispose<List<String>>((ref) async {
+final businessPlanOptionsProvider = FutureProvider.autoDispose<List<String>>((
+  ref,
+) async {
   try {
     final client = Supabase.instance.client;
     final rows = await client.from('businesses').select('subscription_plan');
-    final plans = (rows as List)
-        .map((r) => r['subscription_plan'] as String? ?? 'unknown')
-        .toSet()
-        .toList()
-      ..sort();
+    final plans =
+        (rows as List)
+            .map((r) => r['subscription_plan'] as String? ?? 'unknown')
+            .toSet()
+            .toList()
+          ..sort();
     return plans;
   } catch (_) {
     return [];
@@ -243,17 +263,21 @@ final businessPlanOptionsProvider = FutureProvider.autoDispose<List<String>>((re
 // DETAIL PROVIDER
 // ─────────────────────────────────────────────────────────────────────────
 
-final businessDetailProvider =
-    FutureProvider.family.autoDispose<BusinessDetail?, String>((ref, businessId) async {
+final businessDetailProvider = FutureProvider.family.autoDispose<
+  BusinessDetail?,
+  String
+>((ref, businessId) async {
   try {
     final client = Supabase.instance.client;
 
-    final bizRow = await client
-        .from('businesses')
-        .select(
-            'id, name, business_type, subscription_plan, is_active, address, phone, email, currency, timezone, trial_started_at, trial_ends_at, subscription_expires_at, created_at')
-        .eq('id', businessId)
-        .maybeSingle();
+    final bizRow =
+        await client
+            .from('businesses')
+            .select(
+              'id, name, business_type, subscription_plan, is_active, address, phone, email, currency, timezone, trial_started_at, trial_ends_at, subscription_expires_at, created_at',
+            )
+            .eq('id', businessId)
+            .maybeSingle();
 
     if (bizRow == null) return null;
 
@@ -278,7 +302,9 @@ final businessDetailProvider =
     // string, adjust the .eq('target_type', ...) filter below to match.
     final activityRows = await client
         .from('admin_activity_logs')
-        .select('id, admin_user_id, action, target_type, target_id, created_at, admin_users(role)')
+        .select(
+          'id, admin_user_id, action, target_type, target_id, created_at, admin_users(role)',
+        )
         .eq('target_type', 'business')
         .eq('target_id', businessId)
         .order('created_at', ascending: false)
@@ -295,49 +321,63 @@ final businessDetailProvider =
       email: bizRow['email'] as String?,
       currency: bizRow['currency'] as String? ?? 'PHP',
       timezone: bizRow['timezone'] as String? ?? 'Asia/Manila',
-      trialStartedAt: bizRow['trial_started_at'] != null
-          ? DateTime.parse(bizRow['trial_started_at'] as String).toLocal()
-          : null,
-      trialEndsAt: bizRow['trial_ends_at'] != null
-          ? DateTime.parse(bizRow['trial_ends_at'] as String).toLocal()
-          : null,
-      subscriptionExpiresAt: bizRow['subscription_expires_at'] != null
-          ? DateTime.parse(bizRow['subscription_expires_at'] as String).toLocal()
-          : null,
+      trialStartedAt:
+          bizRow['trial_started_at'] != null
+              ? DateTime.parse(bizRow['trial_started_at'] as String).toLocal()
+              : null,
+      trialEndsAt:
+          bizRow['trial_ends_at'] != null
+              ? DateTime.parse(bizRow['trial_ends_at'] as String).toLocal()
+              : null,
+      subscriptionExpiresAt:
+          bizRow['subscription_expires_at'] != null
+              ? DateTime.parse(
+                bizRow['subscription_expires_at'] as String,
+              ).toLocal()
+              : null,
       createdAt: DateTime.parse(bizRow['created_at'] as String).toLocal(),
-      payments: (paymentsRows as List)
-          .map((r) => RecentPayment(
-                id: r['id'] as String,
-                businessName: bizRow['name'] as String,
-                amount: (r['amount'] as num?)?.toDouble() ?? 0,
-                currency: r['currency'] as String? ?? 'PHP',
-                status: r['status'] as String? ?? 'pending',
-                provider: r['provider'] as String? ?? 'manual',
-                createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-              ))
-          .toList(),
-      staff: (staffRows as List)
-          .map((r) => StaffSummary(
-                id: r['id'] as String,
-                name: r['name'] as String,
-                role: r['role'] as String? ?? 'cashier',
-                isActive: r['is_active'] as bool? ?? false,
-                createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-              ))
-          .toList(),
-      activity: (activityRows as List).map((r) {
-        final adminUser = r['admin_users'] as Map<String, dynamic>?;
-        final rawId = r['admin_user_id'] as String? ?? '';
-        return AdminActivityEntry(
-          id: r['id'] as String,
-          adminRole: adminUser?['role'] as String? ?? 'unknown',
-          adminIdShort: rawId.length >= 8 ? rawId.substring(0, 8) : rawId,
-          action: r['action'] as String,
-          targetType: r['target_type'] as String?,
-          targetId: r['target_id'] as String?,
-          createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-        );
-      }).toList(),
+      payments:
+          (paymentsRows as List)
+              .map(
+                (r) => RecentPayment(
+                  id: r['id'] as String,
+                  businessName: bizRow['name'] as String,
+                  amount: (r['amount'] as num?)?.toDouble() ?? 0,
+                  currency: r['currency'] as String? ?? 'PHP',
+                  status: r['status'] as String? ?? 'pending',
+                  provider: r['provider'] as String? ?? 'manual',
+                  createdAt:
+                      DateTime.parse(r['created_at'] as String).toLocal(),
+                ),
+              )
+              .toList(),
+      staff:
+          (staffRows as List)
+              .map(
+                (r) => StaffSummary(
+                  id: r['id'] as String,
+                  name: r['name'] as String,
+                  role: r['role'] as String? ?? 'cashier',
+                  isActive: r['is_active'] as bool? ?? false,
+                  createdAt:
+                      DateTime.parse(r['created_at'] as String).toLocal(),
+                ),
+              )
+              .toList(),
+      activity:
+          (activityRows as List).map((r) {
+            final adminUser = r['admin_users'] as Map<String, dynamic>?;
+            final rawId = r['admin_user_id'] as String? ?? '';
+            return AdminActivityEntry(
+              id: r['id'] as String,
+              adminRole: adminUser?['role'] as String? ?? 'unknown',
+              adminIdShort: rawId.length >= 8 ? rawId.substring(0, 8) : rawId,
+              action: r['action'] as String,
+              targetType: r['target_type'] as String?,
+              targetId: r['target_id'] as String?,
+              createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+            );
+          }).toList(),
     );
   } catch (_) {
     return null;
@@ -354,7 +394,8 @@ enum AccessStatus { paidActive, trialActive, expired, suspended }
 AccessStatus computeAccessStatus(BusinessListItem b) {
   if (!b.isActive) return AccessStatus.suspended;
   final now = DateTime.now();
-  if (b.subscriptionExpiresAt != null && b.subscriptionExpiresAt!.isAfter(now)) {
+  if (b.subscriptionExpiresAt != null &&
+      b.subscriptionExpiresAt!.isAfter(now)) {
     return AccessStatus.paidActive;
   }
   if (b.trialEndsAt != null && b.trialEndsAt!.isAfter(now)) {
@@ -364,15 +405,15 @@ AccessStatus computeAccessStatus(BusinessListItem b) {
 }
 
 String accessStatusPillKey(AccessStatus s) => switch (s) {
-      AccessStatus.paidActive => 'active',
-      AccessStatus.trialActive => 'trial',
-      AccessStatus.expired => 'expired',
-      AccessStatus.suspended => 'suspended',
-    };
+  AccessStatus.paidActive => 'active',
+  AccessStatus.trialActive => 'trial',
+  AccessStatus.expired => 'expired',
+  AccessStatus.suspended => 'suspended',
+};
 
 String accessStatusLabel(AccessStatus s) => switch (s) {
-      AccessStatus.paidActive => 'Paid',
-      AccessStatus.trialActive => 'Trial',
-      AccessStatus.expired => 'Expired',
-      AccessStatus.suspended => 'Suspended',
-    };
+  AccessStatus.paidActive => 'Paid',
+  AccessStatus.trialActive => 'Trial',
+  AccessStatus.expired => 'Expired',
+  AccessStatus.suspended => 'Suspended',
+};

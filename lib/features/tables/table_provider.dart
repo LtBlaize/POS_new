@@ -98,9 +98,9 @@ class TableNotifier extends StateNotifier<TableState> {
   final String? _businessId;
 
   TableNotifier({required SupabaseClient client, required String? businessId})
-      : _client = client,
-        _businessId = businessId,
-        super(const TableState(tables: [], isLoading: true)) {
+    : _client = client,
+      _businessId = businessId,
+      super(const TableState(tables: [], isLoading: true)) {
     if (businessId != null) _loadTables();
   }
   Future<void> deleteTable(String uuid) async {
@@ -113,22 +113,27 @@ class TableNotifier extends StateNotifier<TableState> {
     } catch (_) {}
   }
 
-    List<TableEntry> _parseRows(List rows) => rows.map((r) {
+  List<TableEntry> _parseRows(List rows) =>
+      rows.map((r) {
         final row = Map<String, dynamic>.from(r as Map);
         final meta = (row['metadata'] as Map?)?.cast<String, dynamic>() ?? {};
-        final openOrder = (row['orders'] as List?)
-            ?.cast<Map<String, dynamic>>()
-            .where((o) =>
-                o['paid_at'] == null &&
-                o['status'] != 'completed' &&
-                o['status'] != 'cancelled')
-            .firstOrNull;
+        final openOrder =
+            (row['orders'] as List?)
+                ?.cast<Map<String, dynamic>>()
+                .where(
+                  (o) =>
+                      o['paid_at'] == null &&
+                      o['status'] != 'completed' &&
+                      o['status'] != 'cancelled',
+                )
+                .firstOrNull;
         return TableEntry(
           name: row['table_number'].toString(),
           uuid: row['id'] as String,
-          status: (row['is_occupied'] as bool? ?? false)
-              ? TableStatus.occupied
-              : TableStatus.available,
+          status:
+              (row['is_occupied'] as bool? ?? false)
+                  ? TableStatus.occupied
+                  : TableStatus.available,
           x: (meta['x'] as num?)?.toDouble() ?? 0,
           y: (meta['y'] as num?)?.toDouble() ?? 0,
           w: (meta['w'] as num?)?.toDouble() ?? 80,
@@ -146,13 +151,17 @@ class TableNotifier extends StateNotifier<TableState> {
       final rows = await _client
           .from('restaurant_tables')
           .select(
-              'id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status, paid_at)')
+            'id, table_number, is_occupied, metadata, orders!orders_table_id_fkey(id, status, paid_at)',
+          )
           .eq('business_id', _businessId)
           .eq('is_active', true)
           .order('table_number')
           .timeout(const Duration(seconds: 6));
       await local.setKv(key, rows);
-      state = state.copyWith(tables: _parseRows(rows as List), isLoading: false);
+      state = state.copyWith(
+        tables: _parseRows(rows as List),
+        isLoading: false,
+      );
     } catch (e) {
       debugPrint('[Tables] load failed, using cache: $e');
       final cached = await local.getKv(key);
@@ -164,7 +173,9 @@ class TableNotifier extends StateNotifier<TableState> {
 
   /// Offline: work out which tables are occupied from local unpaid orders.
   Future<List<TableEntry>> _overlayLocalOccupancy(
-      List<TableEntry> tables, LocalDbService local) async {
+    List<TableEntry> tables,
+    LocalDbService local,
+  ) async {
     try {
       final orders = await local.getOrders(_businessId!);
       final byId = {for (final o in orders) o.id: o};
@@ -172,14 +183,14 @@ class TableNotifier extends StateNotifier<TableState> {
       for (final o in orders) {
         if (o.tableId == null || o.paidAt != null) continue;
         if (o.status == OrderStatus.cancelled ||
-            o.status == OrderStatus.completed) continue;
+            o.status == OrderStatus.completed)
+          continue;
         open.putIfAbsent(o.tableId!, () => o); // newest first
       }
       return [
         for (final t in tables)
           if (t.uuid != null && open.containsKey(t.uuid))
-            t.copyWith(
-                status: TableStatus.occupied, orderId: open[t.uuid]!.id)
+            t.copyWith(status: TableStatus.occupied, orderId: open[t.uuid]!.id)
           else if (t.orderId != null && byId[t.orderId] != null)
             t.copyWith(status: TableStatus.available, clearOrder: true)
           else
@@ -220,10 +231,7 @@ class TableNotifier extends StateNotifier<TableState> {
       tables: [
         for (final t in state.tables)
           if (t.name == name)
-            t.copyWith(
-              status: TableStatus.available,
-              clearOrder: true,
-            )
+            t.copyWith(status: TableStatus.available, clearOrder: true)
           else
             t,
       ],
@@ -248,7 +256,9 @@ class TableNotifier extends StateNotifier<TableState> {
       try {
         await _client
             .from('restaurant_tables')
-            .update({'metadata': {'x': t.x, 'y': t.y, 'w': t.w, 'h': t.h}})
+            .update({
+              'metadata': {'x': t.x, 'y': t.y, 'w': t.w, 'h': t.h},
+            })
             .eq('id', t.uuid!);
       } catch (_) {}
     }
@@ -266,11 +276,11 @@ class TableNotifier extends StateNotifier<TableState> {
   }
 }
 
-final tableProvider =
-    StateNotifierProvider<TableNotifier, TableState>((ref) {
+final tableProvider = StateNotifierProvider<TableNotifier, TableState>((ref) {
   final client = ref.watch(supabaseClientProvider);
   final businessId = ref.watch(
-      profileProvider.select((p) => p.value?.businessId));
+    profileProvider.select((p) => p.value?.businessId),
+  );
   return TableNotifier(client: client, businessId: businessId);
 });
 

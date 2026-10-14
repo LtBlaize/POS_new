@@ -1,21 +1,14 @@
-
 // lib/config/business_config.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/auth/auth_provider.dart';
-class BusinessFeatures {
-  static const retail = [
-    'inventory',
-    'barcode',
-    'credits', 
-  ];
 
-  static const restaurant = [
-    'inventory',
-    'kitchen',
-    'tables',
-  ];
+class BusinessFeatures {
+  static const retail = ['inventory', 'barcode', 'credits'];
+
+  static const restaurant = ['inventory', 'kitchen', 'tables'];
 }
+
 // ── BusinessConfig model ──────────────────────────────────────────────────────
 class BusinessConfig {
   final String id;
@@ -47,33 +40,33 @@ class BusinessConfig {
   });
 
   factory BusinessConfig.fromMap(Map<String, dynamic> m) => BusinessConfig(
-        id: m['id'] as String,
-        taxRate: (m['tax_rate'] as num?)?.toDouble() ?? 0.0,
-        receiptFooter: m['receipt_footer'] as String?,
-        allowDiscounts: m['allow_discounts'] as bool? ?? true,
-        requireTableOnOrder: m['require_table_on_order'] as bool? ?? false,
-        enableKitchenDisplay: m['enable_kitchen_display'] as bool? ?? false,
-        kitchenMode: m['kitchen_mode'] as String? ?? 'single_device',
-        enableTableManagement: m['enable_table_management'] as bool? ?? false,
-        numTables: m['num_tables'] as int? ?? 0,
-        enableBarcodeScanner: m['enable_barcode_scanner'] as bool? ?? false,
-        enableInventoryAlerts: m['enable_inventory_alerts'] as bool? ?? false,
-        lowStockThreshold: m['low_stock_threshold'] as int? ?? 5,
-      );
+    id: m['id'] as String,
+    taxRate: (m['tax_rate'] as num?)?.toDouble() ?? 0.0,
+    receiptFooter: m['receipt_footer'] as String?,
+    allowDiscounts: m['allow_discounts'] as bool? ?? true,
+    requireTableOnOrder: m['require_table_on_order'] as bool? ?? false,
+    enableKitchenDisplay: m['enable_kitchen_display'] as bool? ?? false,
+    kitchenMode: m['kitchen_mode'] as String? ?? 'single_device',
+    enableTableManagement: m['enable_table_management'] as bool? ?? false,
+    numTables: m['num_tables'] as int? ?? 0,
+    enableBarcodeScanner: m['enable_barcode_scanner'] as bool? ?? false,
+    enableInventoryAlerts: m['enable_inventory_alerts'] as bool? ?? false,
+    lowStockThreshold: m['low_stock_threshold'] as int? ?? 5,
+  );
 
   Map<String, dynamic> toMap() => {
-        'tax_rate': taxRate,
-        'receipt_footer': receiptFooter,
-        'allow_discounts': allowDiscounts,
-        'require_table_on_order': requireTableOnOrder,
-        'enable_kitchen_display': enableKitchenDisplay,
-        'kitchen_mode': kitchenMode,
-        'enable_table_management': enableTableManagement,
-        'num_tables': numTables,
-        'enable_barcode_scanner': enableBarcodeScanner,
-        'enable_inventory_alerts': enableInventoryAlerts,
-        'low_stock_threshold': lowStockThreshold,
-      };
+    'tax_rate': taxRate,
+    'receipt_footer': receiptFooter,
+    'allow_discounts': allowDiscounts,
+    'require_table_on_order': requireTableOnOrder,
+    'enable_kitchen_display': enableKitchenDisplay,
+    'kitchen_mode': kitchenMode,
+    'enable_table_management': enableTableManagement,
+    'num_tables': numTables,
+    'enable_barcode_scanner': enableBarcodeScanner,
+    'enable_inventory_alerts': enableInventoryAlerts,
+    'low_stock_threshold': lowStockThreshold,
+  };
 
   BusinessConfig copyWith({
     double? taxRate,
@@ -87,23 +80,20 @@ class BusinessConfig {
     bool? enableBarcodeScanner,
     bool? enableInventoryAlerts,
     int? lowStockThreshold,
-  }) =>
-      BusinessConfig(
-        id: id,
-        taxRate: taxRate ?? this.taxRate,
-        receiptFooter: receiptFooter ?? this.receiptFooter,
-        allowDiscounts: allowDiscounts ?? this.allowDiscounts,
-        requireTableOnOrder: requireTableOnOrder ?? this.requireTableOnOrder,
-        enableKitchenDisplay: enableKitchenDisplay ?? this.enableKitchenDisplay,
-        kitchenMode: kitchenMode ?? this.kitchenMode,
-        enableTableManagement:
-            enableTableManagement ?? this.enableTableManagement,
-        numTables: numTables ?? this.numTables,
-        enableBarcodeScanner: enableBarcodeScanner ?? this.enableBarcodeScanner,
-        enableInventoryAlerts:
-            enableInventoryAlerts ?? this.enableInventoryAlerts,
-        lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
-      );
+  }) => BusinessConfig(
+    id: id,
+    taxRate: taxRate ?? this.taxRate,
+    receiptFooter: receiptFooter ?? this.receiptFooter,
+    allowDiscounts: allowDiscounts ?? this.allowDiscounts,
+    requireTableOnOrder: requireTableOnOrder ?? this.requireTableOnOrder,
+    enableKitchenDisplay: enableKitchenDisplay ?? this.enableKitchenDisplay,
+    kitchenMode: kitchenMode ?? this.kitchenMode,
+    enableTableManagement: enableTableManagement ?? this.enableTableManagement,
+    numTables: numTables ?? this.numTables,
+    enableBarcodeScanner: enableBarcodeScanner ?? this.enableBarcodeScanner,
+    enableInventoryAlerts: enableInventoryAlerts ?? this.enableInventoryAlerts,
+    lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+  );
 }
 
 // ── Room model ────────────────────────────────────────────────────────────────
@@ -119,10 +109,10 @@ class RoomEntry {
   });
 
   factory RoomEntry.fromMap(Map<String, dynamic> m) => RoomEntry(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        sortOrder: m['sort_order'] as int? ?? 0,
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    sortOrder: m['sort_order'] as int? ?? 0,
+  );
 }
 
 // ── Settings state ────────────────────────────────────────────────────────────
@@ -147,14 +137,13 @@ class SettingsState {
     bool? isLoading,
     bool? isSaving,
     String? error,
-  }) =>
-      SettingsState(
-        config: config ?? this.config,
-        rooms: rooms ?? this.rooms,
-        isLoading: isLoading ?? this.isLoading,
-        isSaving: isSaving ?? this.isSaving,
-        error: error,
-      );
+  }) => SettingsState(
+    config: config ?? this.config,
+    rooms: rooms ?? this.rooms,
+    isLoading: isLoading ?? this.isLoading,
+    isSaving: isSaving ?? this.isSaving,
+    error: error,
+  );
 }
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
@@ -165,9 +154,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   SettingsNotifier({
     required SupabaseClient client,
     required String? businessId,
-  })  : _client = client,
-        _businessId = businessId,
-        super(const SettingsState(isLoading: true)) {
+  }) : _client = client,
+       _businessId = businessId,
+       super(const SettingsState(isLoading: true)) {
     if (businessId != null) _load();
   }
 
@@ -228,17 +217,17 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
           .eq('business_id', _businessId)
           .eq('is_active', true);
 
-      if (maxTables != null &&
-          (existing as List).length + count > maxTables) {
+      if (maxTables != null && (existing as List).length + count > maxTables) {
         state = state.copyWith(
           error: 'Table limit reached for your plan ($maxTables max).',
         );
         return;
       }
 
-      final existingNumbers = (existing as List)
-          .map((row) => int.tryParse(row['table_number'].toString()) ?? 0)
-          .toSet();
+      final existingNumbers =
+          (existing as List)
+              .map((row) => int.tryParse(row['table_number'].toString()) ?? 0)
+              .toSet();
 
       final toInsert = <int>[];
       int candidate = 1;
@@ -249,18 +238,20 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         candidate++;
       }
 
-      await _client.from('restaurant_tables').insert(
-        toInsert.map((n) {
-          final row = <String, dynamic>{
-            'business_id': _businessId,
-            'table_number': n.toString(),
-            'is_active': true,
-            'is_occupied': false,
-          };
-          if (roomId != null) row['room_id'] = roomId;
-          return row;
-        }).toList(),
-      );
+      await _client
+          .from('restaurant_tables')
+          .insert(
+            toInsert.map((n) {
+              final row = <String, dynamic>{
+                'business_id': _businessId,
+                'table_number': n.toString(),
+                'is_active': true,
+                'is_occupied': false,
+              };
+              if (roomId != null) row['room_id'] = roomId;
+              return row;
+            }).toList(),
+          );
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -303,7 +294,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     try {
       await _client
           .from('restaurant_tables')
-          .update({'room_id': null}).eq('room_id', roomId);
+          .update({'room_id': null})
+          .eq('room_id', roomId);
       await _client.from('restaurant_rooms').delete().eq('id', roomId);
       await _load();
     } catch (e) {
@@ -315,12 +307,13 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────
-final settingsProvider =
-    StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  final businessId = ref.watch(profileProvider).asData?.value?.businessId;
-  return SettingsNotifier(client: client, businessId: businessId);
-});
+final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>(
+  (ref) {
+    final client = ref.watch(supabaseClientProvider);
+    final businessId = ref.watch(profileProvider).asData?.value?.businessId;
+    return SettingsNotifier(client: client, businessId: businessId);
+  },
+);
 
 // Convenience — just the config
 final businessConfigProvider = Provider<BusinessConfig?>((ref) {

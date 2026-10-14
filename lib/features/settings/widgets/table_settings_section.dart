@@ -32,16 +32,15 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
       (t) => t.name.toLowerCase() == name.toLowerCase(),
     );
     if (duplicate) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"$name" already exists')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('"$name" already exists')));
       return;
     }
 
     setState(() => _adding = true);
     try {
-      final businessId =
-          ref.read(profileProvider).asData?.value?.businessId;
+      final businessId = ref.read(profileProvider).asData?.value?.businessId;
       if (businessId == null) return;
 
       final client = ref.read(supabaseClientProvider);
@@ -70,18 +69,28 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
         // Header
         Row(
           children: [
-            const Icon(Icons.table_restaurant_outlined,
-                size: 18, color: AppColors.primary),
+            const Icon(
+              Icons.table_restaurant_outlined,
+              size: 18,
+              color: AppColors.primary,
+            ),
             const SizedBox(width: 8),
-            const Text('Tables',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
+            const Text(
+              'Tables',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
             const SizedBox(width: 6),
-            Text('· ${tables.length} total',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
+            Text(
+              '· ${tables.length} total',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -97,11 +106,14 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Add table',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary)),
+              const Text(
+                'Add table',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -111,21 +123,23 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
                       decoration: InputDecoration(
                         hintText: 'e.g. 1, Table 1, Bar, VIP',
                         hintStyle: const TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
                         filled: true,
                         fillColor: Colors.white,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              BorderSide(color: AppColors.divider),
+                          borderSide: BorderSide(color: AppColors.divider),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              BorderSide(color: AppColors.divider),
+                          borderSide: BorderSide(color: AppColors.divider),
                         ),
                       ),
                       style: const TextStyle(fontSize: 13),
@@ -139,21 +153,31 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       elevation: 0,
                     ),
-                    child: _adding
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Add',
-                            style: TextStyle(
+                    child:
+                        _adding
+                            ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Text(
+                              'Add',
+                              style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                   ),
                 ],
               ),
@@ -166,45 +190,57 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
         // Edit layout button
         if (tableState.tables.isNotEmpty)
           OutlinedButton.icon(
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => Dialog(
-                insetPadding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 600,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: Row(
-                          children: [
-                            const Text('Edit Floor Plan',
-                                style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
+            onPressed:
+                () => showDialog(
+                  context: context,
+                  builder:
+                      (_) => Dialog(
+                        insetPadding: const EdgeInsets.all(16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 600,
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      'Edit Floor Plan',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.close),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Expanded(
+                                child: FloorPlanView(editMode: true),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const Expanded(
-                          child: FloorPlanView(editMode: true)),
-                    ],
-                  ),
                 ),
-              ),
-            ),
             icon: const Icon(Icons.edit_location_outlined, size: 16),
             label: const Text('Edit Floor Plan'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
 
@@ -216,9 +252,10 @@ class _TableSettingsSectionState extends ConsumerState<TableSettingsSection> {
         else if (tables.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('No tables yet.',
-                style: TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
+            child: Text(
+              'No tables yet.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
           )
         else
           Wrap(
@@ -242,14 +279,16 @@ class _TableChip extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isOccupied
-            ? AppColors.danger.withValues(alpha:0.08)
-            : AppColors.surface,
+        color:
+            isOccupied
+                ? AppColors.danger.withValues(alpha: 0.08)
+                : AppColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isOccupied
-              ? AppColors.danger.withValues(alpha:0.3)
-              : AppColors.divider,
+          color:
+              isOccupied
+                  ? AppColors.danger.withValues(alpha: 0.3)
+                  : AppColors.divider,
         ),
       ),
       child: Row(
@@ -260,8 +299,7 @@ class _TableChip extends ConsumerWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color:
-                  isOccupied ? AppColors.danger : AppColors.textPrimary,
+              color: isOccupied ? AppColors.danger : AppColors.textPrimary,
             ),
           ),
           if (!isOccupied && table.uuid != null) ...[
@@ -270,33 +308,42 @@ class _TableChip extends ConsumerWidget {
               onTap: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Delete table?'),
-                    content: Text(
-                        '"${table.name}" will be removed permanently.'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel')),
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Delete',
-                              style:
-                                  TextStyle(color: AppColors.danger))),
-                    ],
-                  ),
+                  builder:
+                      (_) => AlertDialog(
+                        title: const Text('Delete table?'),
+                        content: Text(
+                          '"${table.name}" will be removed permanently.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text(
+                              'Delete',
+                              style: TextStyle(color: AppColors.danger),
+                            ),
+                          ),
+                        ],
+                      ),
                 );
                 if (confirm == true && table.uuid != null) {
-                  await ref.read(tableProvider.notifier).deleteTable(table.uuid!);
+                  await ref
+                      .read(tableProvider.notifier)
+                      .deleteTable(table.uuid!);
                 }
               },
-              child: const Icon(Icons.close,
-                  size: 13, color: AppColors.textSecondary),
+              child: const Icon(
+                Icons.close,
+                size: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ],
       ),
     );
-    
   }
 }

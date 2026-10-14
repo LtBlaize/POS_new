@@ -17,9 +17,10 @@ final pendingSelectedPlanProvider = StateProvider<String?>((ref) => null);
 // their PIN on this screen and it's passed through to business_type_screen
 // which calls completeRegistration with the real hashed value.
 final pendingOwnerPinProvider = StateProvider<String?>((ref) => null);
-final pendingFullNameProvider     = StateProvider<String?>((ref) => null);
+final pendingFullNameProvider = StateProvider<String?>((ref) => null);
 final pendingBusinessNameProvider = StateProvider<String?>((ref) => null);
 final pendingBusinessTypeProvider = StateProvider<String?>((ref) => null);
+
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
@@ -29,10 +30,10 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl   = TextEditingController();
-  final _passCtrl    = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  final _pinCtrl     = TextEditingController();
+  final _pinCtrl = TextEditingController();
   final _pinConfirmCtrl = TextEditingController();
 
   bool _isLoading = false;
@@ -52,53 +53,55 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (raw.contains('already registered') || raw.contains('already in use')) {
       return 'This email is already registered.';
     }
-    if (raw.contains('password')) return 'Password must be at least 6 characters.';
-    if (raw.contains('email'))   return 'Enter a valid email address.';
+    if (raw.contains('password'))
+      return 'Password must be at least 6 characters.';
+    if (raw.contains('email')) return 'Enter a valid email address.';
     if (raw.contains('network')) return 'Network error. Check your connection.';
     return 'Something went wrong. Please try again.';
   }
 
   Future<void> _submit() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() {
-    _isLoading = true;
-    _error = null;
-  });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-  // ✅ Set a sentinel BEFORE signUp fires the auth event.
-  // The listener in main.dart checks this to know registration is in progress.
-  ref.read(pendingUserIdProvider.notifier).state = 'pending';
+    // ✅ Set a sentinel BEFORE signUp fires the auth event.
+    // The listener in main.dart checks this to know registration is in progress.
+    ref.read(pendingUserIdProvider.notifier).state = 'pending';
 
-  try {
-    final userId = await ref.read(authServiceProvider).startRegistration(
-          email: _emailCtrl.text.trim(),
-          password: _passCtrl.text,
-        );
-
-    // Replace sentinel with the real userId
-    ref.read(pendingUserIdProvider.notifier).state   = userId;
-    ref.read(pendingOwnerPinProvider.notifier).state = _pinCtrl.text;
-
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpVerificationScreen(
+    try {
+      final userId = await ref
+          .read(authServiceProvider)
+          .startRegistration(
             email: _emailCtrl.text.trim(),
+            password: _passCtrl.text,
+          );
+
+      // Replace sentinel with the real userId
+      ref.read(pendingUserIdProvider.notifier).state = userId;
+      ref.read(pendingOwnerPinProvider.notifier).state = _pinCtrl.text;
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (_) => OtpVerificationScreen(email: _emailCtrl.text.trim()),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      // Registration failed — clear the sentinel so the listener works normally
+      ref.read(pendingUserIdProvider.notifier).state = null;
+      debugPrint('Register error: $e');
+      if (mounted) setState(() => _error = _friendlyError(e.toString()));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    // Registration failed — clear the sentinel so the listener works normally
-    ref.read(pendingUserIdProvider.notifier).state = null;
-    debugPrint('Register error: $e');
-    if (mounted) setState(() => _error = _friendlyError(e.toString()));
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -123,8 +126,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.mail_outline_rounded,
-              validator: (v) =>
-                  (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+              validator:
+                  (v) =>
+                      (v == null || !v.contains('@'))
+                          ? 'Enter a valid email'
+                          : null,
             ),
             const SizedBox(height: 16),
             AuthTextField(
@@ -135,8 +141,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               isPassword: true,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.lock_outline_rounded,
-              validator: (v) =>
-                  (v == null || v.length < 6) ? 'Min 6 characters' : null,
+              validator:
+                  (v) =>
+                      (v == null || v.length < 6) ? 'Min 6 characters' : null,
             ),
             const SizedBox(height: 16),
             AuthTextField(
@@ -146,8 +153,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               isPassword: true,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.lock_outline_rounded,
-              validator: (v) =>
-                  v != _passCtrl.text ? 'Passwords do not match' : null,
+              validator:
+                  (v) => v != _passCtrl.text ? 'Passwords do not match' : null,
             ),
 
             const SizedBox(height: 24),
@@ -190,8 +197,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 if (!_isLoading) _submit();
               },
               prefixIcon: Icons.pin_outlined,
-              validator: (v) =>
-                  v != _pinCtrl.text ? 'PINs do not match' : null,
+              validator: (v) => v != _pinCtrl.text ? 'PINs do not match' : null,
             ),
             const SizedBox(height: 12),
 
@@ -201,7 +207,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 'Your PIN is encrypted before being saved. '
                 'It cannot be recovered — keep it safe.',
                 style: TextStyle(
-                    fontSize: 12, color: AuthColors.textSecondary, height: 1.4),
+                  fontSize: 12,
+                  color: AuthColors.textSecondary,
+                  height: 1.4,
+                ),
               ),
             ),
 

@@ -21,7 +21,6 @@ import 'product_provider.dart';
 import '../models/order_payment.dart';
 import '../models/product_variant.dart';
 
-
 // ── Cache invalidation signal ─────────────────────────────────────────────────
 // Add an order ID here to force its items to be re-fetched on the next
 // realtime emission. Used by voidOrderItem and voidOrder.
@@ -33,7 +32,7 @@ void invalidateOrderCache(Ref ref, String orderId) {
   notifier.state = {...notifier.state, orderId};
 }
 
- List<CartItem> _rowsToCartItems(List<Map<String, dynamic>> rows) {
+List<CartItem> _rowsToCartItems(List<Map<String, dynamic>> rows) {
   return CartItem.groupOrderItemRows<Map<String, dynamic>>(
     rows,
     promoGroupId: (row) => row['promo_group_id'] as String?,
@@ -54,7 +53,8 @@ void invalidateOrderCache(Ref ref, String orderId) {
           kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
           discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
           discountType: CartItem.discountTypeFromString(
-              row['discount_type'] as String?),
+            row['discount_type'] as String?,
+          ),
         );
       }
       final pMap = row['products'] as Map<String, dynamic>? ?? {};
@@ -73,8 +73,9 @@ void invalidateOrderCache(Ref ref, String orderId) {
         round: row['round'] as int? ?? 1,
         kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
         discountAmount: (row['discount_amount'] as num?)?.toDouble() ?? 0,
-        discountType:
-            CartItem.discountTypeFromString(row['discount_type'] as String?),
+        discountType: CartItem.discountTypeFromString(
+          row['discount_type'] as String?,
+        ),
       );
     },
     buildComponent: (row) {
@@ -108,7 +109,8 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
 
   // Watch invalidation signals — evict specific orders when voided/updated.
   ref.listen<Set<String>>(_invalidatedOrderIdsProvider, (_, invalidated) {
-    if (invalidated.isEmpty) return; // clearing the signal re-fires this listener
+    if (invalidated.isEmpty)
+      return; // clearing the signal re-fires this listener
     for (final id in invalidated) {
       itemCache.remove(id);
     }
@@ -134,10 +136,11 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
   final client = ref.watch(supabaseClientProvider);
 
   // Limit to last 30 days — older orders are in local cache / reports.
-  final cutoff = DateTime.now()
-      .subtract(const Duration(days: 30))
-      .toUtc()
-      .toIso8601String();
+  final cutoff =
+      DateTime.now()
+          .subtract(const Duration(days: 30))
+          .toUtc()
+          .toIso8601String();
 
   yield* client
       .from('orders')
@@ -147,23 +150,26 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
       .asyncMap((rows) async {
         // Filter to last 30 days client-side since .stream() doesn't
         // support .gte() date filters directly.
-        final filtered = (rows as List)
-            .where((r) => (r['created_at'] as String).compareTo(cutoff) >= 0)
-            .toList();
+        final filtered =
+            (rows as List)
+                .where(
+                  (r) => (r['created_at'] as String).compareTo(cutoff) >= 0,
+                )
+                .toList();
         if (filtered.isEmpty) return <Order>[];
 
         final orderIds = filtered.map((r) => r['id'] as String).toList();
 
         // Only fetch items for orders not already in cache.
-        final uncachedIds = orderIds
-            .where((id) => !itemCache.containsKey(id))
-            .toList();
+        final uncachedIds =
+            orderIds.where((id) => !itemCache.containsKey(id)).toList();
 
         if (uncachedIds.isNotEmpty) {
           final allItemRows = await client
               .from('order_items')
               .select(
-'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
+                '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)',
+              )
               .inFilter('order_id', uncachedIds);
 
           final rowsByOrder = <String, List<Map<String, dynamic>>>{};
@@ -175,7 +181,8 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
           }
 
           for (final entry in rowsByOrder.entries) {
-            itemCache[entry.key] = CartItem.groupOrderItemRows<Map<String, dynamic>>(
+            itemCache[entry
+                .key] = CartItem.groupOrderItemRows<Map<String, dynamic>>(
               entry.value,
               promoGroupId: (row) => row['promo_group_id'] as String?,
               isHeaderRow: (row) => row['product_id'] == null,
@@ -192,11 +199,13 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                     notes: row['notes'] as String?,
                     promoId: row['promo_id'] as String?,
                     round: row['round'] as int? ?? 1,
-                    kitchenStatus: row['kitchen_status'] as String? ?? 'pending',                   
+                    kitchenStatus:
+                        row['kitchen_status'] as String? ?? 'pending',
                     discountAmount:
                         (row['discount_amount'] as num?)?.toDouble() ?? 0,
                     discountType: CartItem.discountTypeFromString(
-                        row['discount_type'] as String?),
+                      row['discount_type'] as String?,
+                    ),
                   );
                 }
                 final pMap = row['products'] as Map<String, dynamic>? ?? {};
@@ -218,7 +227,8 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
                   discountAmount:
                       (row['discount_amount'] as num?)?.toDouble() ?? 0,
                   discountType: CartItem.discountTypeFromString(
-                      row['discount_type'] as String?),
+                    row['discount_type'] as String?,
+                  ),
                 );
               },
               buildComponent: (row) {
@@ -240,11 +250,11 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
         // Evict orders no longer in the stream window to prevent unbounded growth.
         itemCache.removeWhere((id, _) => !orderIds.contains(id));
 
-        final orders = filtered.map((row) {
-          final orderId = row['id'] as String;
-          return Order.fromMap(
-              row, items: itemCache[orderId] ?? []);
-        }).toList();
+        final orders =
+            filtered.map((row) {
+              final orderId = row['id'] as String;
+              return Order.fromMap(row, items: itemCache[orderId] ?? []);
+            }).toList();
 
         await local.upsertOrders(orders);
 
@@ -260,7 +270,8 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
             pendingIds.contains(o.id) ? (localById[o.id] ?? o) : o,
         ];
         final localOnly = localAll.where(
-            (o) => unsyncedIds.contains(o.id) && !remoteIds.contains(o.id));
+          (o) => unsyncedIds.contains(o.id) && !remoteIds.contains(o.id),
+        );
         return [...localOnly, ...merged];
       });
 });
@@ -270,17 +281,17 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
 final pendingOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersStreamProvider).asData?.value ?? [];
   return orders
-      .where((o) =>
-          o.status == OrderStatus.pending ||
-          o.status == OrderStatus.preparing)
+      .where(
+        (o) =>
+            o.status == OrderStatus.pending ||
+            o.status == OrderStatus.preparing,
+      )
       .toList();
 });
 
 final completedOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersStreamProvider).asData?.value ?? [];
-  return orders
-      .where((o) => o.status == OrderStatus.completed)
-      .toList();
+  return orders.where((o) => o.status == OrderStatus.completed).toList();
 });
 
 // ── OrderService ──────────────────────────────────────────────────────────────
@@ -296,7 +307,8 @@ final orderServiceProvider = Provider<OrderService>((ref) {
 
 class AlreadyPaidException implements Exception {
   @override
-  String toString() => 'This order was already paid (possibly on another device).';
+  String toString() =>
+      'This order was already paid (possibly on another device).';
 }
 
 class AppendResult {
@@ -316,10 +328,10 @@ class OrderService {
     required LocalDbService local,
     required SyncQueueService syncQueue,
     required Ref ref,
-  })  : _client = client,
-        _local = local,
-        _syncQueue = syncQueue,
-        _ref = ref;
+  }) : _client = client,
+       _local = local,
+       _syncQueue = syncQueue,
+       _ref = ref;
 
   bool get _isOnline => _ref.read(isOnlineProvider);
 
@@ -360,7 +372,9 @@ class OrderService {
         );
       } catch (e) {
         if (!isNetworkError(e)) rethrow;
-        debugPrint('[OrderService] placeOnline hit network error, falling back offline: $e');
+        debugPrint(
+          '[OrderService] placeOnline hit network error, falling back offline: $e',
+        );
         _ref.read(isOnlineProvider.notifier).state = false;
       }
     }
@@ -417,12 +431,21 @@ class OrderService {
         .single()
         .timeout(const Duration(seconds: 15));
 
-    final orderItems = items
-        .expand((item) => _withMeta(
-            _withVariant(_buildOnlineRows(orderId, item), item), item, 1))
-        .toList();
+    final orderItems =
+        items
+            .expand(
+              (item) => _withMeta(
+                _withVariant(_buildOnlineRows(orderId, item), item),
+                item,
+                1,
+              ),
+            )
+            .toList();
 
-    await _client.from('order_items').insert(orderItems).timeout(const Duration(seconds: 15));
+    await _client
+        .from('order_items')
+        .insert(orderItems)
+        .timeout(const Duration(seconds: 15));
 
     final order = Order.fromMap(orderRow, items: items);
 
@@ -481,9 +504,12 @@ class OrderService {
 
     await _local.insertOfflineOrder(order);
 
-    final itemPayloads = items
-        .expand((i) => _withMeta(_withVariant(_buildOfflineRows(i), i), i, 1))
-        .toList();
+    final itemPayloads =
+        items
+            .expand(
+              (i) => _withMeta(_withVariant(_buildOfflineRows(i), i), i, 1),
+            )
+            .toList();
 
     await _syncQueue.enqueue(
       operation: 'insert_order',
@@ -495,7 +521,7 @@ class OrderService {
         'table_id': tableId,
         'cashier_id': cashierId,
         'order_type': tableId != null ? 'walk_in' : orderType.value,
-          'customer_name': customerName,
+        'customer_name': customerName,
         'status': 'pending',
         'subtotal': subtotal,
         'tax_amount': taxAmount,
@@ -521,7 +547,6 @@ class OrderService {
 
   // ── Update status ───────────────────────────────────────────────────────────
 
-
   /// Appends [items] as a new round on an existing unpaid order.
   /// Works offline: writes locally, then syncs now or queues for later.
   Future<AppendResult> appendItems({
@@ -536,11 +561,12 @@ class OrderService {
     final insertPending = await _local.isOrderPendingSync(orderId);
     if (_isOnline && !insertPending) {
       try {
-        final cur = await _client
-            .from('orders')
-            .select('status, paid_at')
-            .eq('id', orderId)
-            .single();
+        final cur =
+            await _client
+                .from('orders')
+                .select('status, paid_at')
+                .eq('id', orderId)
+                .single();
         paid = cur['paid_at'] != null;
         cancelled = cur['status'] == 'cancelled';
         final r = await _client
@@ -571,11 +597,15 @@ class OrderService {
     final addSubtotal = items.fold<double>(0, (s, i) => s + i.total);
     final addTax = addSubtotal * taxRate;
 
-    final rows = [
-      for (final item in items)
-        ..._withMeta(
-            _withVariant(_buildOnlineRows(orderId, item), item), item, round),
-    ].map((r) => {...r, 'id': const Uuid().v4()}).toList();
+    final rows =
+        [
+          for (final item in items)
+            ..._withMeta(
+              _withVariant(_buildOnlineRows(orderId, item), item),
+              item,
+              round,
+            ),
+        ].map((r) => {...r, 'id': const Uuid().v4()}).toList();
 
     // 1. Local first, so the app shows it immediately and Pay sees it.
     await _local.appendOrderItems(
@@ -620,7 +650,6 @@ class OrderService {
     return AppendResult(round: round, queued: queued);
   }
 
-
   /// Saves the discount/tip chosen at checkout onto an existing order so the
   /// order, receipt and reports all show what was actually charged.
   /// Kitchen: advance one round (pending→preparing→ready→served).
@@ -633,8 +662,9 @@ class OrderService {
     final payload = {'order_id': orderId, 'round': round, 'status': status};
     var queued = true;
     final insertPending = await _local.isOrderPendingSync(orderId);
-    final hasQueued =
-        (await _local.getOrderIdsWithPendingQueue()).contains(orderId);
+    final hasQueued = (await _local.getOrderIdsWithPendingQueue()).contains(
+      orderId,
+    );
     if (_isOnline && !insertPending && !hasQueued) {
       try {
         await _syncQueue.replayRoundStatus(payload);
@@ -654,8 +684,10 @@ class OrderService {
     }
     invalidateOrderCache(_ref, orderId);
     _ref.read(localOrdersRevisionProvider.notifier).state++;
-    EventBus.instance.emit(AppEvents.orderStatusChanged,
-        {'order_id': orderId, 'status': orderStatus});
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {
+      'order_id': orderId,
+      'status': orderStatus,
+    });
   }
 
   Future<void> applyAdjustments({
@@ -664,7 +696,10 @@ class OrderService {
     required double tip,
   }) async {
     await _local.updateOrderAdjustments(
-        orderId: orderId, discount: discount, tip: tip);
+      orderId: orderId,
+      discount: discount,
+      tip: tip,
+    );
     final payload = {'order_id': orderId, 'discount': discount, 'tip': tip};
     var queued = true;
     final insertPending = await _local.isOrderPendingSync(orderId);
@@ -673,7 +708,9 @@ class OrderService {
         await _syncQueue.replayOrderAdjustments(payload);
         queued = false;
       } catch (e) {
-        debugPrint('[OrderService] applyAdjustments online failed, queuing: $e');
+        debugPrint(
+          '[OrderService] applyAdjustments online failed, queuing: $e',
+        );
       }
     }
     if (queued) {
@@ -687,22 +724,28 @@ class OrderService {
     _ref.read(localOrdersRevisionProvider.notifier).state++;
   }
 
-Future<void> updateStatus(String orderId, OrderStatus status) async {
+  Future<void> updateStatus(String orderId, OrderStatus status) async {
     await _local.markOrderStatus(orderId, status);
     final insertPending = await _local.isOrderPendingSync(orderId);
     // If older changes for this order are still queued, go through the queue
     // too, so they replay in order and can't overwrite this status later.
-    final hasQueued =
-        (await _local.getOrderIdsWithPendingQueue()).contains(orderId);
+    final hasQueued = (await _local.getOrderIdsWithPendingQueue()).contains(
+      orderId,
+    );
 
     if (_isOnline && !insertPending && !hasQueued) {
       try {
-        await _client.from('orders').update({
+        await _client
+            .from('orders')
+            .update({
+              'status': status.value,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', orderId);
+        EventBus.instance.emit(AppEvents.orderStatusChanged, {
+          'order_id': orderId,
           'status': status.value,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', orderId);
-        EventBus.instance.emit(AppEvents.orderStatusChanged,
-            {'order_id': orderId, 'status': status.value});
+        });
         return;
       } catch (e) {
         debugPrint('[OrderService] updateStatus online failed, queuing: $e');
@@ -715,13 +758,15 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
       payload: {'status': status.value},
     );
     _ref.read(localOrdersRevisionProvider.notifier).state++;
-    EventBus.instance.emit(AppEvents.orderStatusChanged,
-        {'order_id': orderId, 'status': status.value});
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {
+      'order_id': orderId,
+      'status': status.value,
+    });
   }
 
   // ── Process payment ─────────────────────────────────────────────────────────
 
-    Future<void> processPayment({
+  Future<void> processPayment({
     required String orderId,
     required PaymentMethod method,
     required double amountTendered,
@@ -777,8 +822,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         return;
       } catch (e) {
         if (e is AlreadyPaidException) rethrow;
-        debugPrint(
-            '[OrderService] processPayment online failed, queuing: $e');
+        debugPrint('[OrderService] processPayment online failed, queuing: $e');
       }
     }
 
@@ -798,7 +842,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     );
   }
 
-    // ── Process a SPLIT payment (Task 3) ────────────────────────────────────────
+  // ── Process a SPLIT payment (Task 3) ────────────────────────────────────────
   //
   // Records N payment legs against one order. Does not replace
   // processPayment — a normal single-method checkout still calls that
@@ -806,7 +850,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   // populated with the dominant leg for backward compatibility with any
   // code reading those columns directly; order_payments is the real
   // breakdown and is_split_payment marks the order as one to look up.
-    Future<List<OrderPayment>> processSplitPayment({
+  Future<List<OrderPayment>> processSplitPayment({
     required String orderId,
     required String businessId,
     required List<PaymentSplitInput> payments,
@@ -828,27 +872,34 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     required List<PaymentSplitInput> payments,
     double changeAmount = 0,
   }) async {
-    assert(payments.isNotEmpty, 'processSplitPayment requires at least one payment leg');
+    assert(
+      payments.isNotEmpty,
+      'processSplitPayment requires at least one payment leg',
+    );
 
     final now = DateTime.now();
     final primary = payments.reduce((a, b) => b.amount > a.amount ? b : a);
-    final cashTendered =
-        payments.where((p) => p.method == PaymentMethod.cash).fold(0.0, (s, p) => s + p.amount);
+    final cashTendered = payments
+        .where((p) => p.method == PaymentMethod.cash)
+        .fold(0.0, (s, p) => s + p.amount);
 
     // Order total isn't passed in here — caller (CheckoutService) already
     // validated remaining <= 0 before calling this, so any excess is a
     // genuine cash overpayment/change, not a data error.
-    final orderPayments = payments
-        .map((p) => OrderPayment(
-              id: const Uuid().v4(),
-              orderId: orderId,
-              businessId: businessId,
-              method: p.method,
-              amount: p.amount,
-              referenceNumber: p.referenceNumber,
-              createdAt: now,
-            ))
-        .toList();
+    final orderPayments =
+        payments
+            .map(
+              (p) => OrderPayment(
+                id: const Uuid().v4(),
+                orderId: orderId,
+                businessId: businessId,
+                method: p.method,
+                amount: p.amount,
+                referenceNumber: p.referenceNumber,
+                createdAt: now,
+              ),
+            )
+            .toList();
 
     final rows = orderPayments.map((p) => p.toMap()).toList();
 
@@ -882,7 +933,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         return orderPayments;
       } catch (e) {
         if (e is AlreadyPaidException) rethrow;
-        debugPrint('[OrderService] processSplitPayment online failed, queuing: $e');
+        debugPrint(
+          '[OrderService] processSplitPayment online failed, queuing: $e',
+        );
       }
     }
 
@@ -918,7 +971,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
             .map((r) => OrderPayment.fromMap(r as Map<String, dynamic>))
             .toList();
       } catch (e) {
-        debugPrint('[OrderService] getOrderPayments online failed, using cache: $e');
+        debugPrint(
+          '[OrderService] getOrderPayments online failed, using cache: $e',
+        );
       }
     }
     return _local.getOrderPayments(orderId);
@@ -969,7 +1024,6 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
 
     // 1b. Invalidate item cache so the stream re-fetches this order's items.
     invalidateOrderCache(_ref, orderId);
-   
 
     // 2. Reverse inventory if the product tracks stock.
     if (trackInventory) {
@@ -978,14 +1032,16 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         // variantId is non-null when the voided item was a variant sale.
         // Re-read stock so a stale snapshot can't overwrite newer sales.
         if (variantId != null) {
-          final fv = (await _local.getVariantsForProduct(productId))
-              .where((v) => v.id == variantId)
-              .firstOrNull;
+          final fv =
+              (await _local.getVariantsForProduct(
+                productId,
+              )).where((v) => v.id == variantId).firstOrNull;
           currentStock = fv?.stockQuantity ?? currentStock;
         } else {
-          final fp = (await _local.getProducts(businessId))
-              .where((p) => p.id == productId)
-              .firstOrNull;
+          final fp =
+              (await _local.getProducts(
+                businessId,
+              )).where((p) => p.id == productId).firstOrNull;
           currentStock = fp?.stockQuantity ?? currentStock;
         }
         if (variantId != null) {
@@ -1008,8 +1064,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         }
         _ref.invalidate(productListProvider);
       } catch (e) {
-        debugPrint(
-            '[OrderService] Inventory reversal error (non-fatal): $e');
+        debugPrint('[OrderService] Inventory reversal error (non-fatal): $e');
       }
     }
 
@@ -1031,12 +1086,10 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     if (_isOnline) {
       try {
         // Insert the void record
-        await _client
-            .from('void_order_items')
-            .insert({
-              ...voidRecord.toMap(),
-              if (variantId != null) 'variant_id': variantId,
-            });
+        await _client.from('void_order_items').insert({
+          ...voidRecord.toMap(),
+          if (variantId != null) 'variant_id': variantId,
+        });
 
         // Remove item from Supabase order_items
         var find = _client
@@ -1061,10 +1114,13 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
 
         if ((remaining as List).isEmpty) {
           // No items left — cancel in Supabase
-          await _client.from('orders').update({
-            'status': OrderStatus.cancelled.value,
-            'updated_at': now.toIso8601String(),
-          }).eq('id', orderId);
+          await _client
+              .from('orders')
+              .update({
+                'status': OrderStatus.cancelled.value,
+                'updated_at': now.toIso8601String(),
+              })
+              .eq('id', orderId);
         } else {
           // Recalculate totals in Supabase
           final newSubtotal = remaining.fold<double>(
@@ -1072,33 +1128,33 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
             (s, r) => s + (r['subtotal'] as num).toDouble(),
           );
 
-          final orderRow = await _client
-              .from('orders')
-              .select('tax_amount, discount_amount, subtotal')
-              .eq('id', orderId)
-              .single();
+          final orderRow =
+              await _client
+                  .from('orders')
+                  .select('tax_amount, discount_amount, subtotal')
+                  .eq('id', orderId)
+                  .single();
 
-          final oldSubtotal =
-              (orderRow['subtotal'] as num).toDouble();
-          final existingTax =
-              (orderRow['tax_amount'] as num).toDouble();
+          final oldSubtotal = (orderRow['subtotal'] as num).toDouble();
+          final existingTax = (orderRow['tax_amount'] as num).toDouble();
           final existingDiscount =
               (orderRow['discount_amount'] as num).toDouble();
 
-          final taxRate =
-              oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
+          final taxRate = oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
           final newTax = newSubtotal * taxRate;
-          final newDiscount =
-              existingDiscount.clamp(0.0, newSubtotal);
+          final newDiscount = existingDiscount.clamp(0.0, newSubtotal);
           final newTotal = newSubtotal + newTax - newDiscount;
 
-          await _client.from('orders').update({
-            'subtotal': newSubtotal,
-            'tax_amount': newTax,
-            'discount_amount': newDiscount,
-            'total_amount': newTotal,
-            'updated_at': now.toIso8601String(),
-          }).eq('id', orderId);
+          await _client
+              .from('orders')
+              .update({
+                'subtotal': newSubtotal,
+                'tax_amount': newTax,
+                'discount_amount': newDiscount,
+                'total_amount': newTotal,
+                'updated_at': now.toIso8601String(),
+              })
+              .eq('id', orderId);
         }
 
         // Mark local void record as synced
@@ -1108,12 +1164,10 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           'order_id': orderId,
         });
 
-        debugPrint(
-            '[OrderService] voidOrderItem synced to Supabase: $voidId');
+        debugPrint('[OrderService] voidOrderItem synced to Supabase: $voidId');
         return voidRecord;
       } catch (e) {
-        debugPrint(
-            '[OrderService] voidOrderItem online failed, queuing: $e');
+        debugPrint('[OrderService] voidOrderItem online failed, queuing: $e');
         // Fall through to enqueue below
       }
     }
@@ -1132,12 +1186,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
       },
     );
 
-    EventBus.instance.emit(AppEvents.orderStatusChanged, {
-      'order_id': orderId,
-    });
+    EventBus.instance.emit(AppEvents.orderStatusChanged, {'order_id': orderId});
 
-    debugPrint(
-        '[OrderService] voidOrderItem queued for sync: $voidId');
+    debugPrint('[OrderService] voidOrderItem queued for sync: $voidId');
     return voidRecord;
   }
 
@@ -1196,25 +1247,27 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         }
         if (!item.product.trackInventory) continue;
         if (item.selectedVariant != null) {
-          final freshVariants =
-              await _local.getVariantsForProduct(item.product.id);
-          final freshVariant = freshVariants
-              .where((v) => v.id == item.selectedVariant!.id)
-              .firstOrNull;
+          final freshVariants = await _local.getVariantsForProduct(
+            item.product.id,
+          );
+          final freshVariant =
+              freshVariants
+                  .where((v) => v.id == item.selectedVariant!.id)
+                  .firstOrNull;
           await inventoryService.adjustVariantStock(
             businessId: businessId,
             productId: item.product.id,
             variantId: item.selectedVariant!.id,
             quantityChange: item.quantity,
             quantityBefore:
-                freshVariant?.stockQuantity ?? item.selectedVariant!.stockQuantity,
+                freshVariant?.stockQuantity ??
+                item.selectedVariant!.stockQuantity,
             action: 'void',
           );
         } else {
           final freshProducts = await _local.getProducts(businessId);
-          final freshProduct = freshProducts
-              .where((p) => p.id == item.product.id)
-              .firstOrNull;
+          final freshProduct =
+              freshProducts.where((p) => p.id == item.product.id).firstOrNull;
           await inventoryService.adjustStock(
             businessId: businessId,
             productId: item.product.id,
@@ -1233,11 +1286,14 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     // 3. Sync or enqueue
     if (_isOnline) {
       try {
-        await _client.from('orders').update({
-          'status': OrderStatus.cancelled.value,
-          'notes': reason,
-          'updated_at': now.toIso8601String(),
-        }).eq('id', orderId);
+        await _client
+            .from('orders')
+            .update({
+              'status': OrderStatus.cancelled.value,
+              'notes': reason,
+              'updated_at': now.toIso8601String(),
+            })
+            .eq('id', orderId);
 
         // Void each item row in Supabase — header (promo money) +
         // component rows for a promo line, same pattern as order_items.
@@ -1302,25 +1358,25 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     final preferLocal = queued.contains(orderId) || unsynced;
     if (_isOnline && !preferLocal) {
       try {
-        final orderRow = await _client
-            .from('orders')
-            .select()
-            .eq('id', orderId)
-            .single();
+        final orderRow =
+            await _client.from('orders').select().eq('id', orderId).single();
 
-                final itemRows = await _client
+        final itemRows = await _client
             .from('order_items')
             .select(
-'*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)')
+              '*, products(id, name, price, track_inventory, stock_quantity, business_id, is_available, is_active, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active)',
+            )
             .eq('order_id', orderId);
 
-        final cartItems =
-            _rowsToCartItems((itemRows as List).cast<Map<String, dynamic>>());
+        final cartItems = _rowsToCartItems(
+          (itemRows as List).cast<Map<String, dynamic>>(),
+        );
 
         return Order.fromMap(orderRow, items: cartItems);
       } catch (e) {
         debugPrint(
-            '[OrderService] fetchOrderWithItems online failed, using cache: $e');
+          '[OrderService] fetchOrderWithItems online failed, using cache: $e',
+        );
       }
     }
 
@@ -1332,14 +1388,15 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
     throw Exception('Order $orderId not found in local cache');
   }
 
-    /// After payment: if every item is already served (nothing for the kitchen
+  /// After payment: if every item is already served (nothing for the kitchen
   /// to do), the order is finished. Without this, retail-only orders stay
   /// "pending" forever because only the kitchen advances status.
   Future<void> _completeIfNothingToCook(String orderId) async {
     try {
       final order = await fetchOrderWithItems(orderId);
       if (order.status == OrderStatus.completed ||
-          order.status == OrderStatus.cancelled) return;
+          order.status == OrderStatus.cancelled)
+        return;
       if (order.items.isNotEmpty &&
           order.items.every((i) => i.kitchenStatus == 'served')) {
         await updateStatus(orderId, OrderStatus.completed);
@@ -1385,7 +1442,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           'unit_price': item.effectivePrice,
           'quantity': item.quantity,
           'subtotal': item.total,
-        }
+        },
       ];
     }
     final groupId = const Uuid().v4();
@@ -1403,7 +1460,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         {
           'product_id': c.productId,
           'product_name':
-              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+              c.variantName != null
+                  ? '${c.productName} (${c.variantName})'
+                  : c.productName,
           'unit_price': 0,
           'quantity': c.quantity * item.quantity,
           'subtotal': 0,
@@ -1426,7 +1485,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           'subtotal': item.total,
           'cost_at_sale': _effectiveCost(item),
           'notes': item.notes,
-        }
+        },
       ];
     }
     final groupId = const Uuid().v4();
@@ -1449,7 +1508,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           'order_id': orderId,
           'product_id': c.productId,
           'product_name':
-              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+              c.variantName != null
+                  ? '${c.productName} (${c.variantName})'
+                  : c.productName,
           'unit_price': 0,
           'cost_price': 0,
           'quantity': c.quantity * item.quantity,
@@ -1473,7 +1534,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           'subtotal': item.total,
           'cost_at_sale': _effectiveCost(item),
           'notes': item.notes,
-        }
+        },
       ];
     }
     final groupId = const Uuid().v4();
@@ -1493,7 +1554,9 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         {
           'product_id': c.productId,
           'product_name':
-              c.variantName != null ? '${c.productName} (${c.variantName})' : c.productName,
+              c.variantName != null
+                  ? '${c.productName} (${c.variantName})'
+                  : c.productName,
           'unit_price': 0,
           'quantity': c.quantity * item.quantity,
           'subtotal': 0,
@@ -1508,7 +1571,10 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   /// Stamps round on every row and the per-item discount on the line's main
   /// row (index 0: the plain item or the promo header).
   List<Map<String, dynamic>> _withMeta(
-      List<Map<String, dynamic>> rows, CartItem item, int round) {
+    List<Map<String, dynamic>> rows,
+    CartItem item,
+    int round,
+  ) {
     return [
       for (var i = 0; i < rows.length; i++)
         {
@@ -1524,14 +1590,14 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   /// Adds variant_id to the rows built above: the plain item's chosen
   /// variant, or each promo component's variant (row 0 is the promo header).
   List<Map<String, dynamic>> _withVariant(
-      List<Map<String, dynamic>> rows, CartItem item) {
+    List<Map<String, dynamic>> rows,
+    CartItem item,
+  ) {
     if (item.isPromo) {
       final comps = item.promoComponents!;
       return [
         for (var i = 0; i < rows.length; i++)
-          i == 0
-              ? rows[i]
-              : {...rows[i], 'variant_id': comps[i - 1].variantId},
+          i == 0 ? rows[i] : {...rows[i], 'variant_id': comps[i - 1].variantId},
       ];
     }
     return [
@@ -1541,8 +1607,7 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
 
   // ── Inventory deduction─────────────────────────────────────────────────────
 
-  Future<void> _deductInventory(
-      String businessId, List<CartItem> items) async {
+  Future<void> _deductInventory(String businessId, List<CartItem> items) async {
     try {
       final inventoryService = _ref.read(inventoryServiceProvider);
       for (final item in items) {
@@ -1553,11 +1618,16 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
         if (!item.product.trackInventory) continue;
 
         if (item.selectedVariant != null) {
-          final freshVariants = await _local.getVariantsForProduct(item.product.id);
-          final freshVariant = freshVariants
-              .where((v) => v.id == item.selectedVariant!.id)
-              .firstOrNull;
-          final quantityBefore = freshVariant?.stockQuantity ?? item.selectedVariant!.stockQuantity;
+          final freshVariants = await _local.getVariantsForProduct(
+            item.product.id,
+          );
+          final freshVariant =
+              freshVariants
+                  .where((v) => v.id == item.selectedVariant!.id)
+                  .firstOrNull;
+          final quantityBefore =
+              freshVariant?.stockQuantity ??
+              item.selectedVariant!.stockQuantity;
           await inventoryService.adjustVariantStock(
             businessId: businessId,
             productId: item.product.id,
@@ -1568,10 +1638,10 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
           );
         } else {
           final freshProducts = await _local.getProducts(businessId);
-          final freshProduct = freshProducts
-              .where((p) => p.id == item.product.id)
-              .firstOrNull;
-          final quantityBefore = freshProduct?.stockQuantity ?? item.product.stockQuantity;
+          final freshProduct =
+              freshProducts.where((p) => p.id == item.product.id).firstOrNull;
+          final quantityBefore =
+              freshProduct?.stockQuantity ?? item.product.stockQuantity;
           await inventoryService.adjustStock(
             businessId: businessId,
             productId: item.product.id,
@@ -1583,13 +1653,15 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
       }
       _ref.invalidate(productListProvider);
     } catch (e) {
-      debugPrint(
-          '[OrderService] Inventory deduction error (non-fatal): $e');
+      debugPrint('[OrderService] Inventory deduction error (non-fatal): $e');
     }
   }
 
   Future<void> _reversePromoComponents(
-      String businessId, CartItem promoItem, dynamic inventoryService) async {
+    String businessId,
+    CartItem promoItem,
+    dynamic inventoryService,
+  ) async {
     for (final c in promoItem.promoComponents!) {
       if (!c.trackInventory) continue;
       final totalQty = c.quantity * promoItem.quantity;
@@ -1622,7 +1694,10 @@ Future<void> updateStatus(String orderId, OrderStatus status) async {
   }
 
   Future<void> _deductPromoComponents(
-      String businessId, CartItem promoItem, dynamic inventoryService) async {
+    String businessId,
+    CartItem promoItem,
+    dynamic inventoryService,
+  ) async {
     for (final c in promoItem.promoComponents!) {
       if (!c.trackInventory) continue;
       final totalQty = c.quantity * promoItem.quantity;

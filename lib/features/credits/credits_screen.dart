@@ -52,22 +52,32 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
     final customersAsync = ref.watch(creditCustomersProvider);
 
     return customersAsync.when(
-      loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE94560))),
-      error: (e, _) => Center(
-          child: Text('Error: $e',
-              style: const TextStyle(color: Colors.white))),
+      loading:
+          () => const Center(
+            child: CircularProgressIndicator(color: Color(0xFFE94560)),
+          ),
+      error:
+          (e, _) => Center(
+            child: Text(
+              'Error: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
       data: (customers) {
-        final filtered = _search.isEmpty
-            ? customers
-            : customers
-                .where((c) =>
-                    c.name.toLowerCase().contains(_search.toLowerCase()) ||
-                    c.phone.contains(_search))
-                .toList();
+        final filtered =
+            _search.isEmpty
+                ? customers
+                : customers
+                    .where(
+                      (c) =>
+                          c.name.toLowerCase().contains(
+                            _search.toLowerCase(),
+                          ) ||
+                          c.phone.contains(_search),
+                    )
+                    .toList();
 
-        final totalOwed =
-            customers.fold<double>(0, (s, c) => s + c.totalOwed);
+        final totalOwed = customers.fold<double>(0, (s, c) => s + c.totalOwed);
         final withBalance = customers.where((c) => c.totalOwed > 0).length;
 
         // Build the customer list panel (shared between both layouts)
@@ -88,9 +98,7 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
             } else {
               // Push detail screen onto the local navigator
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => _DetailPage(customer: c),
-                ),
+                MaterialPageRoute(builder: (_) => _DetailPage(customer: c)),
               );
             }
           },
@@ -101,34 +109,37 @@ class _CreditsBodyState extends ConsumerState<_CreditsBody> {
           final panelWidth = (width * 0.32).clamp(280.0, 380.0);
           return Row(
             children: [
-              SizedBox(
-                width: panelWidth,
-                child: listPanel,
-              ),
+              SizedBox(width: panelWidth, child: listPanel),
               Expanded(
-                child: _selected == null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.person_search_outlined,
+                child:
+                    _selected == null
+                        ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_search_outlined,
                                 size: 48,
-                                color: Colors.white.withValues(alpha:0.1)),
-                            const SizedBox(height: 12),
-                            Text('Select a customer to view details',
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Select a customer to view details',
                                 style: TextStyle(
-                                    color: Colors.white.withValues(alpha:0.2),
-                                    fontSize: 13)),
-                          ],
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                        : _CustomerDetail(
+                          key: ValueKey(_selected!.id),
+                          customer: _selected!,
+                          showBackButton: false,
+                          onUpdated:
+                              (updated) => setState(() => _selected = updated),
                         ),
-                      )
-                    : _CustomerDetail(
-                        key: ValueKey(_selected!.id),
-                        customer: _selected!,
-                        showBackButton: false,
-                        onUpdated: (updated) =>
-                            setState(() => _selected = updated),
-                      ),
               ),
             ],
           );
@@ -151,8 +162,11 @@ class _DetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Listen for updated customer from provider so balance refreshes
     final customersAsync = ref.watch(creditCustomersProvider);
-    final live = customersAsync.value
-            ?.firstWhere((c) => c.id == customer.id, orElse: () => customer) ??
+    final live =
+        customersAsync.value?.firstWhere(
+          (c) => c.id == customer.id,
+          orElse: () => customer,
+        ) ??
         customer;
 
     return Scaffold(
@@ -210,42 +224,54 @@ class _CustomerListPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Utang / Credit',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800)),
+                const Text(
+                  'Utang / Credit',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '${customers.length} customers · $withBalance with balance',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.4), fontSize: 12),
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 16),
 
                 // Total outstanding chip
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha:0.08),
+                    color: accentColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: accentColor.withValues(alpha:0.2)),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Total Outstanding',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.55),
-                              fontSize: 12)),
+                      Text(
+                        'Total Outstanding',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 12,
+                        ),
+                      ),
                       Text(
                         '₱${NumberFormat('#,##0.00', 'en_PH').format(totalOwed)}',
                         style: TextStyle(
-                            color: accentColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800),
+                          color: accentColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
@@ -255,19 +281,21 @@ class _CustomerListPanel extends StatelessWidget {
                 // Search
                 TextField(
                   onChanged: onSearchChanged,
-                  style:
-                      const TextStyle(color: Colors.white, fontSize: 13),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search name or phone…',
                     hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha:0.25),
-                        fontSize: 13),
-                    prefixIcon: Icon(Icons.search,
-                        color: Colors.white.withValues(alpha:0.3), size: 18),
+                      color: Colors.white.withValues(alpha: 0.25),
+                      fontSize: 13,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Colors.white.withValues(alpha: 0.3),
+                      size: 18,
+                    ),
                     filled: true,
                     fillColor: cardColor,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none,
@@ -281,33 +309,33 @@ class _CustomerListPanel extends StatelessWidget {
 
           // ── Customer list ──────────────────────────────────────────
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      search.isEmpty
-                          ? 'No customers yet.\nAdd utang at checkout.'
-                          : 'No results',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.25),
-                          fontSize: 13),
+            child:
+                filtered.isEmpty
+                    ? Center(
+                      child: Text(
+                        search.isEmpty
+                            ? 'No customers yet.\nAdd utang at checkout.'
+                            : 'No results',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          fontSize: 13,
+                        ),
+                      ),
+                    )
+                    : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 4),
+                      itemBuilder: (_, i) {
+                        final c = filtered[i];
+                        return _CustomerTile(
+                          customer: c,
+                          selected: selectedId == c.id,
+                          onTap: () => onCustomerTap(c),
+                        );
+                      },
                     ),
-                  )
-                : ListView.separated(
-                    padding:
-                        const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: 4),
-                    itemBuilder: (_, i) {
-                      final c = filtered[i];
-                      return _CustomerTile(
-                        customer: c,
-                        selected: selectedId == c.id,
-                        onTap: () => onCustomerTap(c),
-                      );
-                    },
-                  ),
           ),
         ],
       ),
@@ -335,32 +363,35 @@ class _CustomerTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFE94560).withValues(alpha:0.12)
-              : const Color(0xFF1A1F35),
+          color:
+              selected
+                  ? const Color(0xFFE94560).withValues(alpha: 0.12)
+                  : const Color(0xFF1A1F35),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? const Color(0xFFE94560).withValues(alpha:0.4)
-                : Colors.transparent,
+            color:
+                selected
+                    ? const Color(0xFFE94560).withValues(alpha: 0.4)
+                    : Colors.transparent,
           ),
         ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 20,
-              backgroundColor: hasBalance
-                  ? const Color(0xFFE94560).withValues(alpha:0.15)
-                  : const Color(0xFF10B981).withValues(alpha:0.15),
+              backgroundColor:
+                  hasBalance
+                      ? const Color(0xFFE94560).withValues(alpha: 0.15)
+                      : const Color(0xFF10B981).withValues(alpha: 0.15),
               child: Text(
                 customer.name[0].toUpperCase(),
                 style: TextStyle(
-                  color: hasBalance
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFF10B981),
+                  color:
+                      hasBalance
+                          ? const Color(0xFFE94560)
+                          : const Color(0xFF10B981),
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
                 ),
@@ -371,15 +402,21 @@ class _CustomerTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customer.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                  Text(customer.phone,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.35),
-                          fontSize: 11)),
+                  Text(
+                    customer.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    customer.phone,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -388,13 +425,17 @@ class _CustomerTile extends StatelessWidget {
               Text(
                 '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
                 style: const TextStyle(
-                    color: Color(0xFFE94560),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700),
+                  color: Color(0xFFE94560),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               )
             else
-              const Icon(Icons.check_circle,
-                  color: Color(0xFF10B981), size: 16),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF10B981),
+                size: 16,
+              ),
           ],
         ),
       ),
@@ -416,7 +457,6 @@ class _CustomerDetail extends ConsumerWidget {
     required this.onUpdated,
   });
 
-  
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txAsync = ref.watch(creditTransactionsProvider(customer.id));
@@ -431,68 +471,74 @@ class _CustomerDetail extends ConsumerWidget {
         children: [
           // ── Header ────────────────────────────────────────────────
           Container(
-            padding: EdgeInsets.fromLTRB(
-              showBackButton ? 8 : 28,
-              24,
-              28,
-              20,
-            ),
+            padding: EdgeInsets.fromLTRB(showBackButton ? 8 : 28, 24, 28, 20),
             decoration: BoxDecoration(
               color: const Color(0xFF141827),
               border: Border(
-                bottom: BorderSide(color: Colors.white.withValues(alpha:0.06)),
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
               ),
             ),
-            child: narrowHeader
-                ? _NarrowHeader(
-                    customer: customer,
-                    showBackButton: showBackButton,
-                    onPayPressed: () =>
-                        _handlePay(context, ref),
-                  )
-                : _WideHeader(
-                    customer: customer,
-                    showBackButton: showBackButton,
-                    onPayPressed: () =>
-                        _handlePay(context, ref),
-                  ),
+            child:
+                narrowHeader
+                    ? _NarrowHeader(
+                      customer: customer,
+                      showBackButton: showBackButton,
+                      onPayPressed: () => _handlePay(context, ref),
+                    )
+                    : _WideHeader(
+                      customer: customer,
+                      showBackButton: showBackButton,
+                      onPayPressed: () => _handlePay(context, ref),
+                    ),
           ),
 
           // ── Transaction list label ────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
-            child: Text('Transaction History',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha:0.5),
-                    fontSize: 11,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              'Transaction History',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
 
           // ── Transactions ──────────────────────────────────────────
           Expanded(
             child: txAsync.when(
-              loading: () => const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFFE94560))),
-              error: (e, _) => Center(
-                  child: Text('$e',
-                      style: const TextStyle(color: Colors.white))),
-              data: (txs) => txs.isEmpty
-                  ? Center(
-                      child: Text('No transactions yet',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.2),
-                              fontSize: 13)))
-                  : ListView.separated(
-                      padding:
-                          const EdgeInsets.fromLTRB(28, 0, 28, 24),
-                      itemCount: txs.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 6),
-                      itemBuilder: (_, i) =>
-                          _TxTile(tx: txs[i]),
+              loading:
+                  () => const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFE94560)),
+                  ),
+              error:
+                  (e, _) => Center(
+                    child: Text(
+                      '$e',
+                      style: const TextStyle(color: Colors.white),
                     ),
+                  ),
+              data:
+                  (txs) =>
+                      txs.isEmpty
+                          ? Center(
+                            child: Text(
+                              'No transactions yet',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                fontSize: 13,
+                              ),
+                            ),
+                          )
+                          : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+                            itemCount: txs.length,
+                            separatorBuilder:
+                                (_, _) => const SizedBox(height: 6),
+                            itemBuilder: (_, i) => _TxTile(tx: txs[i]),
+                          ),
             ),
           ),
         ],
@@ -509,8 +555,10 @@ class _CustomerDetail extends ConsumerWidget {
       ref.invalidate(creditTransactionsProvider(customer.id));
       ref.invalidate(creditCustomersProvider);
       final list = await ref.read(creditCustomersProvider.future);
-      final updated = list.firstWhere((c) => c.id == customer.id,
-          orElse: () => customer);
+      final updated = list.firstWhere(
+        (c) => c.id == customer.id,
+        orElse: () => customer,
+      );
       onUpdated(updated);
     }
   }
@@ -539,19 +587,23 @@ class _WideHeader extends StatelessWidget {
       children: [
         if (showBackButton)
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: Colors.white70, size: 18),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white70,
+              size: 18,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
         CircleAvatar(
           radius: 26,
-          backgroundColor: _accent.withValues(alpha:0.15),
+          backgroundColor: _accent.withValues(alpha: 0.15),
           child: Text(
             customer.name[0].toUpperCase(),
             style: const TextStyle(
-                color: _accent,
-                fontSize: 22,
-                fontWeight: FontWeight.w800),
+              color: _accent,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
         const SizedBox(width: 16),
@@ -559,24 +611,34 @@ class _WideHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(customer.name,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800)),
-              Text(customer.phone,
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.4),
-                      fontSize: 13)),
+              Text(
+                customer.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                customer.phone,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 13,
+                ),
+              ),
             ],
           ),
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('Balance',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha:0.4), fontSize: 11)),
+            Text(
+              'Balance',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.4),
+                fontSize: 11,
+              ),
+            ),
             Text(
               '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
               style: TextStyle(
@@ -596,10 +658,10 @@ class _WideHeader extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: _green,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
         ],
@@ -635,8 +697,11 @@ class _NarrowHeader extends StatelessWidget {
           children: [
             if (showBackButton)
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white70, size: 18),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white70,
+                  size: 18,
+                ),
                 onPressed: () => Navigator.of(context).pop(),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -644,13 +709,14 @@ class _NarrowHeader extends StatelessWidget {
             if (showBackButton) const SizedBox(width: 8),
             CircleAvatar(
               radius: 22,
-              backgroundColor: _accent.withValues(alpha:0.15),
+              backgroundColor: _accent.withValues(alpha: 0.15),
               child: Text(
                 customer.name[0].toUpperCase(),
                 style: const TextStyle(
-                    color: _accent,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800),
+                  color: _accent,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -658,27 +724,36 @@ class _NarrowHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customer.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  Text(customer.phone,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.4),
-                          fontSize: 12)),
+                  Text(
+                    customer.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    customer.phone,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('Balance',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.4),
-                        fontSize: 10)),
+                Text(
+                  'Balance',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 10,
+                  ),
+                ),
                 Text(
                   '₱${NumberFormat('#,##0.00').format(customer.totalOwed)}',
                   style: TextStyle(
@@ -706,7 +781,8 @@ class _NarrowHeader extends StatelessWidget {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -725,12 +801,10 @@ class _TxTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = tx.type == CreditTxType.credit;
-    final color =
-        isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
+    final color = isCredit ? const Color(0xFFE94560) : const Color(0xFF10B981);
     final sign = isCredit ? '+' : '-';
-    final icon = isCredit
-        ? Icons.arrow_upward_rounded
-        : Icons.arrow_downward_rounded;
+    final icon =
+        isCredit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
 
     // Settlement badge
     Widget? badge;
@@ -752,10 +826,12 @@ class _TxTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1F35),
         borderRadius: BorderRadius.circular(10),
-        border: isCredit && tx.isSettled
-            ? Border.all(
-                color: const Color(0xFF10B981).withValues(alpha:0.2))
-            : null,
+        border:
+            isCredit && tx.isSettled
+                ? Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                )
+                : null,
       ),
       child: Row(
         children: [
@@ -763,7 +839,7 @@ class _TxTile extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: color.withValues(alpha:0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -778,32 +854,36 @@ class _TxTile extends StatelessWidget {
                     Text(
                       isCredit ? 'Utang' : 'Payment',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600),
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    if (badge != null) ...[
-                      const SizedBox(width: 8),
-                      badge,
-                    ],
+                    if (badge != null) ...[const SizedBox(width: 8), badge],
                   ],
                 ),
                 if (tx.note != null)
-                  Text(tx.note!,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.35),
-                          fontSize: 11)),
+                  Text(
+                    tx.note!,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 11,
+                    ),
+                  ),
                 if (isCredit && tx.isPartiallyPaid)
                   Text(
                     '₱${tx.amountRemaining!.toStringAsFixed(2)} remaining',
                     style: const TextStyle(
-                        color: Color(0xFFF59E0B), fontSize: 11),
+                      color: Color(0xFFF59E0B),
+                      fontSize: 11,
+                    ),
                   ),
                 Text(
                   DateFormat('MMM d, y · h:mm a').format(tx.createdAt),
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.25),
-                      fontSize: 10),
+                    color: Colors.white.withValues(alpha: 0.25),
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
@@ -811,9 +891,10 @@ class _TxTile extends StatelessWidget {
           Text(
             '$sign₱${NumberFormat('#,##0.00').format(tx.amount)}',
             style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w700),
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -833,15 +914,18 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha:0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
-      child: Text(label,
-          style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

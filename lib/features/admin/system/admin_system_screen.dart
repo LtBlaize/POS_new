@@ -19,8 +19,14 @@ class AdminSystemScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('System health',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AdminColors.textPrimary)),
+              const Text(
+                'System health',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AdminColors.textPrimary,
+                ),
+              ),
               TextButton.icon(
                 onPressed: () => ref.invalidate(systemChecksProvider),
                 icon: const Icon(Icons.refresh, size: 16),
@@ -30,19 +36,25 @@ class AdminSystemScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           async.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (_, __) => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: Text('Could not run system checks', style: TextStyle(color: AdminColors.textMuted)),
-              ),
-            ),
-            data: (checks) => Column(
-              children: checks.map((c) => _CheckRow(check: c)).toList(),
-            ),
+            loading:
+                () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+            error:
+                (_, __) => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: Text(
+                      'Could not run system checks',
+                      style: TextStyle(color: AdminColors.textMuted),
+                    ),
+                  ),
+                ),
+            data:
+                (checks) => Column(
+                  children: checks.map((c) => _CheckRow(check: c)).toList(),
+                ),
           ),
         ],
       ),
@@ -55,11 +67,23 @@ class _CheckRow extends StatelessWidget {
   const _CheckRow({required this.check});
 
   (Color, Color, String) get _statusVisuals => switch (check.status) {
-        CheckStatus.ok => (AdminColors.successBg, AdminColors.success, 'Operational'),
-        CheckStatus.degraded => (AdminColors.warningBg, AdminColors.warning, 'Degraded'),
-        CheckStatus.down => (AdminColors.dangerBg, AdminColors.danger, 'Down'),
-        CheckStatus.notConfigured => (AdminColors.neutralBg, AdminColors.neutral, 'Not configured'),
-      };
+    CheckStatus.ok => (
+      AdminColors.successBg,
+      AdminColors.success,
+      'Operational',
+    ),
+    CheckStatus.degraded => (
+      AdminColors.warningBg,
+      AdminColors.warning,
+      'Degraded',
+    ),
+    CheckStatus.down => (AdminColors.dangerBg, AdminColors.danger, 'Down'),
+    CheckStatus.notConfigured => (
+      AdminColors.neutralBg,
+      AdminColors.neutral,
+      'Not configured',
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -74,28 +98,59 @@ class _CheckRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: fg, shape: BoxShape.circle)),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(check.label,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
+                Text(
+                  check.label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(check.detail, style: const TextStyle(fontSize: 12, color: AdminColors.textSecondary)),
+                Text(
+                  check.detail,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AdminColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
           if (check.latency != null) ...[
-            Text('${check.latency!.inMilliseconds}ms',
-                style: const TextStyle(fontSize: 11, color: AdminColors.textMuted)),
+            Text(
+              '${check.latency!.inMilliseconds}ms',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AdminColors.textMuted,
+              ),
+            ),
             const SizedBox(width: 12),
           ],
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-            child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
           ),
         ],
       ),

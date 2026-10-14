@@ -26,7 +26,9 @@ class SystemCheck {
   });
 }
 
-final systemChecksProvider = FutureProvider.autoDispose<List<SystemCheck>>((ref) async {
+final systemChecksProvider = FutureProvider.autoDispose<List<SystemCheck>>((
+  ref,
+) async {
   final checks = <SystemCheck>[];
 
   // ── Real check: Supabase reachability ───────────────────────────────────
@@ -39,43 +41,59 @@ final systemChecksProvider = FutureProvider.autoDispose<List<SystemCheck>>((ref)
     // than adding a new health-check endpoint.
     await client.from('subscription_plans').select('id').limit(1);
     sw.stop();
-    checks.add(SystemCheck(
-      label: 'Supabase reachability',
-      status: sw.elapsedMilliseconds < 1500 ? CheckStatus.ok : CheckStatus.degraded,
-      detail: sw.elapsedMilliseconds < 1500 ? 'Responding normally' : 'Responding slowly',
-      latency: sw.elapsed,
-    ));
+    checks.add(
+      SystemCheck(
+        label: 'Supabase reachability',
+        status:
+            sw.elapsedMilliseconds < 1500
+                ? CheckStatus.ok
+                : CheckStatus.degraded,
+        detail:
+            sw.elapsedMilliseconds < 1500
+                ? 'Responding normally'
+                : 'Responding slowly',
+        latency: sw.elapsed,
+      ),
+    );
   } catch (e) {
     sw.stop();
-    checks.add(SystemCheck(
-      label: 'Supabase reachability',
-      status: CheckStatus.down,
-      detail: 'Query failed: $e',
-      latency: sw.elapsed,
-    ));
+    checks.add(
+      SystemCheck(
+        label: 'Supabase reachability',
+        status: CheckStatus.down,
+        detail: 'Query failed: $e',
+        latency: sw.elapsed,
+      ),
+    );
   }
 
   // ── Real check: auth session validity ───────────────────────────────────
   final session = Supabase.instance.client.auth.currentSession;
   if (session != null) {
     final expiresAt = session.expiresAt;
-    final expiryDt = expiresAt != null
-        ? DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
-        : null;
+    final expiryDt =
+        expiresAt != null
+            ? DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
+            : null;
     final stillValid = expiryDt == null || expiryDt.isAfter(DateTime.now());
-    checks.add(SystemCheck(
-      label: 'Admin session',
-      status: stillValid ? CheckStatus.ok : CheckStatus.degraded,
-      detail: stillValid
-          ? 'Valid${expiryDt != null ? " until ${_fmtTime(expiryDt)}" : ""}'
-          : 'Session expired — re-authentication may be needed',
-    ));
+    checks.add(
+      SystemCheck(
+        label: 'Admin session',
+        status: stillValid ? CheckStatus.ok : CheckStatus.degraded,
+        detail:
+            stillValid
+                ? 'Valid${expiryDt != null ? " until ${_fmtTime(expiryDt)}" : ""}'
+                : 'Session expired — re-authentication may be needed',
+      ),
+    );
   } else {
-    checks.add(const SystemCheck(
-      label: 'Admin session',
-      status: CheckStatus.down,
-      detail: 'No active session',
-    ));
+    checks.add(
+      const SystemCheck(
+        label: 'Admin session',
+        status: CheckStatus.down,
+        detail: 'No active session',
+      ),
+    );
   }
 
   // ── Not configured: no real signal available yet ────────────────────────
@@ -85,12 +103,14 @@ final systemChecksProvider = FutureProvider.autoDispose<List<SystemCheck>>((ref)
     SystemCheck(
       label: 'Device sync status',
       status: CheckStatus.notConfigured,
-      detail: 'No central sync-status table — sync state lives per-device in local SQLite',
+      detail:
+          'No central sync-status table — sync state lives per-device in local SQLite',
     ),
     SystemCheck(
       label: 'LAN server health',
       status: CheckStatus.notConfigured,
-      detail: 'LAN servers run per-business, not reachable from the admin console',
+      detail:
+          'LAN servers run per-business, not reachable from the admin console',
     ),
     SystemCheck(
       label: 'PayMongo integration',

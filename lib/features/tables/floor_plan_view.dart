@@ -17,14 +17,11 @@ import '../../core/services/local_db_service.dart';
 class FloorPlanView extends ConsumerStatefulWidget {
   /// Called when user taps a free table to select it
   final ValueChanged<String>? onSelectTable;
+
   /// If true, tables are draggable (settings/edit mode)
   final bool editMode;
 
-  const FloorPlanView({
-    super.key,
-    this.onSelectTable,
-    this.editMode = false,
-  });
+  const FloorPlanView({super.key, this.onSelectTable, this.editMode = false});
 
   @override
   ConsumerState<FloorPlanView> createState() => _FloorPlanViewState();
@@ -43,17 +40,21 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
       children: [
         if (widget.editMode && _dirty)
           Container(
-            color: AppColors.warning.withValues(alpha:0.1),
+            color: AppColors.warning.withValues(alpha: 0.1),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.edit_location_outlined,
-                    size: 14, color: AppColors.warning),
+                const Icon(
+                  Icons.edit_location_outlined,
+                  size: 14,
+                  color: AppColors.warning,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
-                  child: Text('Layout changed — save to persist',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.warning)),
+                  child: Text(
+                    'Layout changed — save to persist',
+                    style: TextStyle(fontSize: 12, color: AppColors.warning),
+                  ),
                 ),
                 TextButton(
                   onPressed: () async {
@@ -66,56 +67,62 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
             ),
           ),
         Expanded(
-          child: tables.isEmpty
-              ? const Center(
-                  child: Text('No tables set up yet',
+          child:
+              tables.isEmpty
+                  ? const Center(
+                    child: Text(
+                      'No tables set up yet',
                       style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13)))
-              : !widget.editMode
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                  : !widget.editMode
                   ? _buildFitted(tables, selected)
                   : InteractiveViewer(
-                  boundaryMargin: const EdgeInsets.all(200),
-                  minScale: 0.5,
-                  maxScale: 2.5,
-                  child: SizedBox(
-                    width: 1000,
-                    height: 800,
-                    child: Stack(
-                      children: [
-                        // Grid background
-                        Positioned.fill(
-                          child: CustomPaint(painter: _GridPainter()),
-                        ),
-                        // Tables
-                        ...tables.map((table) {
-                          return _TableWidget(
-                            key: ValueKey(table.uuid ?? table.name),
-                            table: table,
-                            isSelected: selected == table.name,
-                            editMode: widget.editMode,
-                            onTap: () {
-                              if (widget.editMode) return;
-                              if (table.status == TableStatus.occupied) {
-                                _showOccupiedSheet(table);
-                              } else {
+                    boundaryMargin: const EdgeInsets.all(200),
+                    minScale: 0.5,
+                    maxScale: 2.5,
+                    child: SizedBox(
+                      width: 1000,
+                      height: 800,
+                      child: Stack(
+                        children: [
+                          // Grid background
+                          Positioned.fill(
+                            child: CustomPaint(painter: _GridPainter()),
+                          ),
+                          // Tables
+                          ...tables.map((table) {
+                            return _TableWidget(
+                              key: ValueKey(table.uuid ?? table.name),
+                              table: table,
+                              isSelected: selected == table.name,
+                              editMode: widget.editMode,
+                              onTap: () {
+                                if (widget.editMode) return;
+                                if (table.status == TableStatus.occupied) {
+                                  _showOccupiedSheet(table);
+                                } else {
+                                  ref
+                                      .read(tableProvider.notifier)
+                                      .selectTable(table.name);
+                                  widget.onSelectTable?.call(table.name);
+                                }
+                              },
+                              onDragEnd: (x, y) {
                                 ref
                                     .read(tableProvider.notifier)
-                                    .selectTable(table.name);
-                                widget.onSelectTable?.call(table.name);
-                              }
-                            },
-                            onDragEnd: (x, y) {
-                              ref
-                                  .read(tableProvider.notifier)
-                                  .moveTable(table.name, x, y);
-                              setState(() => _dirty = true);
-                            },
-                          );
-                        }),
-                      ],
+                                    .moveTable(table.name, x, y);
+                                setState(() => _dirty = true);
+                              },
+                            );
+                          }),
+                        ],
+                      ),
                     ),
                   ),
-                ),
         ),
       ],
     );
@@ -175,34 +182,39 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
   Future<void> _showOccupiedSheet(TableEntry table) async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Text('Table ${table.name}',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700)),
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    'Table ${table.name}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_shopping_cart),
+                  title: const Text('Add items to tab'),
+                  onTap: () => Navigator.pop(ctx, 'add'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.payments_outlined),
+                  title: const Text('Pay'),
+                  onTap: () => Navigator.pop(ctx, 'pay'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.event_available_outlined),
+                  title: const Text('Free table'),
+                  onTap: () => Navigator.pop(ctx, 'free'),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.add_shopping_cart),
-              title: const Text('Add items to tab'),
-              onTap: () => Navigator.pop(ctx, 'add'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: const Text('Pay'),
-              onTap: () => Navigator.pop(ctx, 'pay'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.event_available_outlined),
-              title: const Text('Free table'),
-              onTap: () => Navigator.pop(ctx, 'free'),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
     if (!mounted || action == null) return;
     switch (action) {
@@ -221,7 +233,7 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
   }
 
   /// Latest unpaid, non-cancelled order for this table (online lookup).
-    /// Latest unpaid, non-cancelled order for this table. Online lookup first,
+  /// Latest unpaid, non-cancelled order for this table. Online lookup first,
   /// local cache when offline or on a network failure.
   Future<Map<String, dynamic>?> _findOpenOrder(TableEntry table) async {
     final uuid = table.uuid;
@@ -238,18 +250,23 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
-      } catch (_) {/* fall through to local */}
+      } catch (_) {
+        /* fall through to local */
+      }
     }
     final businessId = ref.read(activeBusinessIdProvider);
     if (businessId == null) return null;
     final local = await ref.read(localDbServiceProvider).getOrders(businessId);
-    final open = local
-        .where((o) =>
-            o.tableId == uuid &&
-            o.paidAt == null &&
-            o.status != OrderStatus.cancelled)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final open =
+        local
+            .where(
+              (o) =>
+                  o.tableId == uuid &&
+                  o.paidAt == null &&
+                  o.status != OrderStatus.cancelled,
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     if (open.isEmpty) return null;
     final o = open.first;
     return {
@@ -267,7 +284,9 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
     final row = await _findOpenOrder(table);
     if (!mounted) return;
     if (row == null) {
-      _toast('No open order found for Table ${table.name} (needs a connection).');
+      _toast(
+        'No open order found for Table ${table.name} (needs a connection).',
+      );
       return;
     }
     ref.read(openTabProvider.notifier).state = OpenTab(
@@ -290,20 +309,25 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
     final row = await _findOpenOrder(table);
     if (!mounted) return;
     if (row == null) {
-      _toast('No open order found for Table ${table.name} (needs a connection).');
+      _toast(
+        'No open order found for Table ${table.name} (needs a connection).',
+      );
       return;
     }
     final orderId = row['id'] as String;
     try {
       // Prefer the stream's copy: promo lines are already grouped there.
-      Order? order = ref
-          .read(ordersStreamProvider)
-          .asData
-          ?.value
-          .where((o) => o.id == orderId)
-          .firstOrNull;
+      Order? order =
+          ref
+              .read(ordersStreamProvider)
+              .asData
+              ?.value
+              .where((o) => o.id == orderId)
+              .firstOrNull;
       if (order == null || order.items.isEmpty) {
-        order = await ref.read(orderServiceProvider).fetchOrderWithItems(orderId);
+        order = await ref
+            .read(orderServiceProvider)
+            .fetchOrderWithItems(orderId);
       }
       final cart = ref.read(cartProvider.notifier);
       cart.clear();
@@ -320,11 +344,12 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
       final paid = await showDialog<Order>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => CheckoutDialog(
-          featureManager: ref.read(featureManagerProvider),
-          existingOrderId: orderId,
-          existingOrder: order, // enables "Print Bill"
-        ),
+        builder:
+            (_) => CheckoutDialog(
+              featureManager: ref.read(featureManagerProvider),
+              existingOrderId: orderId,
+              existingOrder: order, // enables "Print Bill"
+            ),
       );
       // Cancelled: don't leave the tab's items sitting in the cart.
       if (paid == null && mounted) ref.read(cartProvider.notifier).clear();
@@ -336,27 +361,31 @@ class _FloorPlanViewState extends ConsumerState<FloorPlanView> {
   void _confirmFree(BuildContext context, String name) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Free table?'),
-        content: Text(
-          'Table "$name" may still have an unpaid order. '
-          'Freeing it will not cancel or pay that order — it stays open in '
-          'Orders → Active. Mark as available anyway?',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(tableProvider.notifier).freeTable(name);
-            },
-            child: const Text('Free Table',
-                style: TextStyle(color: AppColors.success)),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Free table?'),
+            content: Text(
+              'Table "$name" may still have an unpaid order. '
+              'Freeing it will not cancel or pay that order — it stays open in '
+              'Orders → Active. Mark as available anyway?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  ref.read(tableProvider.notifier).freeTable(name);
+                },
+                child: const Text(
+                  'Free Table',
+                  style: TextStyle(color: AppColors.success),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -442,7 +471,7 @@ class _TableWidgetState extends State<_TableWidget> {
           border: Border.all(color: _borderColor, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -456,15 +485,16 @@ class _TableWidgetState extends State<_TableWidget> {
                   ? Icons.people_outlined
                   : Icons.table_restaurant_outlined,
               size: 20,
-              color: _textColor.withValues(alpha:0.7),
+              color: _textColor.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 4),
             Text(
               widget.table.name,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: _textColor),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: _textColor,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -472,11 +502,12 @@ class _TableWidgetState extends State<_TableWidget> {
               widget.table.status == TableStatus.occupied
                   ? 'Busy'
                   : widget.isSelected
-                      ? 'Selected'
-                      : 'Free',
+                  ? 'Selected'
+                  : 'Free',
               style: TextStyle(
-                  fontSize: 9,
-                  color: _textColor.withValues(alpha:0.7)),
+                fontSize: 9,
+                color: _textColor.withValues(alpha: 0.7),
+              ),
             ),
           ],
         ),
@@ -491,24 +522,20 @@ class _TableWidgetState extends State<_TableWidget> {
         ),
         childWhenDragging: Opacity(opacity: 0.2, child: tableBox),
         onDragEnd: (details) {
-              final canvas = context.findAncestorRenderObjectOfType<RenderBox>();
-              if (canvas == null) return;
-              final localPos = canvas.globalToLocal(details.offset);
-              setState(() {
-                _x = localPos.dx.clamp(0, 920);
-                _y = localPos.dy.clamp(0, 720);
-              });
-              widget.onDragEnd(_x, _y);
-            },
+          final canvas = context.findAncestorRenderObjectOfType<RenderBox>();
+          if (canvas == null) return;
+          final localPos = canvas.globalToLocal(details.offset);
+          setState(() {
+            _x = localPos.dx.clamp(0, 920);
+            _y = localPos.dy.clamp(0, 720);
+          });
+          widget.onDragEnd(_x, _y);
+        },
         child: tableBox,
       );
     }
 
-    return Positioned(
-      left: _x,
-      top: _y,
-      child: tableBox,
-    );
+    return Positioned(left: _x, top: _y, child: tableBox);
   }
 }
 
@@ -517,9 +544,10 @@ class _TableWidgetState extends State<_TableWidget> {
 class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.divider.withValues(alpha:0.5)
-      ..strokeWidth = 0.5;
+    final paint =
+        Paint()
+          ..color = AppColors.divider.withValues(alpha: 0.5)
+          ..strokeWidth = 0.5;
 
     const step = 40.0;
     for (double x = 0; x <= size.width; x += step) {

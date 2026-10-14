@@ -15,15 +15,13 @@ import '../../../core/services/checkout_service.dart';
 class CartPanel extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
   final VoidCallback? onTabAdded;
-  const CartPanel(
-      {super.key, required this.featureManager, this.onTabAdded});
+  const CartPanel({super.key, required this.featureManager, this.onTabAdded});
 
   @override
   ConsumerState<CartPanel> createState() => _CartPanelState();
 }
 
 class _CartPanelState extends ConsumerState<CartPanel> {
-
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
@@ -50,11 +48,14 @@ class _CartPanelState extends ConsumerState<CartPanel> {
             ),
             child: Row(
               children: [
-                const Text('Cart',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary)),
+                const Text(
+                  'Cart',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: () => _showCustomItemDialog(context),
@@ -62,18 +63,34 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     message: 'Add custom item',
                     child: Container(
                       margin: const EdgeInsets.only(left: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha:0.12),
+                        color: AppColors.warning.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
+                        border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.edit_outlined, size: 11, color: AppColors.warning),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 11,
+                            color: AppColors.warning,
+                          ),
                           SizedBox(width: 3),
-                          Text('Custom', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.warning)),
+                          Text(
+                            'Custom',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.warning,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -81,25 +98,30 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                 ),
                 Tooltip(
                   message: 'Barcode scanner ready',
-                  child: Icon(Icons.qr_code_scanner_rounded,
-                      size: 14,
-                      color: AppColors.primary.withValues(alpha:0.5)),
+                  child: Icon(
+                    Icons.qr_code_scanner_rounded,
+                    size: 14,
+                    color: AppColors.primary.withValues(alpha: 0.5),
+                  ),
                 ),
                 if (items.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       '${items.fold(0, (s, i) => s + i.quantity)}',
                       style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -112,35 +134,45 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     Tooltip(
                       message: 'Split bill between guests',
                       child: GestureDetector(
-                        onTap: items.isEmpty
-                            ? null
-                            : () => showDialog(
+                        onTap:
+                            items.isEmpty
+                                ? null
+                                : () => showDialog(
                                   context: context,
                                   barrierDismissible: false,
-                                  builder: (_) => SplitBillDialog(
-                                    featureManager: widget.featureManager,
-                                  ),
+                                  builder:
+                                      (_) => SplitBillDialog(
+                                        featureManager: widget.featureManager,
+                                      ),
                                 ),
                         child: Container(
                           width: 30,
                           height: 30,
                           margin: const EdgeInsets.only(right: 4),
                           decoration: BoxDecoration(
-                            color: items.isEmpty
-                                ? AppColors.divider.withValues(alpha:0.3)
-                                : AppColors.success.withValues(alpha:0.08),
+                            color:
+                                items.isEmpty
+                                    ? AppColors.divider.withValues(alpha: 0.3)
+                                    : AppColors.success.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: items.isEmpty
-                                    ? AppColors.divider
-                                    : AppColors.success.withValues(alpha:0.3)),
+                              color:
+                                  items.isEmpty
+                                      ? AppColors.divider
+                                      : AppColors.success.withValues(
+                                        alpha: 0.3,
+                                      ),
+                            ),
                           ),
                           child: Icon(
                             Icons.call_split_outlined,
                             size: 14,
-                            color: items.isEmpty
-                                ? AppColors.textSecondary.withValues(alpha:0.3)
-                                : AppColors.success,
+                            color:
+                                items.isEmpty
+                                    ? AppColors.textSecondary.withValues(
+                                      alpha: 0.3,
+                                    )
+                                    : AppColors.success,
                           ),
                         ),
                       ),
@@ -149,29 +181,38 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     Tooltip(
                       message: 'Park / hold this order',
                       child: GestureDetector(
-                        onTap: items.isEmpty
-                            ? null
-                            : () => _showParkDialog(context),
+                        onTap:
+                            items.isEmpty
+                                ? null
+                                : () => _showParkDialog(context),
                         child: Container(
                           width: 30,
                           height: 30,
                           margin: const EdgeInsets.only(right: 4),
                           decoration: BoxDecoration(
-                            color: items.isEmpty
-                                ? AppColors.divider.withValues(alpha:0.3)
-                                : AppColors.primary.withValues(alpha:0.08),
+                            color:
+                                items.isEmpty
+                                    ? AppColors.divider.withValues(alpha: 0.3)
+                                    : AppColors.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: items.isEmpty
-                                    ? AppColors.divider
-                                    : AppColors.primary.withValues(alpha:0.3)),
+                              color:
+                                  items.isEmpty
+                                      ? AppColors.divider
+                                      : AppColors.primary.withValues(
+                                        alpha: 0.3,
+                                      ),
+                            ),
                           ),
                           child: Icon(
                             Icons.pause_outlined,
                             size: 14,
-                            color: items.isEmpty
-                                ? AppColors.textSecondary.withValues(alpha:0.3)
-                                : AppColors.primary,
+                            color:
+                                items.isEmpty
+                                    ? AppColors.textSecondary.withValues(
+                                      alpha: 0.3,
+                                    )
+                                    : AppColors.primary,
                           ),
                         ),
                       ),
@@ -186,10 +227,11 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                             width: 30,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: AppColors.danger.withValues(alpha:0.06),
+                              color: AppColors.danger.withValues(alpha: 0.06),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                  color: AppColors.danger.withValues(alpha:0.2)),
+                                color: AppColors.danger.withValues(alpha: 0.2),
+                              ),
                             ),
                             child: const Icon(
                               Icons.delete_outline,
@@ -207,132 +249,190 @@ class _CartPanelState extends ConsumerState<CartPanel> {
 
           // ── Items list ────────────────────────────────────────
           Expanded(
-            child: items.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.shopping_cart_outlined,
+            child:
+                items.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.shopping_cart_outlined,
                             size: 40,
-                            color:
-                                AppColors.textSecondary.withValues(alpha:0.25)),
-                        const SizedBox(height: 10),
-                        Text('Cart is empty',
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.25,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Cart is empty',
                             style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary
-                                    .withValues(alpha:0.5))),
-                        const SizedBox(height: 6),
-                        Text('Scan a barcode to add items',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary
-                                    .withValues(alpha:0.35))),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return GestureDetector(
-                        onLongPress: () =>
-                            _showNotesDialog(context, item.product.id, item.notes),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          child: Row(
-                            children: [
-                              _QuantityStepper(
-                                quantity: item.quantity,
-                                onDecrement: () => item.quantity == 1
-                                    ? cartNotifier
-                                        .removeProduct(item.product.id)
-                                    : cartNotifier
-                                        .decrementProduct(item.product.id),
-                                onIncrement: () =>
-                                    cartNotifier.addProduct(item.product, variant: item.selectedVariant),
+                              fontSize: 13,
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.5,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        if (item.isPromo) ...[
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 5, vertical: 1),
-                                            margin: const EdgeInsets.only(right: 5),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text('PROMO',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Scan a barcode to add items',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    : ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: items.length,
+                      separatorBuilder:
+                          (_, _) => const Divider(
+                            height: 1,
+                            indent: 16,
+                            endIndent: 16,
+                          ),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return GestureDetector(
+                          onLongPress:
+                              () => _showNotesDialog(
+                                context,
+                                item.product.id,
+                                item.notes,
+                              ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                _QuantityStepper(
+                                  quantity: item.quantity,
+                                  onDecrement:
+                                      () =>
+                                          item.quantity == 1
+                                              ? cartNotifier.removeProduct(
+                                                item.product.id,
+                                              )
+                                              : cartNotifier.decrementProduct(
+                                                item.product.id,
+                                              ),
+                                  onIncrement:
+                                      () => cartNotifier.addProduct(
+                                        item.product,
+                                        variant: item.selectedVariant,
+                                      ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (item.isPromo) ...[
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 1,
+                                                  ),
+                                              margin: const EdgeInsets.only(
+                                                right: 5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'PROMO',
                                                 style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: AppColors.primary)),
-                                          ),
-                                        ],
-                                        Flexible(
-                                          child: Text(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          Flexible(
+                                            child: Text(
                                               (item.selectedVariant != null &&
-                                                      item.selectedVariant!.name.isNotEmpty)
+                                                      item
+                                                          .selectedVariant!
+                                                          .name
+                                                          .isNotEmpty)
                                                   ? '${item.product.name} · ${item.selectedVariant!.name}'
                                                   : item.product.name,
                                               style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.textPrimary),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textPrimary,
+                                              ),
                                               maxLines: 1,
-                                              overflow: TextOverflow.ellipsis),
-                                        ),
-                                      ],
-                                    ),
-                                    if (item.notes != null &&
-                                        item.notes!.isNotEmpty)
-                                      Text(item.notes!,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (item.notes != null &&
+                                          item.notes!.isNotEmpty)
+                                        Text(
+                                          item.notes!,
                                           style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.warning,
-                                              fontStyle: FontStyle.italic),
+                                            fontSize: 11,
+                                            color: AppColors.warning,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                           maxLines: 1,
-                                          overflow: TextOverflow.ellipsis)
-                                    else if (item.isPromo)
-                                      Text(
+                                          overflow: TextOverflow.ellipsis,
+                                        )
+                                      else if (item.isPromo)
+                                        Text(
                                           item.promoComponents!
-                                              .map((c) => '${c.quantity}\u00d7 ${c.productName}')
+                                              .map(
+                                                (c) =>
+                                                    '${c.quantity}\u00d7 ${c.productName}',
+                                              )
                                               .join(', '),
                                           style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.textSecondary),
+                                            fontSize: 11,
+                                            color: AppColors.textSecondary,
+                                          ),
                                           maxLines: 1,
-                                          overflow: TextOverflow.ellipsis)
-                                    else
-                                      Text(
+                                          overflow: TextOverflow.ellipsis,
+                                        )
+                                      else
+                                        Text(
                                           '₱${item.effectivePrice.toStringAsFixed(0)} each',
                                           style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.textSecondary)),
-                                  ],
+                                            fontSize: 11,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Text('₱${item.total.toStringAsFixed(0)}',
+                                Text(
+                                  '₱${item.total.toStringAsFixed(0)}',
                                   style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary)),
-                            ],
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
           ),
 
           // ── Footer ────────────────────────────────────────────
@@ -348,26 +448,33 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppColors.warning.withValues(alpha: 0.3)),
+                        color: AppColors.warning.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.add_shopping_cart,
-                            size: 14, color: AppColors.warning),
+                        const Icon(
+                          Icons.add_shopping_cart,
+                          size: 14,
+                          color: AppColors.warning,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Adding to ${tab.label} · Order #${tab.orderNumber} '
                             '(₱${tab.existingTotal.toStringAsFixed(2)} so far)',
                             style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.warning),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.warning,
+                            ),
                           ),
                         ),
                         GestureDetector(
@@ -375,41 +482,54 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                             ref.read(openTabProvider.notifier).state = null;
                             cartNotifier.clear();
                           },
-                          child: const Icon(Icons.close,
-                              size: 16, color: AppColors.textSecondary),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 Row(
                   children: [
-                    const Text('Subtotal',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary)),
+                    const Text(
+                      'Subtotal',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                     const Spacer(),
                     Text(
                       '₱${ref.watch(cartProvider.notifier).itemsTotal.toStringAsFixed(2)}',
                       style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary),
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Text('Total',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary)),
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                     const Spacer(),
-                    Text('₱${total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primary)),
+                    Text(
+                      '₱${total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -417,16 +537,18 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: items.isEmpty
-                        ? null
-                        : tab != null
+                    onPressed:
+                        items.isEmpty
+                            ? null
+                            : tab != null
                             ? () => _addToTab(context, tab)
                             : () => showDialog(
                               context: context,
                               barrierDismissible: false,
-                              builder: (_) => CheckoutDialog(
-                                featureManager: widget.featureManager,
-                              ),
+                              builder:
+                                  (_) => CheckoutDialog(
+                                    featureManager: widget.featureManager,
+                                  ),
                             ),
                     icon: Icon(
                       hasKitchen
@@ -439,7 +561,9 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                           ? 'Add to Tab'
                           : (hasKitchen ? 'Send to Kitchen' : 'Pay'),
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 15),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
@@ -447,7 +571,8 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.divider,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -481,10 +606,11 @@ class _QuantityStepper extends StatelessWidget {
         _StepBtn(icon: Icons.remove, onTap: onDecrement),
         SizedBox(
           width: 24,
-          child: Text('$quantity',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700)),
+          child: Text(
+            '$quantity',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
         ),
         _StepBtn(icon: Icons.add, onTap: onIncrement, positive: true),
       ],
@@ -497,8 +623,11 @@ class _StepBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool positive;
 
-  const _StepBtn(
-      {required this.icon, required this.onTap, this.positive = false});
+  const _StepBtn({
+    required this.icon,
+    required this.onTap,
+    this.positive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -508,16 +637,18 @@ class _StepBtn extends StatelessWidget {
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: positive
-              ? AppColors.primary.withValues(alpha:0.08)
-              : AppColors.surface,
+          color:
+              positive
+                  ? AppColors.primary.withValues(alpha: 0.08)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: AppColors.divider),
         ),
-        child: Icon(icon,
-            size: 13,
-            color:
-                positive ? AppColors.primary : AppColors.textSecondary),
+        child: Icon(
+          icon,
+          size: 13,
+          color: positive ? AppColors.primary : AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -526,8 +657,10 @@ class _StepBtn extends StatelessWidget {
 // ── Custom item dialog (lives on _CartPanelState) ─────────────────────────────
 
 extension _CartPanelDialogs on _CartPanelState {
-    Future<void> _addToTab(BuildContext context, OpenTab tab) async {
-    final result = await ref.read(checkoutServiceProvider).addToTab(
+  Future<void> _addToTab(BuildContext context, OpenTab tab) async {
+    final result = await ref
+        .read(checkoutServiceProvider)
+        .addToTab(
           orderId: tab.orderId,
           hasKitchen: widget.featureManager.hasFeature('kitchen'),
           items: ref.read(cartProvider),
@@ -535,22 +668,29 @@ extension _CartPanelDialogs on _CartPanelState {
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (result.status == CheckoutStatus.error) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(result.errorMessage ?? 'Could not add items.'),
-        backgroundColor: AppColors.danger,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'Could not add items.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
       return; // sheet stays open on failure
     }
     ref.read(openTabProvider.notifier).state = null;
-    messenger.showSnackBar(SnackBar(
-      content: Text(result.pendingSync
-          ? 'Saved offline — Round ${result.round} will sync when you\'re back online'
-          : 'Added Round ${result.round} to ${tab.label} · Order #${tab.orderNumber}'),
-      backgroundColor:
-          result.pendingSync ? AppColors.warning : AppColors.success,
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.pendingSync
+              ? 'Saved offline — Round ${result.round} will sync when you\'re back online'
+              : 'Added Round ${result.round} to ${tab.label} · Order #${tab.orderNumber}',
+        ),
+        backgroundColor:
+            result.pendingSync ? AppColors.warning : AppColors.success,
+      ),
+    );
     widget.onTabAdded?.call(); // closes the phone sheet, only on success
   }
+
   void _showParkDialog(BuildContext context) {
     final labelController = TextEditingController();
     final items = ref.read(cartProvider);
@@ -558,101 +698,122 @@ extension _CartPanelDialogs on _CartPanelState {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hold Order',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${items.fold(0, (s, i) => s + i.quantity)} item(s) · ₱${cartNotifier.grandTotal.toStringAsFixed(2)}',
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: labelController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                  labelText: 'Label (optional)',
-                  hintText: 'e.g. Table 3, John, To-go'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text(
+              'Hold Order',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.pause_outlined, size: 16),
-            label: const Text('Hold'),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              // Get businessId from profile
-              final profile = ref
-                  .read(profileProvider)
-                  .asData
-                  ?.value;
-              if (profile?.businessId == null) return;
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${items.fold(0, (s, i) => s + i.quantity)} item(s) · ₱${cartNotifier.grandTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: labelController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Label (optional)',
+                    hintText: 'e.g. Table 3, John, To-go',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.pause_outlined, size: 16),
+                label: const Text('Hold'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  // Get businessId from profile
+                  final profile = ref.read(profileProvider).asData?.value;
+                  if (profile?.businessId == null) return;
 
-              await ref.read(parkedOrderProvider.notifier).parkCart(
-                    businessId: profile!.businessId!,
-                    label: labelController.text,
-                    items: items,
-                    orderDiscountAmount: cartNotifier.orderDiscountAmount,
-                    orderDiscountType: cartNotifier.orderDiscountType,
-                    tipAmount: cartNotifier.tipAmount,
-                  );
-              cartNotifier.clear();
-            },
+                  await ref
+                      .read(parkedOrderProvider.notifier)
+                      .parkCart(
+                        businessId: profile!.businessId!,
+                        label: labelController.text,
+                        items: items,
+                        orderDiscountAmount: cartNotifier.orderDiscountAmount,
+                        orderDiscountType: cartNotifier.orderDiscountType,
+                        tipAmount: cartNotifier.tipAmount,
+                      );
+                  cartNotifier.clear();
+                },
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
-  void _showNotesDialog(BuildContext context, String productId, String? existing) {
+  void _showNotesDialog(
+    BuildContext context,
+    String productId,
+    String? existing,
+  ) {
     final controller = TextEditingController(text: existing ?? '');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Item Note',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          maxLength: 120,
-          decoration: const InputDecoration(
-            hintText: 'e.g. no onions, extra sauce, well done…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          if (existing != null && existing.isNotEmpty)
-            TextButton(
-              onPressed: () {
-                ref.read(cartProvider.notifier).setItemNotes(productId, null);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Remove',
-                  style: TextStyle(color: AppColors.danger)),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text(
+              'Item Note',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              ref
-                  .read(cartProvider.notifier)
-                  .setItemNotes(productId, controller.text);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 3,
+              maxLength: 120,
+              decoration: const InputDecoration(
+                hintText: 'e.g. no onions, extra sauce, well done…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              if (existing != null && existing.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    ref
+                        .read(cartProvider.notifier)
+                        .setItemNotes(productId, null);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    'Remove',
+                    style: TextStyle(color: AppColors.danger),
+                  ),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  ref
+                      .read(cartProvider.notifier)
+                      .setItemNotes(productId, controller.text);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Save'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -663,49 +824,67 @@ extension _CartPanelDialogs on _CartPanelState {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Custom Item', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Item name', hintText: 'e.g. Special Request'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text(
+              'Custom Item',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Item name',
+                      hintText: 'e.g. Special Request',
+                    ),
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Price',
+                      prefixText: '₱',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (double.tryParse(v.trim()) == null)
+                        return 'Invalid price';
+                      return null;
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: priceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Price', prefixText: '₱'),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Required';
-                  if (double.tryParse(v.trim()) == null) return 'Invalid price';
-                  return null;
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (!formKey.currentState!.validate()) return;
+                  final product = Product.custom(
+                    name: nameController.text.trim(),
+                    price: double.parse(priceController.text.trim()),
+                  );
+                  ref.read(cartProvider.notifier).addProduct(product);
+                  Navigator.pop(ctx);
                 },
+                child: const Text('Add to Cart'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) return;
-              final product = Product.custom(
-                name: nameController.text.trim(),
-                price: double.parse(priceController.text.trim()),
-              );
-              ref.read(cartProvider.notifier).addProduct(product);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Add to Cart'),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -23,56 +23,61 @@ class AuthScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: AuthColors.background,
       body: SafeArea(
-        child: LayoutBuilder(builder: (context, c) {
-          final narrow = c.maxWidth < 480;
-          final pad = narrow ? 16.0 : 24.0;
-          final content = useCard
-              ? Container(
-                  padding: EdgeInsets.all(narrow ? 20 : 32),
-                  decoration: BoxDecoration(
-                    color: AuthColors.card,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AuthColors.border),
-                  ),
-                  child: child,
-                )
-              : child;
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 480;
+            final pad = narrow ? 16.0 : 24.0;
+            final content =
+                useCard
+                    ? Container(
+                      padding: EdgeInsets.all(narrow ? 20 : 32),
+                      decoration: BoxDecoration(
+                        color: AuthColors.card,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AuthColors.border),
+                      ),
+                      child: child,
+                    )
+                    : child;
 
-          return SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.all(pad),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: math.max(0, c.maxHeight - pad * 2),
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (onBack != null)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: onBack,
-                            icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded, size: 14),
-                            label: const Text('Back'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AuthColors.textSecondary,
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.all(pad),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: math.max(0, c.maxHeight - pad * 2),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (onBack != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: onBack,
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 14,
+                              ),
+                              label: const Text('Back'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AuthColors.textSecondary,
+                              ),
                             ),
                           ),
-                        ),
-                      content,
-                    ],
+                        content,
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
     );
   }
@@ -101,28 +106,35 @@ class AuthStepper extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: done
-            ? AuthColors.accent
-            : active
+        color:
+            done
+                ? AuthColors.accent
+                : active
                 ? AuthColors.accent.withValues(alpha: 0.35)
                 : AuthColors.field,
-        border: active ? Border.all(color: AuthColors.accentLight, width: 2) : null,
-        boxShadow: active
-            ? [BoxShadow(
-                color: AuthColors.accentLight.withValues(alpha: 0.45),
-                blurRadius: 10)]
-            : null,
+        border:
+            active ? Border.all(color: AuthColors.accentLight, width: 2) : null,
+        boxShadow:
+            active
+                ? [
+                  BoxShadow(
+                    color: AuthColors.accentLight.withValues(alpha: 0.45),
+                    blurRadius: 10,
+                  ),
+                ]
+                : null,
       ),
-      child: done
-          ? const Icon(Icons.check, size: 16, color: Colors.white)
-          : Text(
-              '$i',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: active ? Colors.white : AuthColors.textMuted,
+      child:
+          done
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : Text(
+                '$i',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: active ? Colors.white : AuthColors.textMuted,
+                ),
               ),
-            ),
     );
   }
 
@@ -132,12 +144,14 @@ class AuthStepper extends StatelessWidget {
     for (var i = 1; i <= total; i++) {
       row.add(_dot(i));
       if (i < total) {
-        row.add(Expanded(
-          child: Container(
-            height: 2,
-            color: i < current ? AuthColors.accent : AuthColors.border,
+        row.add(
+          Expanded(
+            child: Container(
+              height: 2,
+              color: i < current ? AuthColors.accent : AuthColors.border,
+            ),
           ),
-        ));
+        );
       }
     }
     return Semantics(
@@ -182,14 +196,18 @@ class AuthButton extends StatelessWidget {
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           ),
-          backgroundColor: WidgetStateProperty.resolveWith((s) =>
-              s.contains(WidgetState.disabled) && !loading
-                  ? AuthColors.accent.withValues(alpha: 0.35)
-                  : AuthColors.accent),
-          foregroundColor: WidgetStateProperty.resolveWith((s) =>
-              s.contains(WidgetState.disabled) && !loading
-                  ? Colors.white54
-                  : Colors.white),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (s) =>
+                s.contains(WidgetState.disabled) && !loading
+                    ? AuthColors.accent.withValues(alpha: 0.35)
+                    : AuthColors.accent,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (s) =>
+                s.contains(WidgetState.disabled) && !loading
+                    ? Colors.white54
+                    : Colors.white,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -199,7 +217,9 @@ class AuthButton extends StatelessWidget {
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               )
             else if (icon != null)
               Icon(icon, size: 18),
@@ -209,7 +229,9 @@ class AuthButton extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -237,14 +259,20 @@ class AuthErrorBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 18, color: AuthColors.error),
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 18,
+              color: AuthColors.error,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
                 style: const TextStyle(
-                    fontSize: 13, color: AuthColors.error, height: 1.35),
+                  fontSize: 13,
+                  color: AuthColors.error,
+                  height: 1.35,
+                ),
               ),
             ),
           ],
@@ -264,12 +292,13 @@ class AuthErrorSlot extends StatelessWidget {
     return AnimatedSize(
       duration: const Duration(milliseconds: 150),
       alignment: Alignment.topCenter,
-      child: message == null
-          ? const SizedBox(width: double.infinity, height: 0)
-          : Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: AuthErrorBanner(message: message!),
-            ),
+      child:
+          message == null
+              ? const SizedBox(width: double.infinity, height: 0)
+              : Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: AuthErrorBanner(message: message!),
+              ),
     );
   }
 }
@@ -309,16 +338,23 @@ class AuthSectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AuthColors.textPrimary)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AuthColors.textPrimary,
+          ),
+        ),
         if (subtitle != null) ...[
           const SizedBox(height: 4),
-          Text(subtitle!,
-              style: const TextStyle(
-                  fontSize: 13, color: AuthColors.textSecondary)),
+          Text(
+            subtitle!,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AuthColors.textSecondary,
+            ),
+          ),
         ],
       ],
     );

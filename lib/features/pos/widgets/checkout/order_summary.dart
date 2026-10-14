@@ -35,77 +35,83 @@ class OrderSummaryCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Column(
-              children: items.map<Widget>((item) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: CheckoutTheme.elevated,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${item.quantity}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: CheckoutTheme.mint,
+              children:
+                  items.map<Widget>((item) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: CheckoutTheme.elevated,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${item.quantity}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: CheckoutTheme.mint,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // REPLACE
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.product.name,
-                              style: const TextStyle(
-                                  fontSize: 13, color: CheckoutTheme.textHigh),
+                          const SizedBox(width: 10),
+                          // REPLACE
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.product.name,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: CheckoutTheme.textHigh,
+                                  ),
+                                ),
+                                if (item.discountAmount > 0)
+                                  Text(
+                                    item.discountType == DiscountType.percentage
+                                        ? '-${item.discountAmount.toStringAsFixed(0)}%'
+                                        : '-₱${item.discountValue.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: CheckoutTheme.rose,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
                             ),
-                            if (item.discountAmount > 0)
-                              Text(
-                                item.discountType == DiscountType.percentage
-                                    ? '-${item.discountAmount.toStringAsFixed(0)}%'
-                                    : '-₱${item.discountValue.toStringAsFixed(2)}',
-                                style: const TextStyle(
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (item.discountAmount > 0)
+                                Text(
+                                  '₱${item.rawTotal.toStringAsFixed(2)}',
+                                  style: const TextStyle(
                                     fontSize: 10,
-                                    color: CheckoutTheme.rose,
-                                    fontWeight: FontWeight.w600),
+                                    color: CheckoutTheme.textLow,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                              Text(
+                                '₱${item.total.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: CheckoutTheme.textHigh,
+                                ),
                               ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (item.discountAmount > 0)
-                            Text(
-                              '₱${item.rawTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontSize: 10,
-                                  color: CheckoutTheme.textLow,
-                                  decoration: TextDecoration.lineThrough),
-                            ),
-                          Text(
-                            '₱${item.total.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: CheckoutTheme.textHigh),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
           ),
           Container(
@@ -124,17 +130,19 @@ class OrderSummaryCard extends StatelessWidget {
                       const Text(
                         'Tip',
                         style: TextStyle(
-                            color: CheckoutTheme.mint,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
+                          color: CheckoutTheme.mint,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         '+₱${tipAmount.toStringAsFixed(2)}',
                         style: const TextStyle(
-                            color: CheckoutTheme.mint,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700),
+                          color: CheckoutTheme.mint,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -146,17 +154,19 @@ class OrderSummaryCard extends StatelessWidget {
                       Text(
                         orderDiscountLabel ?? 'Order Discount',
                         style: const TextStyle(
-                            color: CheckoutTheme.rose,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
+                          color: CheckoutTheme.rose,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         '-₱${orderDiscountValue.toStringAsFixed(2)}',
                         style: const TextStyle(
-                            color: CheckoutTheme.rose,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700),
+                          color: CheckoutTheme.rose,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -167,18 +177,20 @@ class OrderSummaryCard extends StatelessWidget {
                     const Text(
                       'Total',
                       style: TextStyle(
-                          color: CheckoutTheme.textMid,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600),
+                        color: CheckoutTheme.textMid,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     Text(
                       '₱${subtotal.toStringAsFixed(2)}',
                       style: const TextStyle(
-                          color: CheckoutTheme.mint,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5),
+                        color: CheckoutTheme.mint,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ],
                 ),

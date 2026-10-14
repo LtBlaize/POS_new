@@ -17,8 +17,8 @@ import '../../../core/services/local_db_service.dart';
 import '../../../core/services/sync_queue_service.dart';
 
 class AddProductDialog extends ConsumerStatefulWidget {
-final Product? product;
-const AddProductDialog({super.key, this.product});
+  final Product? product;
+  const AddProductDialog({super.key, this.product});
 
   @override
   ConsumerState<AddProductDialog> createState() => _AddProductDialogState();
@@ -28,13 +28,13 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
-  final _nameController        = TextEditingController();
-  final _priceController       = TextEditingController();
-  final _costController        = TextEditingController();
-  final _descController        = TextEditingController();
-  final _barcodeController     = TextEditingController();
-  final _skuController         = TextEditingController();
-  final _stockController       = TextEditingController(text: '0');
+  final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _costController = TextEditingController();
+  final _descController = TextEditingController();
+  final _barcodeController = TextEditingController();
+  final _skuController = TextEditingController();
+  final _stockController = TextEditingController(text: '0');
   final _newCategoryController = TextEditingController();
 
   // State
@@ -43,7 +43,8 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   bool _sendToKitchen = true;
   bool _saving = false;
   bool _addingNewCategory = false;
-  int _originalStock = 0; // ← added: used to block non-owners from reducing stock on edit
+  int _originalStock =
+      0; // ← added: used to block non-owners from reducing stock on edit
 
   // Product photo — newly picked file, or existing local/cloud path when editing
   XFile? _pickedImage;
@@ -61,9 +62,9 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
@@ -74,19 +75,20 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     // Pre-fill if editing
     final p = widget.product;
     if (p != null) {
-      _nameController.text     = p.name;
-      _priceController.text    = p.price.toStringAsFixed(2);
-      _descController.text     = p.description ?? '';
-      _barcodeController.text  = p.barcode ?? '';
-      _skuController.text      = p.sku ?? '';
-      _costController.text     = p.costPrice > 0 ? p.costPrice.toStringAsFixed(2) : '';
-      _stockController.text    = '${p.stockQuantity}';
-      _sendToKitchen           = p.sendToKitchen;
-      _existingImageUrl        = p.imageUrl;
-      _existingLocalImagePath  = p.localImagePath;
-      _trackInventory          = p.trackInventory;
-      _selectedCategoryId      = p.categoryId;
-      _originalStock           = p.stockQuantity;
+      _nameController.text = p.name;
+      _priceController.text = p.price.toStringAsFixed(2);
+      _descController.text = p.description ?? '';
+      _barcodeController.text = p.barcode ?? '';
+      _skuController.text = p.sku ?? '';
+      _costController.text =
+          p.costPrice > 0 ? p.costPrice.toStringAsFixed(2) : '';
+      _stockController.text = '${p.stockQuantity}';
+      _sendToKitchen = p.sendToKitchen;
+      _existingImageUrl = p.imageUrl;
+      _existingLocalImagePath = p.localImagePath;
+      _trackInventory = p.trackInventory;
+      _selectedCategoryId = p.categoryId;
+      _originalStock = p.stockQuantity;
       // Load existing variants
       _variants = List<ProductVariant>.from(p.variants);
       if (_variants.isEmpty && p.id.isNotEmpty) _loadVariants(p.id);
@@ -105,9 +107,10 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
           .order('name');
       if (mounted) {
         setState(() {
-          _variants = (rows as List)
-              .map((r) => ProductVariant.fromMap(r as Map<String, dynamic>))
-              .toList();
+          _variants =
+              (rows as List)
+                  .map((r) => ProductVariant.fromMap(r as Map<String, dynamic>))
+                  .toList();
         });
       }
     } catch (e) {
@@ -150,23 +153,22 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     if (profile?.businessId == null) return;
 
     final client = ref.read(supabaseClientProvider);
-    final row = await client
-        .from('categories')
-        .insert({
-          'business_id': profile!.businessId,
-          'name': name.trim(),
-        })
-        .select('id, name')
-        .single();
+    final row =
+        await client
+            .from('categories')
+            .insert({'business_id': profile!.businessId, 'name': name.trim()})
+            .select('id, name')
+            .single();
 
     final category = row;
 
     setState(() {
       _categories.add(category);
-      _categories.sort((a, b) =>
-          (a['name'] as String).compareTo(b['name'] as String));
+      _categories.sort(
+        (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+      );
       _selectedCategoryId = category['id'] as String;
-      _addingNewCategory  = false;
+      _addingNewCategory = false;
       _newCategoryController.clear();
     });
   }
@@ -185,7 +187,9 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         setState(() => _pickedImage = file);
       }
     } catch (e) {
-      _showError('Could not access ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e');
+      _showError(
+        'Could not access ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e',
+      );
     }
   }
 
@@ -209,17 +213,15 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     await local.updateProductLocalImage(productId, localPath);
 
     final profile = ref.read(profileProvider).asData?.value;
-    final businessId = profile?.businessId ?? ref.read(activeBusinessIdProvider) ?? '';
+    final businessId =
+        profile?.businessId ?? ref.read(activeBusinessIdProvider) ?? '';
 
     final syncQueue = ref.read(syncQueueServiceProvider);
     await syncQueue.enqueue(
       operation: 'upload_product_image',
       tableName: 'products',
       recordId: productId,
-      payload: {
-        'local_path': localPath,
-        'business_id': businessId,
-      },
+      payload: {'local_path': localPath, 'business_id': businessId},
     );
   }
 
@@ -257,15 +259,27 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     try {
       final client = ref.read(supabaseClientProvider);
       final data = {
-        'category_id':     _selectedCategoryId,
-        'name':            _nameController.text.trim(),
-        'description':     _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-        'price':           double.parse(_priceController.text),
-        'barcode':         _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim(),
-        'sku':             _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
-        'cost_price':      double.tryParse(_costController.text) ?? 0,
+        'category_id': _selectedCategoryId,
+        'name': _nameController.text.trim(),
+        'description':
+            _descController.text.trim().isEmpty
+                ? null
+                : _descController.text.trim(),
+        'price': double.parse(_priceController.text),
+        'barcode':
+            _barcodeController.text.trim().isEmpty
+                ? null
+                : _barcodeController.text.trim(),
+        'sku':
+            _skuController.text.trim().isEmpty
+                ? null
+                : _skuController.text.trim(),
+        'cost_price': double.tryParse(_costController.text) ?? 0,
         'track_inventory': _trackInventory,
-        'stock_quantity':  (_trackInventory && _variants.isEmpty) ? (int.tryParse(_stockController.text) ?? 0) : 0,
+        'stock_quantity':
+            (_trackInventory && _variants.isEmpty)
+                ? (int.tryParse(_stockController.text) ?? 0)
+                : 0,
         if (_variants.isNotEmpty) 'is_available': true,
         'send_to_kitchen': _sendToKitchen,
       };
@@ -274,30 +288,33 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
 
       if (widget.product == null) {
         // ── Insert — capture returned id ────────────────────────────────
-        final row = await client
-            .from('products')
-            .insert({
-              ...data,
-              'business_id': profile!.businessId,
-              'is_available': !_trackInventory || _variants.isNotEmpty || (int.tryParse(_stockController.text) ?? 0) > 0,
-              'is_active': true,
-            })
-            .select('id')
-            .single();
+        final row =
+            await client
+                .from('products')
+                .insert({
+                  ...data,
+                  'business_id': profile!.businessId,
+                  'is_available':
+                      !_trackInventory ||
+                      _variants.isNotEmpty ||
+                      (int.tryParse(_stockController.text) ?? 0) > 0,
+                  'is_active': true,
+                })
+                .select('id')
+                .single();
         productId = row['id'] as String;
       } else {
         // ── Update ──────────────────────────────────────────────────────
-        await client
-            .from('products')
-            .update(data)
-            .eq('id', widget.product!.id);
+        await client.from('products').update(data).eq('id', widget.product!.id);
         productId = widget.product!.id;
       }
 
-      final hadOriginalImage = widget.product != null &&
+      final hadOriginalImage =
+          widget.product != null &&
           ((widget.product!.imageUrl?.isNotEmpty ?? false) ||
               (widget.product!.localImagePath?.isNotEmpty ?? false));
-      final imageWasRemoved = hadOriginalImage &&
+      final imageWasRemoved =
+          hadOriginalImage &&
           _pickedImage == null &&
           (_existingImageUrl == null || _existingImageUrl!.isEmpty) &&
           (_existingLocalImagePath == null || _existingLocalImagePath!.isEmpty);
@@ -334,15 +351,15 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
         'is_active': true,
       };
       if (v.id.startsWith('new_')) {
-        final row = await client
-            .from('product_variants')
-            .insert({...payload, 'stock_quantity': v.stockQuantity})
-            .select('id')
-            .single();
+        final row =
+            await client
+                .from('product_variants')
+                .insert({...payload, 'stock_quantity': v.stockQuantity})
+                .select('id')
+                .single();
         if (v.stockQuantity > 0) {
           await client.from('inventory_logs').insert({
-            'business_id':
-                ref.read(profileProvider).asData?.value?.businessId,
+            'business_id': ref.read(profileProvider).asData?.value?.businessId,
             'product_id': productId,
             'variant_id': row['id'],
             'action': 'restock',
@@ -354,10 +371,7 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
           });
         }
       } else {
-        await client
-            .from('product_variants')
-            .update(payload)
-            .eq('id', v.id);
+        await client.from('product_variants').update(payload).eq('id', v.id);
       }
     }
     // Soft-delete removed variants
@@ -391,21 +405,32 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
               decoration: const BoxDecoration(
                 color: AppColors.primary,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  Icon(isEdit ? Icons.edit_outlined : Icons.add_box_outlined,
-                      color: Colors.white, size: 20),
+                  Icon(
+                    isEdit ? Icons.edit_outlined : Icons.add_box_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
-                  Text(isEdit ? 'Edit Product' : 'Add Product',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text(
+                    isEdit ? 'Edit Product' : 'Add Product',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -427,9 +452,11 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       _field(
                         controller: _nameController,
                         hint: 'e.g. Cheeseburger',
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Name is required'
-                            : null,
+                        validator:
+                            (v) =>
+                                (v == null || v.trim().isEmpty)
+                                    ? 'Name is required'
+                                    : null,
                       ),
                       const SizedBox(height: 14),
 
@@ -439,7 +466,8 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                         controller: _priceController,
                         hint: '0.00',
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
                             return 'Price is required';
@@ -457,7 +485,9 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       _field(
                         controller: _costController,
                         hint: '0.00  (optional — used for margin reports)',
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                       ),
                       const SizedBox(height: 14),
 
@@ -476,24 +506,24 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                         const SizedBox(
                           height: 44,
                           child: Center(
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2)),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         )
                       else if (_addingNewCategory)
                         _NewCategoryField(
                           controller: _newCategoryController,
                           onSave: (name) => _createCategory(name),
-                          onCancel: () =>
-                              setState(() => _addingNewCategory = false),
+                          onCancel:
+                              () => setState(() => _addingNewCategory = false),
                         )
                       else
                         _CategoryDropdown(
                           categories: _categories,
                           selectedId: _selectedCategoryId,
-                          onChanged: (id) =>
-                              setState(() => _selectedCategoryId = id),
-                          onAddNew: () =>
-                              setState(() => _addingNewCategory = true),
+                          onChanged:
+                              (id) => setState(() => _selectedCategoryId = id),
+                          onAddNew:
+                              () => setState(() => _addingNewCategory = true),
                         ),
                       const SizedBox(height: 14),
 
@@ -541,33 +571,35 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       ),
 
                       const SizedBox(height: 10),
-                        _SendToKitchenToggle(
-                          value: _sendToKitchen,
-                          onChanged: (v) => setState(() => _sendToKitchen = v),
-                        ),
+                      _SendToKitchenToggle(
+                        value: _sendToKitchen,
+                        onChanged: (v) => setState(() => _sendToKitchen = v),
+                      ),
                       const SizedBox(height: 14),
 
                       // Track inventory toggle
                       _TrackInventoryToggle(
                         value: _trackInventory,
-                        onChanged: (v) =>
-                            setState(() => _trackInventory = v),
+                        onChanged: (v) => setState(() => _trackInventory = v),
                       ),
-                      
-                      
+
                       // Stock quantity — only when tracking and no variants
                       if (_trackInventory && _variants.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         const Text(
                           'Stock is tracked per variant. Restock them from the Inventory list.',
                           style: TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary),
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                       if (_trackInventory && _variants.isEmpty) ...[
                         const SizedBox(height: 14),
                         // ← changed: label differs for add vs edit
-                        _label(isEdit ? 'Stock Quantity' : 'Initial Stock Quantity'),
+                        _label(
+                          isEdit ? 'Stock Quantity' : 'Initial Stock Quantity',
+                        ),
                         _field(
                           controller: _stockController,
                           hint: '0',
@@ -589,8 +621,9 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                           Text(
                             'Minimum: $_originalStock (cannot reduce stock)',
                             style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary),
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ],
@@ -600,22 +633,25 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       // ── Variants section ───────────────────────────────
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _priceController,
-                        builder: (_, _, _) => _VariantsSection(
-                        productId: widget.product?.id,
-                        basePrice: double.tryParse(_priceController.text) ?? 0,
-                        variants: _variants,
-                        loading: _variantsLoading,
-                        onAdd: (v) => setState(() => _variants.add(v)),
-                        onUpdate: (i, v) =>
-                            setState(() => _variants[i] = v),
-                        onRemove: (i) => setState(() {
-                          final removed = _variants[i];
-                          if (!removed.id.startsWith('new_')) {
-                            _removedVariantIds.add(removed.id);
-                          }
-                          _variants.removeAt(i);
-                        }),
-                      ),
+                        builder:
+                            (_, _, _) => _VariantsSection(
+                              productId: widget.product?.id,
+                              basePrice:
+                                  double.tryParse(_priceController.text) ?? 0,
+                              variants: _variants,
+                              loading: _variantsLoading,
+                              onAdd: (v) => setState(() => _variants.add(v)),
+                              onUpdate:
+                                  (i, v) => setState(() => _variants[i] = v),
+                              onRemove:
+                                  (i) => setState(() {
+                                    final removed = _variants[i];
+                                    if (!removed.id.startsWith('new_')) {
+                                      _removedVariantIds.add(removed.id);
+                                    }
+                                    _variants.removeAt(i);
+                                  }),
+                            ),
                       ), // ValueListenableBuilder
 
                       const SizedBox(height: 24),
@@ -631,11 +667,15 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: AppColors.divider,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: Text(
                             isEdit ? 'Update Product' : 'Save Product',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
                       ),
@@ -653,13 +693,16 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    ),
+  );
 
   Widget _field({
     required TextEditingController controller,
@@ -667,38 +710,39 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     int maxLines = 1,
-  }) =>
-      TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        validator: validator,
-        maxLines: maxLines,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(
-              color: AppColors.textSecondary.withValues(alpha:0.5),
-              fontSize: 13),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppColors.divider)),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppColors.divider)),
-          focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 2)),
-          errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.danger, width: 1)),
-          filled: true,
-          fillColor: AppColors.surface,
-        ),
-      );
+  }) => TextFormField(
+    controller: controller,
+    keyboardType: keyboardType,
+    validator: validator,
+    maxLines: maxLines,
+    style: const TextStyle(fontSize: 13),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+        color: AppColors.textSecondary.withValues(alpha: 0.5),
+        fontSize: 13,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: AppColors.divider),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: AppColors.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.danger, width: 1),
+      ),
+      filled: true,
+      fillColor: AppColors.surface,
+    ),
+  );
 }
 
 // ── Category dropdown ─────────────────────────────────────────────────────────
@@ -731,25 +775,36 @@ class _CategoryDropdown extends StatelessWidget {
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: categories.any((c) => c['id'] == selectedId)
-                    ? selectedId
-                    : null,
+                value:
+                    categories.any((c) => c['id'] == selectedId)
+                        ? selectedId
+                        : null,
                 isExpanded: true,
-                hint: const Text('Select category',
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary)),
+                hint: const Text(
+                  'Select category',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 style: const TextStyle(
-                    fontSize: 13, color: AppColors.textPrimary),
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
                 items: [
                   const DropdownMenuItem<String>(
                     value: null,
-                    child: Text('No category',
-                        style: TextStyle(color: AppColors.textSecondary)),
+                    child: Text(
+                      'No category',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                   ),
-                  ...categories.map((c) => DropdownMenuItem<String>(
-                        value: c['id'] as String,
-                        child: Text(c['name'] as String),
-                      )),
+                  ...categories.map(
+                    (c) => DropdownMenuItem<String>(
+                      value: c['id'] as String,
+                      child: Text(c['name'] as String),
+                    ),
+                  ),
                 ],
                 onChanged: (id) => onChanged(id),
               ),
@@ -760,15 +815,17 @@ class _CategoryDropdown extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: onAddNew,
           icon: const Icon(Icons.add, size: 14),
-          label: const Text('New',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          label: const Text(
+            'New',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primary,
             side: const BorderSide(color: AppColors.primary),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         ),
       ],
@@ -801,18 +858,27 @@ class _NewCategoryField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'New category name',
               hintStyle: TextStyle(
-                  color: AppColors.textSecondary.withValues(alpha:0.5),
-                  fontSize: 13),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
+                fontSize: 13,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 2)),
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 2,
+                ),
+              ),
               focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 2)),
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 2,
+                ),
+              ),
               filled: true,
               fillColor: AppColors.surface,
             ),
@@ -828,14 +894,20 @@ class _NewCategoryField extends StatelessWidget {
               onSave(controller.text);
             }
           },
-          icon: const Icon(Icons.check_circle,
-              color: AppColors.success, size: 24),
+          icon: const Icon(
+            Icons.check_circle,
+            color: AppColors.success,
+            size: 24,
+          ),
           tooltip: 'Save category',
         ),
         IconButton(
           onPressed: onCancel,
-          icon: const Icon(Icons.cancel_outlined,
-              color: AppColors.textSecondary, size: 24),
+          icon: const Icon(
+            Icons.cancel_outlined,
+            color: AppColors.textSecondary,
+            size: 24,
+          ),
           tooltip: 'Cancel',
         ),
       ],
@@ -893,10 +965,14 @@ class _PhotoPicker extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           clipBehavior: Clip.antiAlias,
-          child: _hasImage
-              ? _buildPreview()
-              : const Icon(Icons.image_outlined,
-                  color: AppColors.textSecondary, size: 28),
+          child:
+              _hasImage
+                  ? _buildPreview()
+                  : const Icon(
+                    Icons.image_outlined,
+                    color: AppColors.textSecondary,
+                    size: 28,
+                  ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -907,38 +983,59 @@ class _PhotoPicker extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onTakePhoto,
                 icon: const Icon(Icons.camera_alt_outlined, size: 14),
-                label: const Text('Take Photo',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Take Photo',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
               OutlinedButton.icon(
                 onPressed: onPickGallery,
                 icon: const Icon(Icons.photo_library_outlined, size: 14),
-                label: const Text('Gallery',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Gallery',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                   side: const BorderSide(color: AppColors.divider),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
               if (_hasImage)
                 OutlinedButton.icon(
                   onPressed: onRemove,
                   icon: const Icon(Icons.close, size: 14),
-                  label: const Text('Remove',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  label: const Text(
+                    'Remove',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.danger,
                     side: const BorderSide(color: AppColors.danger),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
             ],
@@ -960,34 +1057,41 @@ class _SendToKitchenToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: value
-            ? Colors.orange.withValues(alpha:0.05)
-            : AppColors.surface,
+        color:
+            value ? Colors.orange.withValues(alpha: 0.05) : AppColors.surface,
         border: Border.all(
-          color: value
-              ? Colors.orange.withValues(alpha:0.3)
-              : AppColors.divider,
+          color:
+              value ? Colors.orange.withValues(alpha: 0.3) : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(Icons.kitchen_outlined,
-              size: 16, color: AppColors.textSecondary),
+          const Icon(
+            Icons.kitchen_outlined,
+            size: 16,
+            color: AppColors.textSecondary,
+          ),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Send to Kitchen',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                Text('This item will appear on the kitchen display',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary)),
+                Text(
+                  'Send to Kitchen',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  'This item will appear on the kitchen display',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1008,42 +1112,52 @@ class _TrackInventoryToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _TrackInventoryToggle(
-      {required this.value, required this.onChanged});
+  const _TrackInventoryToggle({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: value
-            ? AppColors.primary.withValues(alpha:0.05)
-            : AppColors.surface,
+        color:
+            value
+                ? AppColors.primary.withValues(alpha: 0.05)
+                : AppColors.surface,
         border: Border.all(
-          color: value
-              ? AppColors.primary.withValues(alpha:0.3)
-              : AppColors.divider,
+          color:
+              value
+                  ? AppColors.primary.withValues(alpha: 0.3)
+                  : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              size: 16, color: AppColors.textSecondary),
+          const Icon(
+            Icons.inventory_2_outlined,
+            size: 16,
+            color: AppColors.textSecondary,
+          ),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Track Inventory',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                Text('Monitor and deduct stock on each sale',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary)),
+                Text(
+                  'Track Inventory',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  'Monitor and deduct stock on each sale',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1112,9 +1226,10 @@ class _VariantsSectionState extends State<_VariantsSection> {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
-          color: _expanded
-              ? AppColors.primary.withValues(alpha:0.3)
-              : AppColors.divider,
+          color:
+              _expanded
+                  ? AppColors.primary.withValues(alpha: 0.3)
+                  : AppColors.divider,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -1128,24 +1243,32 @@ class _VariantsSectionState extends State<_VariantsSection> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: Row(
                 children: [
-                  const Icon(Icons.tune_outlined,
-                      size: 16, color: AppColors.textSecondary),
+                  const Icon(
+                    Icons.tune_outlined,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Variants',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary)),
+                        const Text(
+                          'Variants',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                         Text(
                           count == 0
                               ? 'Size, colour, flavour, etc.'
                               : '$count variant${count > 1 ? 's' : ''}',
                           style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary),
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -1173,12 +1296,15 @@ class _VariantsSectionState extends State<_VariantsSection> {
             if (widget.variants.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Text(
                   'No variants yet. Add one below.',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary.withValues(alpha:0.7)),
+                    fontSize: 12,
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                  ),
                 ),
               )
             else
@@ -1186,14 +1312,14 @@ class _VariantsSectionState extends State<_VariantsSection> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: widget.variants.length,
-                separatorBuilder: (_, _) =>
-                    const Divider(height: 1),
-                itemBuilder: (_, i) => _VariantRow(
-                  variant: widget.variants[i],
-                  basePrice: widget.basePrice,
-                  onUpdate: (v) => widget.onUpdate(i, v),
-                  onRemove: () => widget.onRemove(i),
-                ),
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder:
+                    (_, i) => _VariantRow(
+                      variant: widget.variants[i],
+                      basePrice: widget.basePrice,
+                      onUpdate: (v) => widget.onUpdate(i, v),
+                      onRemove: () => widget.onRemove(i),
+                    ),
               ),
             const Divider(height: 1),
             Padding(
@@ -1203,15 +1329,17 @@ class _VariantsSectionState extends State<_VariantsSection> {
                 child: OutlinedButton.icon(
                   onPressed: _addVariant,
                   icon: const Icon(Icons.add, size: 14),
-                  label: const Text('Add Variant',
-                      style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600)),
+                  label: const Text(
+                    'Add Variant',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -1256,15 +1384,17 @@ class _VariantRowState extends State<_VariantRow> {
   void initState() {
     super.initState();
     final v = widget.variant;
-    _nameCtrl  = TextEditingController(text: v.name);
+    _nameCtrl = TextEditingController(text: v.name);
     _deltaCtrl = TextEditingController(
-        text: v.priceDelta == 0 ? '' : v.priceDelta.toStringAsFixed(2));
+      text: v.priceDelta == 0 ? '' : v.priceDelta.toStringAsFixed(2),
+    );
     _stockCtrl = TextEditingController(text: '${v.stockQuantity}');
-    _costCtrl  = TextEditingController(
-        text: v.costPrice == 0 ? '' : v.costPrice.toStringAsFixed(2));
-    _skuCtrl          = TextEditingController(text: v.sku ?? '');
-    _barcodeCtrl      = TextEditingController(text: v.barcode ?? '');
-    _optionTypeCtrl   = TextEditingController(text: v.optionType ?? '');
+    _costCtrl = TextEditingController(
+      text: v.costPrice == 0 ? '' : v.costPrice.toStringAsFixed(2),
+    );
+    _skuCtrl = TextEditingController(text: v.sku ?? '');
+    _barcodeCtrl = TextEditingController(text: v.barcode ?? '');
+    _optionTypeCtrl = TextEditingController(text: v.optionType ?? '');
 
     // Auto-expand new (unsaved) rows so user fills them in immediately
     _expanded = v.id.startsWith('new_');
@@ -1283,15 +1413,21 @@ class _VariantRowState extends State<_VariantRow> {
   }
 
   void _pushUpdate() {
-    widget.onUpdate(widget.variant.copyWith(
-      name: _nameCtrl.text.trim(),
-      optionType: _optionTypeCtrl.text.trim().isEmpty ? null : _optionTypeCtrl.text.trim(),
-      priceDelta: double.tryParse(_deltaCtrl.text) ?? 0,
-      stockQuantity: int.tryParse(_stockCtrl.text) ?? 0,
-      costPrice: double.tryParse(_costCtrl.text) ?? 0,
-      sku: _skuCtrl.text.trim().isEmpty ? null : _skuCtrl.text.trim(),
-      barcode: _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
-    ));
+    widget.onUpdate(
+      widget.variant.copyWith(
+        name: _nameCtrl.text.trim(),
+        optionType:
+            _optionTypeCtrl.text.trim().isEmpty
+                ? null
+                : _optionTypeCtrl.text.trim(),
+        priceDelta: double.tryParse(_deltaCtrl.text) ?? 0,
+        stockQuantity: int.tryParse(_stockCtrl.text) ?? 0,
+        costPrice: double.tryParse(_costCtrl.text) ?? 0,
+        sku: _skuCtrl.text.trim().isEmpty ? null : _skuCtrl.text.trim(),
+        barcode:
+            _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
+      ),
+    );
   }
 
   @override
@@ -1314,22 +1450,27 @@ class _VariantRowState extends State<_VariantRow> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: _nameCtrl.text.isEmpty
-                          ? AppColors.textSecondary
-                          : AppColors.textPrimary,
+                      color:
+                          _nameCtrl.text.isEmpty
+                              ? AppColors.textSecondary
+                              : AppColors.textPrimary,
                     ),
                   ),
                 ),
                 Text(
                   '₱${resolvedPrice.toStringAsFixed(2)}',
                   style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Stock: ${_stockCtrl.text}',
                   style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Icon(
@@ -1340,8 +1481,11 @@ class _VariantRowState extends State<_VariantRow> {
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: widget.onRemove,
-                  child: const Icon(Icons.close,
-                      size: 16, color: AppColors.danger),
+                  child: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AppColors.danger,
+                  ),
                 ),
               ],
             ),
@@ -1390,7 +1534,9 @@ class _VariantRowState extends State<_VariantRow> {
                         label: 'Price +/− (₱)',
                         hint: '0.00',
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true, signed: true),
+                          decimal: true,
+                          signed: true,
+                        ),
                         onChanged: (_) => setState(_pushUpdate),
                       ),
                     ),
@@ -1398,9 +1544,10 @@ class _VariantRowState extends State<_VariantRow> {
                     Expanded(
                       child: _miniField(
                         controller: _stockCtrl,
-                        label: widget.variant.id.startsWith('new_')
-                            ? 'Opening stock'
-                            : 'Stock (edit in list)',
+                        label:
+                            widget.variant.id.startsWith('new_')
+                                ? 'Opening stock'
+                                : 'Stock (edit in list)',
                         enabled: widget.variant.id.startsWith('new_'),
                         hint: '0',
                         keyboardType: TextInputType.number,
@@ -1414,7 +1561,8 @@ class _VariantRowState extends State<_VariantRow> {
                         label: 'Cost (₱)',
                         hint: '0.00',
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                         onChanged: (_) => _pushUpdate(),
                       ),
                     ),
@@ -1450,9 +1598,10 @@ class _VariantRowState extends State<_VariantRow> {
                 Text(
                   'Final price: ₱${resolvedPrice.toStringAsFixed(2)}',
                   style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.primary.withValues(alpha:0.8),
-                      fontWeight: FontWeight.w500),
+                    fontSize: 11,
+                    color: AppColors.primary.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -1472,11 +1621,14 @@ class _VariantRowState extends State<_VariantRow> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 4),
         TextField(
           controller: controller,
@@ -1487,20 +1639,28 @@ class _VariantRowState extends State<_VariantRow> {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-                color: AppColors.textSecondary.withValues(alpha:0.5),
-                fontSize: 12),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              color: AppColors.textSecondary.withValues(alpha: 0.5),
+              fontSize: 12,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: AppColors.divider)),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.divider),
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: AppColors.divider)),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.divider),
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
+            ),
             filled: true,
             fillColor: AppColors.surface,
             isDense: true,

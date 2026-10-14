@@ -6,7 +6,7 @@ import 'plan_picker_screen.dart';
 import 'widgets/auth_text_field.dart';
 import 'widgets/business_type_card.dart';
 import 'widgets/auth_theme.dart';
-import 'widgets/auth_components.dart';// for DeviceRole + deviceRoleProvider
+import 'widgets/auth_components.dart'; // for DeviceRole + deviceRoleProvider
 
 class BusinessTypeScreen extends ConsumerStatefulWidget {
   const BusinessTypeScreen({super.key});
@@ -16,8 +16,8 @@ class BusinessTypeScreen extends ConsumerStatefulWidget {
 }
 
 class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
-  final _formKey          = GlobalKey<FormState>();
-  final _fullNameCtrl     = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _fullNameCtrl = TextEditingController();
   final _businessNameCtrl = TextEditingController();
 
   String? _selectedType;
@@ -27,7 +27,8 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
     _BusinessOption(
       type: 'restaurant',
       label: 'Restaurant / Food Service',
-      description: 'Table management, kitchen display, dine-in & takeout orders.',
+      description:
+          'Table management, kitchen display, dine-in & takeout orders.',
       icon: Icons.restaurant_rounded,
     ),
     _BusinessOption(
@@ -65,8 +66,10 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
     }
 
     // Store everything the plan picker will need.
-    ref.read(pendingFullNameProvider.notifier).state     = _fullNameCtrl.text.trim();
-    ref.read(pendingBusinessNameProvider.notifier).state = _businessNameCtrl.text.trim();
+    ref.read(pendingFullNameProvider.notifier).state =
+        _fullNameCtrl.text.trim();
+    ref.read(pendingBusinessNameProvider.notifier).state =
+        _businessNameCtrl.text.trim();
     ref.read(pendingBusinessTypeProvider.notifier).state = _selectedType;
 
     if (!mounted) return;
@@ -99,8 +102,8 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
               controller: _fullNameCtrl,
               textInputAction: TextInputAction.next,
               prefixIcon: Icons.person_outline_rounded,
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Enter your name' : null,
+              validator:
+                  (v) => (v == null || v.isEmpty) ? 'Enter your name' : null,
             ),
             const SizedBox(height: 16),
             AuthTextField(
@@ -109,25 +112,28 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
               controller: _businessNameCtrl,
               textInputAction: TextInputAction.done,
               prefixIcon: Icons.business_outlined,
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Enter business name' : null,
+              validator:
+                  (v) =>
+                      (v == null || v.isEmpty) ? 'Enter business name' : null,
             ),
             const SizedBox(height: 24),
 
             const Text('BUSINESS TYPE', style: AuthText.label),
             const SizedBox(height: 10),
 
-            ..._options.map((opt) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: BusinessTypeCard(
-                    type: opt.type,
-                    label: opt.label,
-                    description: opt.description,
-                    icon: opt.icon,
-                    isSelected: _selectedType == opt.type,
-                    onTap: () => setState(() => _selectedType = opt.type),
-                  ),
-                )),
+            ..._options.map(
+              (opt) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: BusinessTypeCard(
+                  type: opt.type,
+                  label: opt.label,
+                  description: opt.description,
+                  icon: opt.icon,
+                  isSelected: _selectedType == opt.type,
+                  onTap: () => setState(() => _selectedType = opt.type),
+                ),
+              ),
+            ),
 
             Container(
               padding: const EdgeInsets.all(14),
@@ -138,13 +144,20 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.add_circle_outline_rounded,
-                      color: AuthColors.textMuted, size: 18),
+                  Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: AuthColors.textMuted,
+                    size: 18,
+                  ),
                   SizedBox(width: 10),
                   Expanded(
-                    child: Text('More business types coming soon',
-                        style: TextStyle(
-                            fontSize: 13, color: AuthColors.textMuted)),
+                    child: Text(
+                      'More business types coming soon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AuthColors.textMuted,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -168,9 +181,9 @@ class _BusinessTypeScreenState extends ConsumerState<BusinessTypeScreen> {
 // ── Data class ────────────────────────────────────────────────────────────────
 
 class _BusinessOption {
-  final String   type;
-  final String   label;
-  final String   description;
+  final String type;
+  final String label;
+  final String description;
   final IconData icon;
 
   const _BusinessOption({
@@ -180,4 +193,3 @@ class _BusinessOption {
     required this.icon,
   });
 }
-

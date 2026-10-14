@@ -21,9 +21,9 @@ class CashierShift {
   final double cashSales;
   final double gcashSales;
   final double otherSales;
-  final double creditGiven;   // utang added during shift
-  final double creditsPaid;   // credit payments collected during shift
-  final double expenses;      // placeholder, full tab later
+  final double creditGiven; // utang added during shift
+  final double creditsPaid; // credit payments collected during shift
+  final double expenses; // placeholder, full tab later
 
   const CashierShift({
     required this.id,
@@ -46,8 +46,7 @@ class CashierShift {
   });
 
   // Expected cash = opening float + cash sales + credits paid - expenses
-  double get expectedCash =>
-      openingCash + cashSales + creditsPaid - expenses;
+  double get expectedCash => openingCash + cashSales + creditsPaid - expenses;
 
   // Over/short = actual - expected (negative = short, positive = over)
   double get overShort =>
@@ -68,24 +67,23 @@ class CashierShift {
     double? creditGiven,
     double? creditsPaid,
     double? expenses,
-  }) =>
-      CashierShift(
-        id: id,
-        businessId: businessId,
-        staffId: staffId,
-        staffName: staffName,
-        openingCash: openingCash,
-        openedAt: openedAt,
-        status: status ?? this.status,
-        closedAt: closedAt ?? this.closedAt,
-        actualCashCount: actualCashCount ?? this.actualCashCount,
-        notes: notes ?? this.notes,
-        totalSales: totalSales ?? this.totalSales,
-        cashSales: cashSales ?? this.cashSales,
-        gcashSales: gcashSales ?? this.gcashSales,
-        otherSales: otherSales ?? this.otherSales,
-        creditGiven: creditGiven ?? this.creditGiven,
-        creditsPaid: creditsPaid ?? this.creditsPaid,
-        expenses: expenses ?? this.expenses,
-      );
+  }) => CashierShift(
+    id: id,
+    businessId: businessId,
+    staffId: staffId,
+    staffName: staffName,
+    openingCash: openingCash,
+    openedAt: openedAt,
+    status: status ?? this.status,
+    closedAt: closedAt ?? this.closedAt,
+    actualCashCount: actualCashCount ?? this.actualCashCount,
+    notes: notes ?? this.notes,
+    totalSales: totalSales ?? this.totalSales,
+    cashSales: cashSales ?? this.cashSales,
+    gcashSales: gcashSales ?? this.gcashSales,
+    otherSales: otherSales ?? this.otherSales,
+    creditGiven: creditGiven ?? this.creditGiven,
+    creditsPaid: creditsPaid ?? this.creditsPaid,
+    expenses: expenses ?? this.expenses,
+  );
 }

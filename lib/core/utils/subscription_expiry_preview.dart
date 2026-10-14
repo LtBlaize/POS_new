@@ -15,9 +15,10 @@ class SubscriptionExpiryPreview {
     if (durationMonths == null) return null;
 
     final now = DateTime.now();
-    final base = (currentExpiresAt != null && currentExpiresAt.isAfter(now))
-        ? currentExpiresAt
-        : now;
+    final base =
+        (currentExpiresAt != null && currentExpiresAt.isAfter(now))
+            ? currentExpiresAt
+            : now;
 
     // Dart's DateTime constructor normalizes month overflow (e.g. month 14
     // becomes Feb of the following year), matching Postgres's

@@ -23,9 +23,9 @@ class ReceiptService {
     required dynamic client,
     required Ref ref,
     required SyncQueueService syncQueue,
-  })  : _client = client,
-        _ref = ref,
-        _syncQueue = syncQueue;
+  }) : _client = client,
+       _ref = ref,
+       _syncQueue = syncQueue;
 
   bool get _isOnline => _ref.read(isOnlineProvider);
 
@@ -51,17 +51,21 @@ class ReceiptService {
     if (!_isOnline) return;
     try {
       // Read current count then increment — no RPC needed
-      final row = await _client
-          .from('receipts')
-          .select('reprint_count')
-          .eq('id', receiptId)
-          .single();
+      final row =
+          await _client
+              .from('receipts')
+              .select('reprint_count')
+              .eq('id', receiptId)
+              .single();
       final current = (row['reprint_count'] as int? ?? 0);
-      await _client.from('receipts').update({
-        'reprint_count': current + 1,
-        'last_reprinted_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', receiptId);
+      await _client
+          .from('receipts')
+          .update({
+            'reprint_count': current + 1,
+            'last_reprinted_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', receiptId);
     } catch (_) {
       // Non-fatal — reprint count is cosmetic
     }
@@ -119,11 +123,8 @@ class ReceiptService {
     }
 
     try {
-      final row = await _client
-          .from('receipts')
-          .insert(payload)
-          .select()
-          .single();
+      final row =
+          await _client.from('receipts').insert(payload).select().single();
       return row['id'] as String;
     } catch (e) {
       debugPrint('[Receipt] Insert failed, queuing: $e');

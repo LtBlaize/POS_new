@@ -9,15 +9,32 @@ import '../services/connectivity_service.dart';
 
 // All tabs in the app
 const kAllTabs = [
-  'pos', 'orders', 'kitchen', 'inventory', 'utang', 'reports', 'settings'
+  'pos',
+  'orders',
+  'kitchen',
+  'inventory',
+  'utang',
+  'reports',
+  'settings',
 ];
 
 // Tabs available per business type
 const kRestaurantTabs = [
-  'pos', 'orders', 'kitchen', 'inventory', 'utang', 'reports', 'settings'
+  'pos',
+  'orders',
+  'kitchen',
+  'inventory',
+  'utang',
+  'reports',
+  'settings',
 ];
 const kRetailTabs = [
-  'pos', 'orders', 'inventory', 'utang', 'reports', 'settings'
+  'pos',
+  'orders',
+  'inventory',
+  'utang',
+  'reports',
+  'settings',
 ];
 
 List<String> tabsForBusinessType(bool isRestaurant) =>
@@ -46,6 +63,7 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     state = const AsyncLoading();
     state = AsyncData(await build());
   }
+
   @override
   Future<RolePermMap> build() async {
     final profile = await ref.watch(profileProvider.future);
@@ -83,9 +101,8 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     final validTabs = tabsForBusinessType(isRestaurant).toSet();
 
     final result = raw.map((role, value) {
-      final List<dynamic> tabList = value is Map
-          ? (value['screens'] as List? ?? [])
-          : (value as List);
+      final List<dynamic> tabList =
+          value is Map ? (value['screens'] as List? ?? []) : (value as List);
       return MapEntry(role, Set<String>.from(tabList).intersection(validTabs));
     });
     debugPrint('[Perms] resolved: $result');
@@ -100,7 +117,6 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     return source.map((role, tabs) => MapEntry(role, Set<String>.from(tabs)));
   }
 
-
   Future<void> toggle(String role, String tab) async {
     // Custom role/permission editing is Pro-only — Starter/Growth use the
     // fixed defaults from registration (kDefaultPermissions /
@@ -108,7 +124,8 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     // stays unrestricted — that's core navigation, not customization.
     if (!ref.read(featureManagerProvider).canEditCustomRoles) {
       throw Exception(
-          'Custom role permissions require the Pro plan. Upgrade to customize staff access.');
+        'Custom role permissions require the Pro plan. Upgrade to customize staff access.',
+      );
     }
     final current = state.value ?? _defaults();
     final updated = Map<String, Set<String>>.from(
@@ -131,25 +148,28 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
     final client = ref.read(supabaseClientProvider);
     try {
       // Read current raw JSONB so we preserve capability fields
-      final row = await client
-          .from('business_configs')
-          .select('role_permissions')
-          .eq('business_id', profile!.businessId!)
-          .maybeSingle();
+      final row =
+          await client
+              .from('business_configs')
+              .select('role_permissions')
+              .eq('business_id', profile!.businessId!)
+              .maybeSingle();
 
       final raw = (row?['role_permissions'] as Map<String, dynamic>?) ?? {};
 
       final merged = updated.map((r, tabs) {
-        final existing = raw[r] is Map
-            ? Map<String, dynamic>.from(raw[r] as Map)
-            : <String, dynamic>{};
+        final existing =
+            raw[r] is Map
+                ? Map<String, dynamic>.from(raw[r] as Map)
+                : <String, dynamic>{};
         existing['screens'] = tabs.toList();
         return MapEntry(r, existing);
       });
 
-      await client.from('business_configs').update({
-        'role_permissions': merged,
-      }).eq('business_id', profile.businessId!);
+      await client
+          .from('business_configs')
+          .update({'role_permissions': merged})
+          .eq('business_id', profile.businessId!);
     } catch (e) {
       debugPrint('[RolePermissions] save failed: $e');
       // Revert optimistic update on failure
@@ -166,33 +186,37 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
   Future<void> toggleCapability(String role, String key) async {
     if (!ref.read(featureManagerProvider).canEditCustomRoles) {
       throw Exception(
-          'Custom role permissions require the Pro plan. Upgrade to customize staff access.');
+        'Custom role permissions require the Pro plan. Upgrade to customize staff access.',
+      );
     }
     final profile = ref.read(profileProvider).value;
     if (profile?.businessId == null) return;
 
     final client = ref.read(supabaseClientProvider);
     try {
-      final row = await client
-          .from('business_configs')
-          .select('role_permissions')
-          .eq('business_id', profile!.businessId!)
-          .maybeSingle();
+      final row =
+          await client
+              .from('business_configs')
+              .select('role_permissions')
+              .eq('business_id', profile!.businessId!)
+              .maybeSingle();
 
       final raw = Map<String, dynamic>.from(
-          (row?['role_permissions'] as Map<String, dynamic>?) ?? {});
+        (row?['role_permissions'] as Map<String, dynamic>?) ?? {},
+      );
 
-      final existing = raw[role] is Map
-          ? Map<String, dynamic>.from(raw[role] as Map)
-          : <String, dynamic>{};
+      final existing =
+          raw[role] is Map
+              ? Map<String, dynamic>.from(raw[role] as Map)
+              : <String, dynamic>{};
 
       existing[key] = !(existing[key] as bool? ?? false);
       raw[role] = existing;
 
       await client
           .from('business_configs')
-          .update({'role_permissions': raw}).eq(
-              'business_id', profile.businessId!);
+          .update({'role_permissions': raw})
+          .eq('business_id', profile.businessId!);
 
       ref.invalidateSelf();
     } catch (e) {
@@ -235,15 +259,17 @@ class RolePermissionsNotifier extends AsyncNotifier<RolePermMap> {
 
 final rolePermissionsProvider =
     AsyncNotifierProvider<RolePermissionsNotifier, RolePermMap>(
-        RolePermissionsNotifier.new);
+      RolePermissionsNotifier.new,
+    );
 
 // Correctly resolves tabs for whoever is actually logged in
 // ── Role capabilities (action-level) ─────────────────────────────────────────
 
 /// Fetches the full capability map for the active staff's role.
 /// Returns permissive defaults for owner, restrictive defaults on error.
-final activeRoleCapabilitiesProvider =
-    FutureProvider<RoleCapabilities>((ref) async {
+final activeRoleCapabilitiesProvider = FutureProvider<RoleCapabilities>((
+  ref,
+) async {
   final staff = ref.watch(activeStaffProvider);
   if (staff == null) return RoleCapabilities.none;
   if (staff.role == StaffRole.owner) return RoleCapabilities.owner;
@@ -294,12 +320,12 @@ class RoleCapabilities {
   /// field. Used by the settings UI to read/render an arbitrary capability
   /// by its string key without exposing the JSONB shape to the widget.
   bool valueFor(String key) => switch (key) {
-        'can_void_item' => canVoidItem,
-        'can_void_order' => canVoidOrder,
-        'can_apply_discount' => canApplyDiscount,
-        'can_issue_refund' => canIssueRefund,
-        _ => false,
-      };
+    'can_void_item' => canVoidItem,
+    'can_void_order' => canVoidOrder,
+    'can_apply_discount' => canApplyDiscount,
+    'can_issue_refund' => canIssueRefund,
+    _ => false,
+  };
 
   static const owner = RoleCapabilities(
     canVoidItem: true,
@@ -320,24 +346,24 @@ class RoleCapabilities {
   );
 
   static RoleCapabilities defaultFor(StaffRole role) => switch (role) {
-        StaffRole.manager => const RoleCapabilities(
-            canVoidItem: true,
-            canVoidOrder: true,
-            canApplyDiscount: true,
-            canIssueRefund: true,
-            requiresManagerForDiscount: false,
-            maxDiscountPercent: 50,
-          ),
-        StaffRole.cashier => const RoleCapabilities(
-            canVoidItem: false,
-            canVoidOrder: false,
-            canApplyDiscount: true,
-            canIssueRefund: false,
-            requiresManagerForDiscount: true,
-            maxDiscountPercent: 10,
-          ),
-        _ => none,
-      };
+    StaffRole.manager => const RoleCapabilities(
+      canVoidItem: true,
+      canVoidOrder: true,
+      canApplyDiscount: true,
+      canIssueRefund: true,
+      requiresManagerForDiscount: false,
+      maxDiscountPercent: 50,
+    ),
+    StaffRole.cashier => const RoleCapabilities(
+      canVoidItem: false,
+      canVoidOrder: false,
+      canApplyDiscount: true,
+      canIssueRefund: false,
+      requiresManagerForDiscount: true,
+      maxDiscountPercent: 10,
+    ),
+    _ => none,
+  };
 }
 
 final activeStaffTabsProvider = Provider<Set<String>>((ref) {
@@ -358,10 +384,9 @@ final activeStaffTabsProvider = Provider<Set<String>>((ref) {
     return defaults[staff2?.role.value] ?? {};
   }
 
-  final perms = permsAsync.value ??
-      kDefaultPermissions.map(
-        (r, tabs) => MapEntry(r, Set<String>.from(tabs)),
-      );
+  final perms =
+      permsAsync.value ??
+      kDefaultPermissions.map((r, tabs) => MapEntry(r, Set<String>.from(tabs)));
 
   final tabs = perms[staff.role.value] ?? {};
   debugPrint('[Tabs] tabs for ${staff.role.value}: $tabs');

@@ -3,9 +3,10 @@
 class ProductVariant {
   final String id;
   final String productId;
-  final String name;        // e.g. "Small", "Red", "Vanilla"
-  final String? optionType; // e.g. "size", "color", "flavor" — display-only label
-  final double priceDelta;  // added to parent price; 0 = same price
+  final String name; // e.g. "Small", "Red", "Vanilla"
+  final String?
+  optionType; // e.g. "size", "color", "flavor" — display-only label
+  final double priceDelta; // added to parent price; 0 = same price
   final String? sku;
   final String? barcode;
   final int stockQuantity;
@@ -31,17 +32,17 @@ class ProductVariant {
   bool get isInStock => stockQuantity > 0;
 
   factory ProductVariant.fromMap(Map<String, dynamic> map) => ProductVariant(
-        id: map['id'] as String,
-        productId: map['product_id'] as String,
-        name: map['name'] as String,
-        optionType: map['option_type'] as String?,
-        priceDelta: (map['price_delta'] as num?)?.toDouble() ?? 0,
-        sku: map['sku'] as String?,
-        barcode: map['barcode'] as String?,
-        stockQuantity: map['stock_quantity'] as int? ?? 0,
-        isActive: map['is_active'] as bool? ?? true,
-        costPrice: (map['cost_price'] as num?)?.toDouble() ?? 0,
-      );
+    id: map['id'] as String,
+    productId: map['product_id'] as String,
+    name: map['name'] as String,
+    optionType: map['option_type'] as String?,
+    priceDelta: (map['price_delta'] as num?)?.toDouble() ?? 0,
+    sku: map['sku'] as String?,
+    barcode: map['barcode'] as String?,
+    stockQuantity: map['stock_quantity'] as int? ?? 0,
+    isActive: map['is_active'] as bool? ?? true,
+    costPrice: (map['cost_price'] as num?)?.toDouble() ?? 0,
+  );
 
   /// For SQLite rows (booleans as int)
   factory ProductVariant.fromLocalRow(Map<String, dynamic> row) =>
@@ -59,16 +60,16 @@ class ProductVariant {
       );
 
   Map<String, dynamic> toMap() => {
-        'product_id': productId,
-        'name': name,
-        'option_type': optionType,
-        'price_delta': priceDelta,
-        'sku': sku,
-        'barcode': barcode,
-        'stock_quantity': stockQuantity,
-        'is_active': isActive,
-        'cost_price': costPrice,
-      };
+    'product_id': productId,
+    'name': name,
+    'option_type': optionType,
+    'price_delta': priceDelta,
+    'sku': sku,
+    'barcode': barcode,
+    'stock_quantity': stockQuantity,
+    'is_active': isActive,
+    'cost_price': costPrice,
+  };
 
   ProductVariant copyWith({
     String? name,
@@ -79,19 +80,18 @@ class ProductVariant {
     int? stockQuantity,
     bool? isActive,
     double? costPrice,
-  }) =>
-      ProductVariant(
-        id: id,
-        productId: productId,
-        name: name ?? this.name,
-        optionType: optionType ?? this.optionType,
-        priceDelta: priceDelta ?? this.priceDelta,
-        sku: sku ?? this.sku,
-        barcode: barcode ?? this.barcode,
-        stockQuantity: stockQuantity ?? this.stockQuantity,
-        isActive: isActive ?? this.isActive,
-        costPrice: costPrice ?? this.costPrice,
-      );
+  }) => ProductVariant(
+    id: id,
+    productId: productId,
+    name: name ?? this.name,
+    optionType: optionType ?? this.optionType,
+    priceDelta: priceDelta ?? this.priceDelta,
+    sku: sku ?? this.sku,
+    barcode: barcode ?? this.barcode,
+    stockQuantity: stockQuantity ?? this.stockQuantity,
+    isActive: isActive ?? this.isActive,
+    costPrice: costPrice ?? this.costPrice,
+  );
 
   @override
   bool operator ==(Object other) =>

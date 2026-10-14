@@ -20,9 +20,9 @@ const _supportMessenger = 'https://m.me/YOUR_PAGE_NAME'; // TODO: your page
 Future<void> _open(BuildContext context, Uri uri) async {
   final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open that app')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not open that app')));
   }
 }
 
@@ -47,22 +47,29 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                     color: AppColors.danger.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.lock_outline_rounded,
-                      size: 34, color: AppColors.danger),
+                  child: const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 34,
+                    color: AppColors.danger,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 const Text(
                   'Subscription expired',
                   style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Contact support to reactivate your account.',
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -74,26 +81,35 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                     OutlinedButton.icon(
                       icon: const Icon(Icons.call_rounded, size: 16),
                       label: const Text('Call'),
-                      onPressed: () => _open(
-                          context, Uri(scheme: 'tel', path: _supportPhone)),
+                      onPressed:
+                          () => _open(
+                            context,
+                            Uri(scheme: 'tel', path: _supportPhone),
+                          ),
                     ),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.sms_outlined, size: 16),
                       label: const Text('Text'),
-                      onPressed: () => _open(
-                          context, Uri(scheme: 'sms', path: _supportPhone)),
+                      onPressed:
+                          () => _open(
+                            context,
+                            Uri(scheme: 'sms', path: _supportPhone),
+                          ),
                     ),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.email_outlined, size: 16),
                       label: const Text('Email'),
-                      onPressed: () => _open(
-                          context, Uri(scheme: 'mailto', path: _supportEmail)),
+                      onPressed:
+                          () => _open(
+                            context,
+                            Uri(scheme: 'mailto', path: _supportEmail),
+                          ),
                     ),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.chat_bubble_outline, size: 16),
                       label: const Text('Messenger'),
-                      onPressed: () =>
-                          _open(context, Uri.parse(_supportMessenger)),
+                      onPressed:
+                          () => _open(context, Uri.parse(_supportMessenger)),
                     ),
                   ],
                 ),
@@ -107,7 +123,10 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                     } catch (_) {
                       if (context.mounted) {
                         Navigator.pushNamedAndRemoveUntil(
-                            context, '/login', (_) => false);
+                          context,
+                          '/login',
+                          (_) => false,
+                        );
                       }
                     }
                   },

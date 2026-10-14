@@ -21,8 +21,7 @@ class CloseShiftScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<CloseShiftScreen> createState() =>
-      _CloseShiftScreenState();
+  ConsumerState<CloseShiftScreen> createState() => _CloseShiftScreenState();
 }
 
 class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
@@ -47,13 +46,13 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
       _error = null;
     });
     try {
-      final closed =
-          await ref.read(currentShiftProvider.notifier).closeShift(
-                actualCashCount: _actualCash,
-                notes: _notesCtrl.text.trim().isEmpty
-                    ? null
-                    : _notesCtrl.text.trim(),
-              );
+      final closed = await ref
+          .read(currentShiftProvider.notifier)
+          .closeShift(
+            actualCashCount: _actualCash,
+            notes:
+                _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          );
       setState(() {
         _closedShift = closed;
         _loading = false;
@@ -85,25 +84,29 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
     }
 
     return shiftAsync.when(
-      loading: () => const Scaffold(
-        backgroundColor: Color(0xFF0B0E1A),
-        body: Center(
-            child: CircularProgressIndicator(color: Color(0xFFE94560))),
-      ),
-      error: (e, _) => Scaffold(
-        backgroundColor: _bg,
-        body: Center(
-            child: Text('$e',
-                style: const TextStyle(color: Colors.white))),
-      ),
+      loading:
+          () => const Scaffold(
+            backgroundColor: Color(0xFF0B0E1A),
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFE94560)),
+            ),
+          ),
+      error:
+          (e, _) => Scaffold(
+            backgroundColor: _bg,
+            body: Center(
+              child: Text('$e', style: const TextStyle(color: Colors.white)),
+            ),
+          ),
       data: (shift) {
         if (shift == null) {
           return Scaffold(
             backgroundColor: _bg,
             body: Center(
-              child: Text('No open shift found.',
-                  style:
-                      TextStyle(color: Colors.white.withValues(alpha:0.4))),
+              child: Text(
+                'No open shift found.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+              ),
             ),
           );
         }
@@ -126,15 +129,20 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white70),
           onPressed: widget.onCancel,
         ),
-        title: const Text('Close Shift',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Close Shift',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child:
-              Divider(height: 1, color: Colors.white.withValues(alpha:0.06)),
+          child: Divider(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -144,8 +152,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ShiftInfoBanner(
-                  shift: shift, hours: hours, minutes: minutes),
+              _ShiftInfoBanner(shift: shift, hours: hours, minutes: minutes),
               const SizedBox(height: 20),
 
               _SectionTitle(title: 'SALES SUMMARY'),
@@ -180,9 +187,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                 builder: (context, ref, _) {
                   final liveExpenses = ref.watch(_liveExpensesProvider);
                   return _OverShortPreview(
-                    expectedCash: shift.openingCash +
-                        shift.cashSales -
-                        liveExpenses,
+                    expectedCash:
+                        shift.openingCash + shift.cashSales - liveExpenses,
                     actualCash: _actualCash,
                   );
                 },
@@ -199,8 +205,9 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                   hintText:
                       'Any notes for this shift (e.g. equipment issues, incidents)',
                   hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha:0.25),
-                      fontSize: 13),
+                    color: Colors.white.withValues(alpha: 0.25),
+                    fontSize: 13,
+                  ),
                   filled: true,
                   fillColor: _surface,
                   border: OutlineInputBorder(
@@ -209,8 +216,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        const BorderSide(color: _accent, width: 1.5),
+                    borderSide: const BorderSide(color: _accent, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
@@ -222,93 +228,109 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _accent.withValues(alpha:0.1),
+                    color: _accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: _accent.withValues(alpha:0.3)),
+                    border: Border.all(color: _accent.withValues(alpha: 0.3)),
                   ),
-                  child: Text(_error!,
-                      style: const TextStyle(
-                          color: _accent, fontSize: 13)),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: _accent, fontSize: 13),
+                  ),
                 ),
 
               if (!_confirming)
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _loading
-                        ? null
-                        : () => setState(() => _confirming = true),
+                    onPressed:
+                        _loading
+                            ? null
+                            : () => setState(() => _confirming = true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                     ),
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.lock_rounded, size: 18),
-                              SizedBox(width: 10),
-                              Text('Close Shift',
+                    child:
+                        _loading
+                            ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.lock_rounded, size: 18),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Close Shift',
                                   style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
                   ),
                 )
               else
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: _accent.withValues(alpha:0.08),
+                    color: _accent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: _accent.withValues(alpha:0.3)),
+                    border: Border.all(color: _accent.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          color: _accent, size: 32),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: _accent,
+                        size: 32,
+                      ),
                       const SizedBox(height: 10),
-                      const Text('Close this shift?',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700)),
+                      const Text(
+                        'Close this shift?',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         'This cannot be undone. Make sure all sales are recorded.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: Colors.white.withValues(alpha:0.45),
-                            fontSize: 13),
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () =>
-                                  setState(() => _confirming = false),
+                              onPressed:
+                                  () => setState(() => _confirming = false),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white54,
                                 side: BorderSide(
-                                    color:
-                                        Colors.white.withValues(alpha:0.15)),
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                ),
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
                               child: const Text('Cancel'),
                             ),
@@ -316,28 +338,34 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: _loading
-                                  ? null
-                                  : () => _closeShift(shift),
+                              onPressed:
+                                  _loading ? null : () => _closeShift(shift),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _accent,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
-                              child: _loading
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
+                              child:
+                                  _loading
+                                      ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white))
-                                  : const Text('Yes, Close Shift',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w700)),
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                      : const Text(
+                                        'Yes, Close Shift',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                             ),
                           ),
                         ],
@@ -362,10 +390,11 @@ class _ShiftInfoBanner extends StatelessWidget {
   final int hours;
   final int minutes;
 
-  const _ShiftInfoBanner(
-      {required this.shift,
-      required this.hours,
-      required this.minutes});
+  const _ShiftInfoBanner({
+    required this.shift,
+    required this.hours,
+    required this.minutes,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +403,7 @@ class _ShiftInfoBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [
@@ -382,27 +411,34 @@ class _ShiftInfoBanner extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFE94560).withValues(alpha:0.12),
+              color: const Color(0xFFE94560).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.person_outline,
-                color: Color(0xFFE94560), size: 22),
+            child: const Icon(
+              Icons.person_outline,
+              color: Color(0xFFE94560),
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(shift.staffName,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  shift.staffName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Text(
                   'Opened ${DateFormat('MMM d · h:mm a').format(shift.openedAt)}',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.35),
-                      fontSize: 12),
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -413,14 +449,18 @@ class _ShiftInfoBanner extends StatelessWidget {
               Text(
                 '${hours}h ${minutes}m',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800),
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              Text('shift duration',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.3),
-                      fontSize: 11)),
+              Text(
+                'shift duration',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontSize: 11,
+                ),
+              ),
             ],
           ),
         ],
@@ -441,13 +481,12 @@ class _SalesSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         children: [
@@ -486,7 +525,6 @@ class _SalesSummaryCard extends StatelessWidget {
             color: const Color(0xFF8B5CF6),
             subtitle: 'Includes Card Payments',
           ),
-         
 
           // REPLACE
           if (shift.creditGiven > 0 || shift.creditsPaid > 0) ...[
@@ -540,7 +578,7 @@ class _CashReconciliationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         children: [
@@ -584,7 +622,8 @@ class _CashReconciliationCard extends StatelessWidget {
               color: const Color(0xFF1A1F35),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: const Color(0xFFE94560).withValues(alpha:0.3)),
+                color: const Color(0xFFE94560).withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -592,28 +631,32 @@ class _CashReconciliationCard extends StatelessWidget {
                 Text(
                   'ACTUAL CASH COUNT',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.35),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2),
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text('₱',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha:0.4),
-                            fontSize: 24)),
+                    Text(
+                      '₱',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 24,
+                      ),
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: TextField(
                         controller: actualCashCtrl,
                         onChanged: (_) => onChanged(),
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'[\d.]')),
+                          FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                         ],
                         style: const TextStyle(
                           color: Colors.white,
@@ -624,7 +667,9 @@ class _CashReconciliationCard extends StatelessWidget {
                           border: InputBorder.none,
                           hintText: '0.00',
                           hintStyle: TextStyle(
-                              color: Color(0xFF374151), fontSize: 28),
+                            color: Color(0xFF374151),
+                            fontSize: 28,
+                          ),
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
@@ -636,8 +681,9 @@ class _CashReconciliationCard extends StatelessWidget {
                 Text(
                   'Count the physical bills and coins in the drawer',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.25),
-                      fontSize: 11),
+                    color: Colors.white.withValues(alpha: 0.25),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -654,50 +700,63 @@ class _OverShortPreview extends StatelessWidget {
   final double expectedCash;
   final double actualCash;
 
-  const _OverShortPreview(
-      {required this.expectedCash, required this.actualCash});
+  const _OverShortPreview({
+    required this.expectedCash,
+    required this.actualCash,
+  });
 
   @override
   Widget build(BuildContext context) {
     final diff = actualCash - expectedCash;
     final isOver = diff > 0;
     final isExact = diff == 0;
-    final color = isExact
-        ? const Color(0xFF10B981)
-        : isOver
+    final color =
+        isExact
+            ? const Color(0xFF10B981)
+            : isOver
             ? const Color(0xFF3B82F6)
             : const Color(0xFFE94560);
-    final label = isExact ? 'Exact' : isOver ? 'Over' : 'Short';
-    final icon = isExact
-        ? Icons.check_circle_outline
-        : isOver
+    final label =
+        isExact
+            ? 'Exact'
+            : isOver
+            ? 'Over'
+            : 'Short';
+    final icon =
+        isExact
+            ? Icons.check_circle_outline
+            : isOver
             ? Icons.arrow_upward_rounded
             : Icons.arrow_downward_rounded;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha:0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           Text(
             '${diff >= 0 ? '+' : ''}₱${NumberFormat('#,##0.00').format(diff.abs())}',
             style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.w800),
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
@@ -722,9 +781,10 @@ class _ShiftReceiptView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final diff = shift.overShort;
-    final overShortColor = diff == 0
-        ? _green
-        : diff > 0
+    final overShortColor =
+        diff == 0
+            ? _green
+            : diff > 0
             ? const Color(0xFF3B82F6)
             : _accent;
 
@@ -734,17 +794,22 @@ class _ShiftReceiptView extends StatelessWidget {
         backgroundColor: _card,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text('Shift Report',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Shift Report',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         actions: [
           TextButton.icon(
             onPressed: onDone,
             icon: const Icon(Icons.check, color: Color(0xFF10B981)),
-            label: const Text('Done',
-                style: TextStyle(color: Color(0xFF10B981))),
+            label: const Text(
+              'Done',
+              style: TextStyle(color: Color(0xFF10B981)),
+            ),
           ),
         ],
       ),
@@ -759,9 +824,9 @@ class _ShiftReceiptView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: _green.withValues(alpha:0.08),
+                  color: _green.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _green.withValues(alpha:0.3)),
+                  border: Border.all(color: _green.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -769,28 +834,32 @@ class _ShiftReceiptView extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: _green.withValues(alpha:0.15),
+                        color: _green.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check,
-                          color: _green, size: 24),
+                      child: const Icon(Icons.check, color: _green, size: 24),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Shift Closed',
-                              style: TextStyle(
-                                  color: _green,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700)),
-                          Text(
-                            DateFormat('MMM d, y · h:mm a')
-                                .format(shift.closedAt!),
+                          const Text(
+                            'Shift Closed',
                             style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.35),
-                                fontSize: 12),
+                              color: _green,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            DateFormat(
+                              'MMM d, y · h:mm a',
+                            ).format(shift.closedAt!),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -807,7 +876,8 @@ class _ShiftReceiptView extends StatelessWidget {
                   color: _card,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                      color: Colors.white.withValues(alpha:0.06)),
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -819,16 +889,18 @@ class _ShiftReceiptView extends StatelessWidget {
                           Text(
                             shift.staffName,
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800),
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${DateFormat('h:mm a').format(shift.openedAt)} – ${DateFormat('h:mm a').format(shift.closedAt!)}',
                             style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.35),
-                                fontSize: 13),
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -840,23 +912,34 @@ class _ShiftReceiptView extends StatelessWidget {
                     const SizedBox(height: 16),
                     _ReceiptLabel('SALES'),
                     const SizedBox(height: 10),
-                    _ReceiptRow('Total Sales', shift.totalSales,
-                        bold: true),
+                    _ReceiptRow('Total Sales', shift.totalSales, bold: true),
                     // FIX: labels match shift_service.dart grouping
-                    _ReceiptRow('  Cash', shift.cashSales,
-                        color: _green),
+                    _ReceiptRow('  Cash', shift.cashSales, color: _green),
                     _ReceiptRow(
-                        '  GCash / Maya / E-Wallet', shift.gcashSales,
-                        color: const Color(0xFF3B82F6)),
-                    _ReceiptRow('  Card / Other', shift.otherSales,
-                        color: const Color(0xFF8B5CF6)),
+                      '  GCash / Maya / E-Wallet',
+                      shift.gcashSales,
+                      color: const Color(0xFF3B82F6),
+                    ),
+                    _ReceiptRow(
+                      '  Card / Other',
+                      shift.otherSales,
+                      color: const Color(0xFF8B5CF6),
+                    ),
                     // REPLACE
                     if (shift.creditGiven > 0)
-                      _ReceiptRow('  Utang Given', shift.creditGiven,
-                          color: _accent, prefix: '+'),
+                      _ReceiptRow(
+                        '  Utang Given',
+                        shift.creditGiven,
+                        color: _accent,
+                        prefix: '+',
+                      ),
                     if (shift.creditsPaid > 0)
-                      _ReceiptRow('  Utang Collected', shift.creditsPaid,
-                          color: _green, prefix: '+'),
+                      _ReceiptRow(
+                        '  Utang Collected',
+                        shift.creditsPaid,
+                        color: _green,
+                        prefix: '+',
+                      ),
 
                     const SizedBox(height: 16),
                     _ReceiptDivider(),
@@ -866,22 +949,25 @@ class _ShiftReceiptView extends StatelessWidget {
                     _ReceiptLabel('CASH RECONCILIATION'),
                     const SizedBox(height: 10),
                     _ReceiptRow('Opening Cash', shift.openingCash),
-                    _ReceiptRow('Cash Sales', shift.cashSales,
-                        prefix: '+'),
+                    _ReceiptRow('Cash Sales', shift.cashSales, prefix: '+'),
                     if (shift.expenses > 0)
-                      _ReceiptRow('Expenses', shift.expenses,
-                          color: const Color(0xFFE94560), prefix: '−'),
+                      _ReceiptRow(
+                        'Expenses',
+                        shift.expenses,
+                        color: const Color(0xFFE94560),
+                        prefix: '−',
+                      ),
                     const SizedBox(height: 8),
                     _ReceiptRow(
-                        'Expected in Drawer',
-                        shift.openingCash +
-                            shift.cashSales -
-                            shift.expenses,
-                        bold: true),
+                      'Expected in Drawer',
+                      shift.openingCash + shift.cashSales - shift.expenses,
+                      bold: true,
+                    ),
                     _ReceiptRow(
-                        'Actual Cash Count',
-                        shift.actualCashCount ?? 0,
-                        bold: true),
+                      'Actual Cash Count',
+                      shift.actualCashCount ?? 0,
+                      bold: true,
+                    ),
                     const SizedBox(height: 16),
                     _ReceiptDivider(),
                     const SizedBox(height: 16),
@@ -889,51 +975,57 @@ class _ShiftReceiptView extends StatelessWidget {
                     // ── Over/Short ───────────────────────────────────
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
-                        color: overShortColor.withValues(alpha:0.08),
+                        color: overShortColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: overShortColor.withValues(alpha:0.3)),
+                          color: overShortColor.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             diff == 0
                                 ? 'Exact'
                                 : diff > 0
-                                    ? 'OVER'
-                                    : 'SHORT',
+                                ? 'OVER'
+                                : 'SHORT',
                             style: TextStyle(
-                                color: overShortColor,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5),
+                              color: overShortColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                           Text(
                             '${diff >= 0 ? '+' : ''}₱${NumberFormat('#,##0.00').format(diff)}',
                             style: TextStyle(
-                                color: overShortColor,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800),
+                              color: overShortColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ],
                       ),
                     ),
 
-                    if (shift.notes != null &&
-                        shift.notes!.isNotEmpty) ...[
+                    if (shift.notes != null && shift.notes!.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _ReceiptDivider(),
                       const SizedBox(height: 12),
                       _ReceiptLabel('NOTES'),
                       const SizedBox(height: 6),
-                      Text(shift.notes!,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.5),
-                              fontSize: 13)),
+                      Text(
+                        shift.notes!,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -949,12 +1041,14 @@ class _ShiftReceiptView extends StatelessWidget {
                     backgroundColor: _green,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
-                  child: const Text('Done — Back to Login',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Done — Back to Login',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
               const SizedBox(height: 40),
@@ -1011,15 +1105,16 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
   }
 
   Future<void> _save() async {
-    final amount =
-        double.tryParse(_amountCtrl.text.replaceAll(',', ''));
+    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
     if (amount == null || amount <= 0) return;
     final desc = _descCtrl.text.trim();
     if (desc.isEmpty) return;
 
     setState(() => _saving = true);
     try {
-      await ref.read(shiftServiceProvider).logExpense(
+      await ref
+          .read(shiftServiceProvider)
+          .logExpense(
             shiftId: widget.shiftId,
             businessId: '',
             amount: amount,
@@ -1041,35 +1136,40 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
       decoration: BoxDecoration(
         color: const Color(0xFF141827),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha:0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.receipt_long_outlined,
-                  size: 16, color: Color(0xFFE94560)),
+              const Icon(
+                Icons.receipt_long_outlined,
+                size: 16,
+                color: Color(0xFFE94560),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Total Expenses: ₱${NumberFormat('#,##0.00').format(_totalExpenses)}',
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700),
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               TextButton.icon(
-                onPressed: () =>
-                    setState(() => _adding = !_adding),
-                icon: Icon(
-                    _adding ? Icons.close : Icons.add, size: 14),
-                label: Text(_adding ? 'Cancel' : 'Add',
-                    style: const TextStyle(fontSize: 12)),
+                onPressed: () => setState(() => _adding = !_adding),
+                icon: Icon(_adding ? Icons.close : Icons.add, size: 14),
+                label: Text(
+                  _adding ? 'Cancel' : 'Add',
+                  style: const TextStyle(fontSize: 12),
+                ),
                 style: TextButton.styleFrom(
-                    foregroundColor: _accent,
-                    padding: EdgeInsets.zero),
+                  foregroundColor: _accent,
+                  padding: EdgeInsets.zero,
+                ),
               ),
             ],
           ),
@@ -1081,23 +1181,23 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
                   width: 110,
                   child: TextField(
                     controller: _amountCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(
-                            decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'[\d.]')),
+                      FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                     ],
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: '0.00',
                       hintStyle: TextStyle(
-                          color: Colors.white.withValues(alpha:0.2),
-                          fontSize: 13),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        fontSize: 13,
+                      ),
                       prefixText: '₱ ',
                       prefixStyle: TextStyle(
-                          color: Colors.white.withValues(alpha:0.4)),
+                        color: Colors.white.withValues(alpha: 0.4),
+                      ),
                       filled: true,
                       fillColor: _surface,
                       border: OutlineInputBorder(
@@ -1105,7 +1205,9 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
                       isDense: true,
                     ),
                   ),
@@ -1114,13 +1216,13 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
                 Expanded(
                   child: TextField(
                     controller: _descCtrl,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Description (e.g. Ice, Supplies)',
                       hintStyle: TextStyle(
-                          color: Colors.white.withValues(alpha:0.2),
-                          fontSize: 13),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        fontSize: 13,
+                      ),
                       filled: true,
                       fillColor: _surface,
                       border: OutlineInputBorder(
@@ -1128,7 +1230,9 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
                       isDense: true,
                     ),
                     onSubmitted: (_) => _save(),
@@ -1137,31 +1241,37 @@ class _ExpensesCardState extends ConsumerState<_ExpensesCard> {
                 const SizedBox(width: 8),
                 _saving
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFE94560)))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFE94560),
+                      ),
+                    )
                     : GestureDetector(
-                        onTap: _save,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _accent.withValues(alpha:0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.check,
-                              color: _accent, size: 18),
+                      onTap: _save,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _accent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: _accent,
+                          size: 18,
                         ),
                       ),
+                    ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
               'This amount will be deducted from expected cash in drawer.',
               style: TextStyle(
-                  color: Colors.white.withValues(alpha:0.25),
-                  fontSize: 11),
+                color: Colors.white.withValues(alpha: 0.25),
+                fontSize: 11,
+              ),
             ),
           ],
         ],
@@ -1176,12 +1286,15 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(title,
-        style: TextStyle(
-            color: Colors.white.withValues(alpha:0.35),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2));
+    return Text(
+      title,
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.35),
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+      ),
+    );
   }
 }
 
@@ -1209,37 +1322,42 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       children: [
         if (icon != null) ...[
-          Icon(icon, color: color.withValues(alpha:0.6), size: 16),
+          Icon(icon, color: color.withValues(alpha: 0.6), size: 16),
           const SizedBox(width: 8),
         ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: TextStyle(
-                      color: isBold
+              Text(
+                label,
+                style: TextStyle(
+                  color:
+                      isBold
                           ? Colors.white
-                          : Colors.white.withValues(alpha:0.55),
-                      fontSize: isBold ? 14 : 13,
-                      fontWeight: isBold
-                          ? FontWeight.w700
-                          : FontWeight.w500)),
+                          : Colors.white.withValues(alpha: 0.55),
+                  fontSize: isBold ? 14 : 13,
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
               if (subtitle != null)
-                Text(subtitle!,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha:0.2),
-                        fontSize: 10)),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    fontSize: 10,
+                  ),
+                ),
             ],
           ),
         ),
         Text(
           '${prefix ?? ''}₱${NumberFormat('#,##0.00').format(value)}',
           style: TextStyle(
-              color: color,
-              fontSize: isBold ? 15 : 13,
-              fontWeight:
-                  isBold ? FontWeight.w800 : FontWeight.w600),
+            color: color,
+            fontSize: isBold ? 15 : 13,
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -1251,18 +1369,18 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Divider(
-            height: 1, color: Colors.white.withValues(alpha:0.06)),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
+  );
 }
 
 class _ReceiptDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Divider(
-      height: 1,
-      color: Colors.white.withValues(alpha:0.08),
-      thickness: 1);
+    height: 1,
+    color: Colors.white.withValues(alpha: 0.08),
+    thickness: 1,
+  );
 }
 
 class _ReceiptLabel extends StatelessWidget {
@@ -1270,12 +1388,15 @@ class _ReceiptLabel extends StatelessWidget {
   const _ReceiptLabel(this.text);
 
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: TextStyle(
-          color: Colors.white.withValues(alpha:0.3),
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: TextStyle(
+      color: Colors.white.withValues(alpha: 0.3),
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.5,
+    ),
+  );
 }
 
 class _ReceiptRow extends StatelessWidget {
@@ -1285,30 +1406,37 @@ class _ReceiptRow extends StatelessWidget {
   final Color? color;
   final String? prefix;
 
-  const _ReceiptRow(this.label, this.value,
-      {this.bold = false, this.color, this.prefix});
+  const _ReceiptRow(
+    this.label,
+    this.value, {
+    this.bold = false,
+    this.color,
+    this.prefix,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Colors.white.withValues(alpha:bold ? 0.9 : 0.55);
+    final c = color ?? Colors.white.withValues(alpha: bold ? 0.9 : 0.55);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(
-                  color: c,
-                  fontSize: bold ? 14 : 13,
-                  fontWeight:
-                      bold ? FontWeight.w700 : FontWeight.normal)),
+          Text(
+            label,
+            style: TextStyle(
+              color: c,
+              fontSize: bold ? 14 : 13,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
           Text(
             '${prefix ?? ''}₱${NumberFormat('#,##0.00').format(value)}',
             style: TextStyle(
-                color: color ?? Colors.white.withValues(alpha:bold ? 1 : 0.7),
-                fontSize: bold ? 14 : 13,
-                fontWeight:
-                    bold ? FontWeight.w800 : FontWeight.w500),
+              color: color ?? Colors.white.withValues(alpha: bold ? 1 : 0.7),
+              fontSize: bold ? 14 : 13,
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+            ),
           ),
         ],
       ),

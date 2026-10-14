@@ -69,8 +69,7 @@ final repairPromptReasonProvider = Provider<RepairPromptReason?>((ref) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb &&
-      (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
@@ -88,15 +87,16 @@ Future<void> main() async {
   // FIX 1: Only sign out on real auth errors (deleted account, revoked token).
   // Previously this caught ALL exceptions including network timeouts, which
   // caused the app to sign out users whenever the device was offline at boot.
-  
 
-final existingSession = Supabase.instance.client.auth.currentSession;
-if (existingSession != null) {
-    debugPrint('[Boot] Cached session found for ${existingSession.user.id} — '
-        'letting SDK auto-refresh handle validity (autoRefreshToken: true)');
+  final existingSession = Supabase.instance.client.auth.currentSession;
+  if (existingSession != null) {
+    debugPrint(
+      '[Boot] Cached session found for ${existingSession.user.id} — '
+      'letting SDK auto-refresh handle validity (autoRefreshToken: true)',
+    );
   }
 
-  final prefs     = await SharedPreferences.getInstance();
+  final prefs = await SharedPreferences.getInstance();
   final container = ProviderContainer();
 
   await container.read(localDbServiceProvider).db;
@@ -108,7 +108,7 @@ if (existingSession != null) {
     container.read(deviceRoleProvider.notifier).state = role;
   }
 
-  final isPos     = savedRole == null || role == DeviceRole.pos;
+  final isPos = savedRole == null || role == DeviceRole.pos;
   final isKitchen = role == DeviceRole.kitchen;
 
   if (isPos) {
@@ -119,7 +119,9 @@ if (existingSession != null) {
   }
 
   await container.read(connectivityServiceProvider).init();
-  container.read(syncQueueServiceProvider); // provider factory already calls init()
+  container.read(
+    syncQueueServiceProvider,
+  ); // provider factory already calls init()
   container.read(profileRefreshServiceProvider).init();
 
   if (isPos) {
@@ -149,8 +151,9 @@ if (existingSession != null) {
     final cachedIp = prefs.getString('cashier_ip');
     if (cachedIp != null && cachedIp.isNotEmpty) {
       container.read(cashierIpProvider.notifier).state = cachedIp;
-      final reachable =
-          await container.read(connectivityServiceProvider).probeLan(cachedIp);
+      final reachable = await container
+          .read(connectivityServiceProvider)
+          .probeLan(cachedIp);
       if (reachable) {
         final businessId = prefs.getString('business_id') ?? '';
         container.read(kitchenStateProvider.notifier).connect(businessId);
@@ -164,7 +167,9 @@ if (existingSession != null) {
   // once it resolves — eliminating the race between initialRoute and
   // featureManagerProvider being null on the first frame.
   final String initialRoute =
-      Supabase.instance.client.auth.currentSession != null ? '/pending' : '/login';
+      Supabase.instance.client.auth.currentSession != null
+          ? '/pending'
+          : '/login';
 
   debugPrint('[Boot] savedRole: $savedRole  initialRoute: $initialRoute');
 
@@ -198,14 +203,21 @@ class _MyAppState extends ConsumerState<MyApp> {
     ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) async {
       if (!_initialEventSkipped) {
         _initialEventSkipped = true;
-        debugPrint('[Auth] initial event: ${next.runtimeType} user: ${next.asData?.value?.id} route: ${widget.initialRoute}');
+        debugPrint(
+          '[Auth] initial event: ${next.runtimeType} user: ${next.asData?.value?.id} route: ${widget.initialRoute}',
+        );
         if (next.asData?.value != null && widget.initialRoute == '/pending') {
-          debugPrint('[Auth] cached session boot — falling through to signed-in handler');
+          debugPrint(
+            '[Auth] cached session boot — falling through to signed-in handler',
+          );
           // Fall through to normal signed-in handling below.
-        } else if (next.asData?.value == null && widget.initialRoute == '/pending') {
+        } else if (next.asData?.value == null &&
+            widget.initialRoute == '/pending') {
           debugPrint('[Auth] cached session gone — going to /login');
-          router.navigatorKey.currentState
-              ?.pushNamedAndRemoveUntil('/login', (_) => false);
+          router.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            '/login',
+            (_) => false,
+          );
           return;
         } else {
           debugPrint('[Auth] initial event skipped');
@@ -213,68 +225,71 @@ class _MyAppState extends ConsumerState<MyApp> {
         }
       }
 
-        final previousUser = previous?.asData?.value;
-        final currentUser  = next.asData?.value;
+      final previousUser = previous?.asData?.value;
+      final currentUser = next.asData?.value;
 
-        // No real change in user identity — skip
-        if (previousUser?.id == currentUser?.id) return;
+      // No real change in user identity — skip
+      if (previousUser?.id == currentUser?.id) return;
 
-        // Guard: only one navigation in flight at a time
-        if (_isNavigating) return;
-        _isNavigating = true; // FIX: was 'isNavigating' (missing underscore)
+      // Guard: only one navigation in flight at a time
+      if (_isNavigating) return;
+      _isNavigating = true; // FIX: was 'isNavigating' (missing underscore)
 
-        final nav = router.navigatorKey.currentState;
-        if (nav == null) {
-          _isNavigating = false;
-          return;
-        }
+      final nav = router.navigatorKey.currentState;
+      if (nav == null) {
+        _isNavigating = false;
+        return;
+      }
 
-        try {
-          if (currentUser == null) {
-            // ── Signed out ─────────────────────────────────────────────────
-            final isAlreadyOnLogin = nav.canPop() == false &&
-                ModalRoute.of(nav.context)?.settings.name == '/login';
+      try {
+        if (currentUser == null) {
+          // ── Signed out ─────────────────────────────────────────────────
+          final isAlreadyOnLogin =
+              nav.canPop() == false &&
+              ModalRoute.of(nav.context)?.settings.name == '/login';
 
-            if (!isAlreadyOnLogin) {
-              debugPrint('[Auth] Signed out → /login');
-              nav.pushNamedAndRemoveUntil('/login', (_) => false);
-            } else {
-              debugPrint('[Auth] Signed out → already on /login, skipping push');
-            }
-
+          if (!isAlreadyOnLogin) {
+            debugPrint('[Auth] Signed out → /login');
+            nav.pushNamedAndRemoveUntil('/login', (_) => false);
           } else {
-            // ── Signed in ──────────────────────────────────────────────────
-            debugPrint('[Auth] Signed in: ${currentUser.id} → checking registration state');
-
-            if (RecoveryGuard.isRecovering) {
-              debugPrint('[Auth] Mid-password-reset — skipping navigation');
-              return;
-            }
-
-            final isPendingRegistration = ref.read(pendingUserIdProvider) != null;
-            if (isPendingRegistration) {
-              debugPrint('[Auth] Mid-registration — skipping navigation, waiting for completeRegistration()');
-              return;
-            }
-
-            try {
-              // Authentication succeeded.
-              // Let the dedicated pending screen resolve admin/profile/role.
-              // Do not perform network-dependent initialization here.
-              debugPrint('[Auth] Signed in: ${currentUser.id} → /pending');
-
-              nav.pushNamedAndRemoveUntil('/pending', (_) => false);
-              return;
-            } catch (e) {
-              debugPrint('[Auth] Profile load error: $e — falling back to /pos');
-              nav.pushNamedAndRemoveUntil('/pos', (_) => false);
-            }
+            debugPrint('[Auth] Signed out → already on /login, skipping push');
           }
-        } finally {
-          _isNavigating = false; // FIX: was 'isNavigating' (missing underscore)
+        } else {
+          // ── Signed in ──────────────────────────────────────────────────
+          debugPrint(
+            '[Auth] Signed in: ${currentUser.id} → checking registration state',
+          );
+
+          if (RecoveryGuard.isRecovering) {
+            debugPrint('[Auth] Mid-password-reset — skipping navigation');
+            return;
+          }
+
+          final isPendingRegistration = ref.read(pendingUserIdProvider) != null;
+          if (isPendingRegistration) {
+            debugPrint(
+              '[Auth] Mid-registration — skipping navigation, waiting for completeRegistration()',
+            );
+            return;
+          }
+
+          try {
+            // Authentication succeeded.
+            // Let the dedicated pending screen resolve admin/profile/role.
+            // Do not perform network-dependent initialization here.
+            debugPrint('[Auth] Signed in: ${currentUser.id} → /pending');
+
+            nav.pushNamedAndRemoveUntil('/pending', (_) => false);
+            return;
+          } catch (e) {
+            debugPrint('[Auth] Profile load error: $e — falling back to /pos');
+            nav.pushNamedAndRemoveUntil('/pos', (_) => false);
+          }
         }
-      },
-    );
+      } finally {
+        _isNavigating = false; // FIX: was 'isNavigating' (missing underscore)
+      }
+    });
 
     // ── Persist "has this device ever paired successfully" ─────────────────
     ref.listen<bool>(hasEverPairedProvider, (prev, next) async {
@@ -289,7 +304,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     // re-show every rebuild while an outage is ongoing, and won't spam the
     // user after they dismiss it with "Keep Trying" unless the underlying
     // issue changes (e.g. unreachable → authFailed) or clears and recurs.
-    ref.listen<RepairPromptReason?>(repairPromptReasonProvider, (previous, next) {
+    ref.listen<RepairPromptReason?>(repairPromptReasonProvider, (
+      previous,
+      next,
+    ) {
       if (next == null || previous == next || _repairDialogShowing) return;
       final ctx = router.navigatorKey.currentContext;
       if (ctx == null) return;
@@ -315,7 +333,8 @@ class _MyAppState extends ConsumerState<MyApp> {
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     });
@@ -329,7 +348,9 @@ class _MyAppState extends ConsumerState<MyApp> {
         fontFamily: 'Inter',
       ),
       navigatorKey: router.navigatorKey,
-      initialRoute: widget.initialRoute, // FIX: was 'initialRoute', must be 'widget.initialRoute'
+      initialRoute:
+          widget
+              .initialRoute, // FIX: was 'initialRoute', must be 'widget.initialRoute'
       onGenerateRoute: router.onGenerateRoute,
     );
   }
@@ -337,39 +358,40 @@ class _MyAppState extends ConsumerState<MyApp> {
   void _showRepairPrompt(BuildContext context, RepairPromptReason reason) {
     final (title, message) = switch (reason) {
       RepairPromptReason.authFailed => (
-          'Pairing key rejected',
-          "This device reached the POS, but the saved pairing key doesn't "
-              "match. Orders can't be sent or received until this is fixed.",
-        ),
+        'Pairing key rejected',
+        "This device reached the POS, but the saved pairing key doesn't "
+            "match. Orders can't be sent or received until this is fixed.",
+      ),
       RepairPromptReason.unreachable => (
-          "Can't reach POS",
-          "This device hasn't been able to reach the POS for a while. "
-              "It'll keep retrying in the background — but if the POS's "
-              "network address changed, re-pairing will fix it faster.",
-        ),
+        "Can't reach POS",
+        "This device hasn't been able to reach the POS for a while. "
+            "It'll keep retrying in the background — but if the POS's "
+            "network address changed, re-pairing will fix it faster.",
+      ),
     };
 
     _repairDialogShowing = true;
     showDialog(
       context: context,
       barrierDismissible: true, // tapping outside = same as Keep Trying
-      builder: (dialogCtx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Keep Trying'),
+      builder:
+          (dialogCtx) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Keep Trying'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  Navigator.of(context).pushNamed('/ip-setup');
+                },
+                child: const Text('Re-pair POS'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogCtx).pop();
-              Navigator.of(context).pushNamed('/ip-setup');
-            },
-            child: const Text('Re-pair POS'),
-          ),
-        ],
-      ),
     ).then((_) => _repairDialogShowing = false);
   }
 }

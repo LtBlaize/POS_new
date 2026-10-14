@@ -20,24 +20,24 @@ class OrderPayment {
   });
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'order_id': orderId,
-        'business_id': businessId,
-        'method': method.value,
-        'amount': amount,
-        'reference_number': referenceNumber,
-        'created_at': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'order_id': orderId,
+    'business_id': businessId,
+    'method': method.value,
+    'amount': amount,
+    'reference_number': referenceNumber,
+    'created_at': createdAt.toIso8601String(),
+  };
 
   factory OrderPayment.fromMap(Map<String, dynamic> m) => OrderPayment(
-        id: m['id'] as String,
-        orderId: m['order_id'] as String,
-        businessId: m['business_id'] as String,
-        method: PaymentMethodX.fromString(m['method'] as String),
-        amount: (m['amount'] as num).toDouble(),
-        referenceNumber: m['reference_number'] as String?,
-        createdAt: DateTime.parse(m['created_at'] as String),
-      );
+    id: m['id'] as String,
+    orderId: m['order_id'] as String,
+    businessId: m['business_id'] as String,
+    method: PaymentMethodX.fromString(m['method'] as String),
+    amount: (m['amount'] as num).toDouble(),
+    referenceNumber: m['reference_number'] as String?,
+    createdAt: DateTime.parse(m['created_at'] as String),
+  );
 }
 
 /// Lightweight input for a single payment leg entered in the split-payment

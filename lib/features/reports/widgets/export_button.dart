@@ -104,10 +104,9 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
       name: _fileName(widget.date),
     );
 
-    final result = await Share.shareXFiles(
-      [xFile],
-      subject: _fileName(widget.date),
-    );
+    final result = await Share.shareXFiles([
+      xFile,
+    ], subject: _fileName(widget.date));
 
     if (result.status != ShareResultStatus.unavailable) {
       _deleteTempFile(tempPath);
@@ -164,33 +163,35 @@ class _ExportButtonState extends ConsumerState<ExportButton> {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             border: Border.all(
-              color: enabled
-                  ? AppColors.divider
-                  : AppColors.divider.withValues(alpha:0.4),
+              color:
+                  enabled
+                      ? AppColors.divider
+                      : AppColors.divider.withValues(alpha: 0.4),
             ),
             borderRadius: BorderRadius.circular(8),
             color: Colors.white,
           ),
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation(AppColors.primary),
+          child:
+              _busy
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                    ),
+                  )
+                  : Icon(
+                    // Show a download icon on desktop, share icon on mobile
+                    _isDesktop
+                        ? Icons.file_download_outlined
+                        : Icons.ios_share_rounded,
+                    size: 16,
+                    color:
+                        enabled
+                            ? AppColors.textSecondary
+                            : AppColors.textSecondary.withValues(alpha: 0.3),
                   ),
-                )
-              : Icon(
-                  // Show a download icon on desktop, share icon on mobile
-                  _isDesktop
-                      ? Icons.file_download_outlined
-                      : Icons.ios_share_rounded,
-                  size: 16,
-                  color: enabled
-                      ? AppColors.textSecondary
-                      : AppColors.textSecondary.withValues(alpha:0.3),
-                ),
         ),
       ),
     );

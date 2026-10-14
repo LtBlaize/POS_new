@@ -28,9 +28,9 @@ class AppColors {
 
   // Status colors — matches order statuses
   static Color statusColor(String status) => switch (status) {
-        'pending' => warning,
-        'preparing' => info,
-        'ready' => success,
-        _ => textSecondary,
-      };
+    'pending' => warning,
+    'preparing' => info,
+    'ready' => success,
+    _ => textSecondary,
+  };
 }

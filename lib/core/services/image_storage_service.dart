@@ -28,7 +28,9 @@ class SupabaseImageStorage implements ImageStorageService {
 
   @override
   Future<String> upload(Uint8List bytes, String remotePath) async {
-    await _client.storage.from(_bucket).uploadBinary(
+    await _client.storage
+        .from(_bucket)
+        .uploadBinary(
           remotePath,
           bytes,
           fileOptions: const FileOptions(
@@ -66,13 +68,14 @@ class ProductImagePipeline {
       throw Exception('Could not decode image at $sourcePath');
     }
 
-    final resized = (decoded.width > maxDimension || decoded.height > maxDimension)
-        ? img.copyResize(
-            decoded,
-            width: decoded.width >= decoded.height ? maxDimension : null,
-            height: decoded.height > decoded.width ? maxDimension : null,
-          )
-        : decoded;
+    final resized =
+        (decoded.width > maxDimension || decoded.height > maxDimension)
+            ? img.copyResize(
+              decoded,
+              width: decoded.width >= decoded.height ? maxDimension : null,
+              height: decoded.height > decoded.width ? maxDimension : null,
+            )
+            : decoded;
 
     final jpegBytes = img.encodeJpg(resized, quality: jpegQuality);
 

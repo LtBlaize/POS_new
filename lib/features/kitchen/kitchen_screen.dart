@@ -26,6 +26,7 @@ import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/sync_queue_service.dart';
 import '../../core/models/product_variant.dart';
+import '../../core/services/kitchen_alert_service.dart';
 
 // ── Supabase kitchen orders provider ──────────────────────────────────────────
 //
@@ -34,9 +35,11 @@ import '../../core/models/product_variant.dart';
 
 final _kitchenOrdersFromDbProvider =
     AsyncNotifierProvider<_KitchenDbNotifier, List<Order>>(
-        _KitchenDbNotifier.new);
+      _KitchenDbNotifier.new,
+    );
 
-typedef RoundAdvance = Future<void> Function(String orderId, int round, String next);
+typedef RoundAdvance =
+    Future<void> Function(String orderId, int round, String next);
 
 class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
   @override
@@ -63,21 +66,26 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
         final rows = await Supabase.instance.client
             .from('orders')
             .select(
-                '*, order_items(*, products(id, name, price, business_id, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active))')
+              '*, order_items(*, products(id, name, price, business_id, send_to_kitchen), product_variants(id, product_id, name, price_delta, cost_price, stock_quantity, is_active))',
+            )
             .eq('business_id', businessId)
             .inFilter('status', ['pending', 'preparing', 'ready'])
             .order('created_at', ascending: true);
 
-        final remote = rows
-            .map((row) => _parseDbOrder(row))
-            .where((o) => o.items.isNotEmpty)
-            .toList();
+        final remote =
+            rows
+                .map((row) => _parseDbOrder(row))
+                .where((o) => o.items.isNotEmpty)
+                .toList();
 
         final remoteIds = remote.map((o) => o.id).toSet();
         final unsynced = await local.getUnsyncedOrderIds();
-        final localOnly = (await local.getActiveKitchenOrders(businessId))
-            .where((o) => unsynced.contains(o.id) && !remoteIds.contains(o.id))
-            .toList();
+        final localOnly =
+            (await local.getActiveKitchenOrders(businessId))
+                .where(
+                  (o) => unsynced.contains(o.id) && !remoteIds.contains(o.id),
+                )
+                .toList();
 
         final merged = <String, Order>{};
         for (final o in [...localOnly, ...remote]) {
@@ -92,29 +100,33 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
         debugPrint('[Kitchen] Supabase fetch error, using local DB: $e');
       }
     }
-    return (await local.getActiveKitchenOrders(businessId))
-        .where((o) => o.items.isNotEmpty)
-        .toList();
+    return (await local.getActiveKitchenOrders(
+      businessId,
+    )).where((o) => o.items.isNotEmpty).toList();
   }
 
   Future<void> advanceRound(String orderId, int round, String next) async {
-    state = AsyncData((state.value ?? []).map((o) {
-      if (o.id != orderId) return o;
-      final items = [
-        for (final i in o.items)
-          (i.round == round && i.kitchenStatus != 'served')
-              ? i.withKitchenStatus(next)
-              : i,
-      ];
-      return o.copyWith(
-        items: items,
-        status: OrderStatusX.fromString(
-            deriveOrderStatus(items.map((i) => i.kitchenStatus))),
-      );
-    }).toList());
+    state = AsyncData(
+      (state.value ?? []).map((o) {
+        if (o.id != orderId) return o;
+        final items = [
+          for (final i in o.items)
+            (i.round == round && i.kitchenStatus != 'served')
+                ? i.withKitchenStatus(next)
+                : i,
+        ];
+        return o.copyWith(
+          items: items,
+          status: OrderStatusX.fromString(
+            deriveOrderStatus(items.map((i) => i.kitchenStatus)),
+          ),
+        );
+      }).toList(),
+    );
     try {
-      await ref.read(orderServiceProvider).setRoundStatus(
-          orderId: orderId, round: round, status: next);
+      await ref
+          .read(orderServiceProvider)
+          .setRoundStatus(orderId: orderId, round: round, status: next);
     } catch (e) {
       debugPrint('[Kitchen] Round status error: $e');
       ref.invalidateSelf();
@@ -122,7 +134,8 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
   }
 
   Order _parseDbOrder(Map<String, dynamic> m) {
-    final rawItems = (m['order_items'] as List? ?? []).cast<Map<String, dynamic>>();
+    final rawItems =
+        (m['order_items'] as List? ?? []).cast<Map<String, dynamic>>();
 
     final items = CartItem.groupOrderItemRows<Map<String, dynamic>>(
       rawItems,
@@ -141,7 +154,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
             notes: map['notes'] as String?,
             promoId: map['promo_id'] as String?,
             round: map['round'] as int? ?? 1,
-            kitchenStatus: map['kitchen_status'] as String? ?? 'pending',            
+            kitchenStatus: map['kitchen_status'] as String? ?? 'pending',
           );
         }
         final product = map['products'] as Map<String, dynamic>? ?? {};
@@ -149,14 +162,19 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           product: Product(
             id: product['id'] as String? ?? '',
             businessId: product['business_id'] as String? ?? '',
-            name: product['name'] as String? ?? map['product_name'] as String? ?? '',
+            name:
+                product['name'] as String? ??
+                map['product_name'] as String? ??
+                '',
             price: (product['price'] as num?)?.toDouble() ?? 0.0,
             sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
           ),
-          selectedVariant: map['product_variants'] != null
-              ? ProductVariant.fromMap(
-                  map['product_variants'] as Map<String, dynamic>)
-              : null,          
+          selectedVariant:
+              map['product_variants'] != null
+                  ? ProductVariant.fromMap(
+                    map['product_variants'] as Map<String, dynamic>,
+                  )
+                  : null,
           quantity: map['quantity'] as int? ?? 1,
           costAtSale: (map['cost_price'] as num?)?.toDouble() ?? 0.0,
           notes: map['notes'] as String?,
@@ -170,7 +188,9 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
           promoId: map['promo_id'] as String? ?? '',
           productId: map['product_id'] as String,
           productName:
-              product['name'] as String? ?? map['product_name'] as String? ?? '',
+              product['name'] as String? ??
+              map['product_name'] as String? ??
+              '',
           quantity: map['quantity'] as int? ?? 1,
           trackInventory: false,
           sendToKitchen: product['send_to_kitchen'] as bool? ?? true,
@@ -178,10 +198,11 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       },
     );
 
-    final kitchenItems = items.where((i) {
-      if (i.isPromo) return i.promoComponents!.any((c) => c.sendToKitchen);
-      return i.product.sendToKitchen;
-    }).toList();
+    final kitchenItems =
+        items.where((i) {
+          if (i.isPromo) return i.promoComponents!.any((c) => c.sendToKitchen);
+          return i.product.sendToKitchen;
+        }).toList();
 
     return Order(
       id: m['id'] as String,
@@ -210,13 +231,13 @@ class KitchenScreen extends ConsumerStatefulWidget {
 
 class _KitchenScreenState extends ConsumerState<KitchenScreen>
     with WidgetsBindingObserver {
-
   // Whether this screen is using LAN mode (kitchen device) or DB mode (owner)
   bool get _isOwnerMode {
     final role = ref.read(deviceRoleProvider);
     if (role == DeviceRole.kitchen) return false;
     // Single-device mode: POS and kitchen run on the same device
-    final kitchenMode = ref.read(businessConfigProvider)?.kitchenMode ?? 'single_device';
+    final kitchenMode =
+        ref.read(businessConfigProvider)?.kitchenMode ?? 'single_device';
     return kitchenMode == 'single_device' || role == DeviceRole.pos;
   }
 
@@ -224,6 +245,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(kitchenAlertEngineProvider).resetSession(); // startup baseline
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isOwnerMode) _connect();
     });
@@ -246,7 +268,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No POS IP configured. Go to Settings → LAN Connection.'),
+            content: Text(
+              'No POS IP configured. Go to Settings → LAN Connection.',
+            ),
             duration: Duration(seconds: 5),
           ),
         );
@@ -267,7 +291,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
 
     // ── Kitchen device: use LAN stream, fall back to Supabase if offline ──
     final kitchenState = ref.watch(kitchenStateProvider);
-    final isOffline = kitchenState.connection == LanConnectionState.disconnected;
+    final isOffline =
+        kitchenState.connection == LanConnectionState.disconnected;
 
     // If LAN is disconnected, fall back to DB view automatically
     if (isOffline) {
@@ -277,8 +302,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     return _KitchenBody(
       orders: kitchenState.orders,
       connection: kitchenState.connection,
-      onAdvanceStatus: (orderId, round, next) =>
-          ref.read(kitchenStateProvider.notifier).advanceRound(orderId, round, next),
+      onAdvanceStatus:
+          (orderId, round, next) => ref
+              .read(kitchenStateProvider.notifier)
+              .advanceRound(orderId, round, next),
     );
   }
 }
@@ -293,25 +320,50 @@ class _DbKitchenView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_kitchenOrdersFromDbProvider);
 
+    // Alerts from the Supabase view:
+    //  - showLanBanner == true  -> dedicated kitchen device, LAN down: default ON
+    //  - otherwise (owner/POS)  -> only if single-device mode AND user enabled it
+    ref.listen<AsyncValue<List<Order>>>(_kitchenOrdersFromDbProvider, (
+      _,
+      next,
+    ) {
+      final orders = next.valueOrNull;
+      if (orders == null) return;
+      final singleDevice =
+          (ref.read(businessConfigProvider)?.kitchenMode ?? 'single_device') ==
+          'single_device';
+      ref
+          .read(kitchenAlertEngineProvider)
+          .handleSnapshot(
+            orders,
+            source: showLanBanner ? 'db-fallback' : 'db',
+            autoEnabled: showLanBanner,
+            allowed: showLanBanner || singleDevice,
+          );
+    });
+
     return ordersAsync.when(
       skipLoadingOnReload: true,
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => Scaffold(
-        body: Center(child: Text('Error loading orders: $e')),
-      ),
-      data: (orders) => _KitchenBody(
-        orders: orders,
-        // Owner always shows as "connected" since they read from DB directly
-        connection: showLanBanner
-            ? LanConnectionState.disconnected
-            : LanConnectionState.connected,
-        isDbMode: true,
-        onAdvanceStatus: (orderId, round, next) => ref
-            .read(_kitchenOrdersFromDbProvider.notifier)
-            .advanceRound(orderId, round, next),
-      ),
+      loading:
+          () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error:
+          (e, _) =>
+              Scaffold(body: Center(child: Text('Error loading orders: $e'))),
+      data:
+          (orders) => _KitchenBody(
+            orders: orders,
+            // Owner always shows as "connected" since they read from DB directly
+            connection:
+                showLanBanner
+                    ? LanConnectionState.disconnected
+                    : LanConnectionState.connected,
+            isDbMode: true,
+            onAdvanceStatus:
+                (orderId, round, next) => ref
+                    .read(_kitchenOrdersFromDbProvider.notifier)
+                    .advanceRound(orderId, round, next),
+          ),
     );
   }
 }
@@ -333,13 +385,18 @@ class _KitchenBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    OrderStatus effective(Order o) => o.items.isEmpty
-        ? o.status
-        : OrderStatusX.fromString(
-            deriveOrderStatus(o.items.map((i) => i.kitchenStatus)));
-    final pending   = orders.where((o) => effective(o) == OrderStatus.pending).toList();
-    final preparing = orders.where((o) => effective(o) == OrderStatus.preparing).toList();
-    final ready     = orders.where((o) => effective(o) == OrderStatus.ready).toList();
+    OrderStatus effective(Order o) =>
+        o.items.isEmpty
+            ? o.status
+            : OrderStatusX.fromString(
+              deriveOrderStatus(o.items.map((i) => i.kitchenStatus)),
+            );
+    final pending =
+        orders.where((o) => effective(o) == OrderStatus.pending).toList();
+    final preparing =
+        orders.where((o) => effective(o) == OrderStatus.preparing).toList();
+    final ready =
+        orders.where((o) => effective(o) == OrderStatus.ready).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -372,11 +429,23 @@ class _KitchenBody extends StatelessWidget {
                     else
                       _LanIndicator(state: connection),
                     const SizedBox(width: 12),
-                    _KitchenStat(label: 'Pending',   count: pending.length,   color: AppColors.warning),
+                    _KitchenStat(
+                      label: 'Pending',
+                      count: pending.length,
+                      color: AppColors.warning,
+                    ),
                     const SizedBox(width: 8),
-                    _KitchenStat(label: 'Preparing', count: preparing.length, color: AppColors.info),
+                    _KitchenStat(
+                      label: 'Preparing',
+                      count: preparing.length,
+                      color: AppColors.info,
+                    ),
                     const SizedBox(width: 8),
-                    _KitchenStat(label: 'Ready',     count: ready.length,     color: AppColors.success),
+                    _KitchenStat(
+                      label: 'Ready',
+                      count: ready.length,
+                      color: AppColors.success,
+                    ),
                   ],
                 ),
               ],
@@ -385,40 +454,46 @@ class _KitchenBody extends StatelessWidget {
 
           // Columns
           Expanded(
-            child: orders.isEmpty
-                ? _EmptyKitchen(isDbMode: isDbMode)
-                                : LayoutBuilder(builder: (context, c) {
-                    final row = Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _KitchenColumn(
-                          title: 'Pending',
-                          color: AppColors.warning,
-                          orders: pending,
-                          onAdvanceStatus: onAdvanceStatus,
-                        ),
-                        _KitchenColumn(
-                          title: 'Preparing',
-                          color: AppColors.info,
-                          orders: preparing,
-                          onAdvanceStatus: onAdvanceStatus,
-                        ),
-                        _KitchenColumn(
-                          title: 'Ready',
-                          color: AppColors.success,
-                          orders: ready,
-                          onAdvanceStatus: onAdvanceStatus,
-                        ),
-                      ],
-                    );
-                    if (c.maxWidth >= 720) return row;
-                    // Narrow window: scroll sideways instead of overflowing.
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SizedBox(
-                          width: 900, height: c.maxHeight, child: row),
-                    );
-                  }),
+            child:
+                orders.isEmpty
+                    ? _EmptyKitchen(isDbMode: isDbMode)
+                    : LayoutBuilder(
+                      builder: (context, c) {
+                        final row = Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _KitchenColumn(
+                              title: 'Pending',
+                              color: AppColors.warning,
+                              orders: pending,
+                              onAdvanceStatus: onAdvanceStatus,
+                            ),
+                            _KitchenColumn(
+                              title: 'Preparing',
+                              color: AppColors.info,
+                              orders: preparing,
+                              onAdvanceStatus: onAdvanceStatus,
+                            ),
+                            _KitchenColumn(
+                              title: 'Ready',
+                              color: AppColors.success,
+                              orders: ready,
+                              onAdvanceStatus: onAdvanceStatus,
+                            ),
+                          ],
+                        );
+                        if (c.maxWidth >= 720) return row;
+                        // Narrow window: scroll sideways instead of overflowing.
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: 900,
+                            height: c.maxHeight,
+                            child: row,
+                          ),
+                        );
+                      },
+                    ),
           ),
         ],
       ),
@@ -435,12 +510,18 @@ class _ConnectionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color) = switch (state) {
-      LanConnectionState.disconnected =>
-        ('Not connected to POS — showing orders from server instead', Colors.orange.shade700),
-      LanConnectionState.connecting =>
-        ('Connecting to POS...', Colors.orange.shade700),
-      LanConnectionState.polling =>
-        ('Live link degraded — polling every 5 s', Colors.orange.shade600),
+      LanConnectionState.disconnected => (
+        'Not connected to POS — showing orders from server instead',
+        Colors.orange.shade700,
+      ),
+      LanConnectionState.connecting => (
+        'Connecting to POS...',
+        Colors.orange.shade700,
+      ),
+      LanConnectionState.polling => (
+        'Live link degraded — polling every 5 s',
+        Colors.orange.shade600,
+      ),
       LanConnectionState.connected => ('', Colors.transparent),
     };
 
@@ -456,11 +537,14 @@ class _ConnectionBanner extends StatelessWidget {
           const Icon(Icons.wifi_off, size: 14, color: Colors.white),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -477,16 +561,22 @@ class _DbModeIndicator extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: const BoxDecoration(
-              color: AppColors.success, shape: BoxShape.circle),
+            color: AppColors.success,
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 5),
-        const Text('Live',
-            style: TextStyle(
-                color: AppColors.success,
-                fontSize: 11,
-                fontWeight: FontWeight.w600)),
+        const Text(
+          'Live',
+          style: TextStyle(
+            color: AppColors.success,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
@@ -502,13 +592,13 @@ class _LanIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (state) {
       LanConnectionState.connected => AppColors.success,
-      LanConnectionState.polling   => AppColors.warning,
-      _                            => Colors.red,
+      LanConnectionState.polling => AppColors.warning,
+      _ => Colors.red,
     };
     final label = switch (state) {
-      LanConnectionState.connected    => 'LAN live',
-      LanConnectionState.polling      => 'Polling',
-      LanConnectionState.connecting   => 'Connecting',
+      LanConnectionState.connected => 'LAN live',
+      LanConnectionState.polling => 'Polling',
+      LanConnectionState.connecting => 'Connecting',
       LanConnectionState.disconnected => 'Offline',
     };
 
@@ -516,13 +606,19 @@ class _LanIndicator extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(label,
-            style: TextStyle(
-                color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
@@ -543,7 +639,7 @@ class _EmptyKitchen extends StatelessWidget {
           Icon(
             Icons.kitchen_outlined,
             size: 48,
-            color: AppColors.textSecondary.withValues(alpha:0.25),
+            color: AppColors.textSecondary.withValues(alpha: 0.25),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -552,8 +648,13 @@ class _EmptyKitchen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            isDbMode ? 'Refreshes every 10 seconds' : 'Waiting for orders from POS',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            isDbMode
+                ? 'Refreshes every 10 seconds'
+                : 'Waiting for orders from POS',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -591,50 +692,71 @@ class _KitchenColumn extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: color.withValues(alpha:0.08),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(13)),
+                color: color.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(13),
+                ),
                 border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: color)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
                   const Spacer(),
                   if (orders.isNotEmpty)
-                    Text('${orders.length}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: color)),
+                    Text(
+                      '${orders.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
                 ],
               ),
             ),
             Expanded(
-              child: orders.isEmpty
-                  ? Center(
-                      child: Text('No orders',
+              child:
+                  orders.isEmpty
+                      ? Center(
+                        child: Text(
+                          'No orders',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary.withValues(alpha:0.4))))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(10),
-                      itemCount: orders.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) => _KitchenOrderCard(
-                        key: ValueKey('${orders[i].id}-${orders[i].status}'),
-                        order: orders[i],
-                        onAdvanceStatus: onAdvanceStatus,
+                            fontSize: 12,
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
+                        ),
+                      )
+                      : ListView.separated(
+                        padding: const EdgeInsets.all(10),
+                        itemCount: orders.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder:
+                            (_, i) => _KitchenOrderCard(
+                              key: ValueKey(
+                                '${orders[i].id}-${orders[i].status}',
+                              ),
+                              order: orders[i],
+                              onAdvanceStatus: onAdvanceStatus,
+                            ),
                       ),
-                    ),
             ),
           ],
         ),
@@ -700,9 +822,10 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     String base;
     if (tableId != null && tableId.isNotEmpty) {
       final n = ref.read(tableProvider).tableNameForUuid(tableId);
-      base = n != null
-          ? 'TABLE $n'
-          : 'TABLE …${tableId.substring(tableId.length - 6)}';
+      base =
+          n != null
+              ? 'TABLE $n'
+              : 'TABLE …${tableId.substring(tableId.length - 6)}';
     } else {
       base = switch (o.orderType) {
         OrderType.takeOut => 'TAKEOUT',
@@ -743,38 +866,47 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
           Row(
             children: [
               Expanded(
-                child: Text(_whereLabel(),
-                    style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary)),
+                child: Text(
+                  _whereLabel(),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: AppColors.divider),
                 ),
-                child: Text(_formatAge(age),
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary)),
+                child: Text(
+                  _formatAge(age),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
             ],
           ),
-          Text('Order #${order.orderNumber}',
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
+          Text(
+            'Order #${order.orderNumber}',
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 10),
           if (keys.isEmpty)
-            const Text('Loading items...',
-                style:
-                    TextStyle(fontSize: 11, color: AppColors.textSecondary))
+            const Text(
+              'Loading items...',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            )
           else
-            for (final r in keys)
-              _roundSection(r, rounds[r]!, keys.length > 1),
+            for (final r in keys) _roundSection(r, rounds[r]!, keys.length > 1),
         ],
       ),
     );
@@ -803,9 +935,8 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
         color: served ? Colors.transparent : color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: served
-                ? AppColors.divider
-                : color.withValues(alpha: 0.35)),
+          color: served ? AppColors.divider : color.withValues(alpha: 0.35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,19 +946,26 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  Text('ROUND $round',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: served ? AppColors.textSecondary : color)),
+                  Text(
+                    'ROUND $round',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: served ? AppColors.textSecondary : color,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Text(tag,
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: served
+                  Text(
+                    tag,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          served
                               ? AppColors.textSecondary
-                              : color.withValues(alpha: 0.8))),
+                              : color.withValues(alpha: 0.8),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -837,25 +975,33 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
             SizedBox(
               width: double.infinity,
               height: 34,
-              child: _busyRound == '$round'
-                  ? const Center(
-                      child: SizedBox(
+              child:
+                  _busyRound == '$round'
+                      ? const Center(
+                        child: SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2)))
-                  : ElevatedButton(
-                      onPressed: () => _advance(round, next),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: EdgeInsets.zero,
-                      ),
-                      child: Text(label,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                      : ElevatedButton(
+                        onPressed: () => _advance(round, next),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: color,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Text(
+                          label,
                           style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w700)),
-                    ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
             ),
           ],
         ],
@@ -868,14 +1014,17 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
         if (item.isPromo) {
           return item.promoComponents!
               .where((c) => c.sendToKitchen)
-              .map((c) => _kitchenLine(
-                    quantity: c.quantity * item.quantity,
-                    name: c.variantName != null
-                        ? '${c.productName} (${c.variantName})'
-                        : c.productName,
-                    subtitle: item.product.name,
-                    served: served,
-                  ));
+              .map(
+                (c) => _kitchenLine(
+                  quantity: c.quantity * item.quantity,
+                  name:
+                      c.variantName != null
+                          ? '${c.productName} (${c.variantName})'
+                          : c.productName,
+                  subtitle: item.product.name,
+                  served: served,
+                ),
+              );
         }
         return [
           _kitchenLine(
@@ -911,11 +1060,14 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
               borderRadius: BorderRadius.circular(5),
             ),
             child: Center(
-              child: Text('$quantity',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: served ? grey : AppColors.primary)),
+              child: Text(
+                '$quantity',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: served ? grey : AppColors.primary,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 7),
@@ -923,25 +1075,34 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: TextStyle(
-                        fontSize: 12,
-                        decoration: strike,
-                        color: served ? grey : AppColors.textPrimary)),
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    decoration: strike,
+                    color: served ? grey : AppColors.textPrimary,
+                  ),
+                ),
                 if (subtitle != null)
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          decoration: strike,
-                          color: served ? grey : subtitleColor)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      decoration: strike,
+                      color: served ? grey : subtitleColor,
+                    ),
+                  ),
                 if (notes != null && notes.isNotEmpty)
-                  Text(notes,
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic,
-                          decoration: strike,
-                          color: served ? grey : AppColors.warning)),
+                  Text(
+                    notes,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                      decoration: strike,
+                      color: served ? grey : AppColors.warning,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -958,25 +1119,35 @@ class _KitchenStat extends StatelessWidget {
   final int count;
   final Color color;
 
-  const _KitchenStat(
-      {required this.label, required this.count, required this.color});
+  const _KitchenStat({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          Text('$count',
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+          Text(
+            '$count',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
           const SizedBox(width: 5),
-          Text(label,
-              style: TextStyle(color: color.withValues(alpha:0.8), fontSize: 11)),
+          Text(
+            label,
+            style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 11),
+          ),
         ],
       ),
     );

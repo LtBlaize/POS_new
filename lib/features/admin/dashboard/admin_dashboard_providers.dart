@@ -26,9 +26,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DashboardKpis {
   final int totalBusinesses;
-  final int activeSubscriptions; // is_active=true AND subscription_plan != 'free'
-  final double monthlyRevenue;   // sum(payments.amount) where status='completed', this calendar month
-  final Map<String, int> planCounts; // raw subscription_plan value -> count, for "Active X" cards
+  final int
+  activeSubscriptions; // is_active=true AND subscription_plan != 'free'
+  final double
+  monthlyRevenue; // sum(payments.amount) where status='completed', this calendar month
+  final Map<String, int>
+  planCounts; // raw subscription_plan value -> count, for "Active X" cards
 
   const DashboardKpis({
     required this.totalBusinesses,
@@ -94,8 +97,10 @@ class RecentPayment {
 
 class AdminActivityEntry {
   final String id;
-  final String adminRole;   // from admin_users.role — no name field exists yet, see file header
-  final String adminIdShort; // first 8 chars of admin_user_id, for eyeballing "was this the same admin"
+  final String
+  adminRole; // from admin_users.role — no name field exists yet, see file header
+  final String
+  adminIdShort; // first 8 chars of admin_user_id, for eyeballing "was this the same admin"
   final String action;
   final String? targetType;
   final String? targetId;
@@ -136,7 +141,8 @@ final dashboardKpisProvider = FutureProvider<DashboardKpis>((ref) async {
 
     // Monthly revenue: completed payments this calendar month.
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1).toUtc().toIso8601String();
+    final monthStart =
+        DateTime(now.year, now.month, 1).toUtc().toIso8601String();
     final payRows = await client
         .from('payments')
         .select('amount')
@@ -162,58 +168,62 @@ final dashboardKpisProvider = FutureProvider<DashboardKpis>((ref) async {
 /// Last 6 completed months of revenue, oldest first. Empty list (not zeros)
 /// when there's no payment history at all — screen must render an empty
 /// state, not a flat zero line that implies "confirmed zero revenue."
-final dashboardRevenueChartProvider =
-    FutureProvider<List<MonthlyRevenuePoint>>((ref) async {
-  try {
-    final client = Supabase.instance.client;
-    final now = DateTime.now();
-    final rangeStart = DateTime(now.year, now.month - 5, 1);
+final dashboardRevenueChartProvider = FutureProvider<List<MonthlyRevenuePoint>>(
+  (ref) async {
+    try {
+      final client = Supabase.instance.client;
+      final now = DateTime.now();
+      final rangeStart = DateTime(now.year, now.month - 5, 1);
 
-    final rows = await client
-        .from('payments')
-        .select('amount, created_at')
-        .eq('status', 'completed')
-        .gte('created_at', rangeStart.toUtc().toIso8601String());
+      final rows = await client
+          .from('payments')
+          .select('amount, created_at')
+          .eq('status', 'completed')
+          .gte('created_at', rangeStart.toUtc().toIso8601String());
 
-    if ((rows as List).isEmpty) return [];
+      if ((rows as List).isEmpty) return [];
 
-    final Map<String, double> byMonth = {}; // 'yyyy-MM' -> sum
-    for (final r in rows) {
-      final dt = DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal();
-      if (dt == null) continue;
-      final key = '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
-      final amt = (r['amount'] as num?)?.toDouble() ?? 0;
-      byMonth[key] = (byMonth[key] ?? 0) + amt;
+      final Map<String, double> byMonth = {}; // 'yyyy-MM' -> sum
+      for (final r in rows) {
+        final dt =
+            DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal();
+        if (dt == null) continue;
+        final key = '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
+        final amt = (r['amount'] as num?)?.toDouble() ?? 0;
+        byMonth[key] = (byMonth[key] ?? 0) + amt;
+      }
+
+      final points = <MonthlyRevenuePoint>[];
+      for (var i = 5; i >= 0; i--) {
+        final m = DateTime(now.year, now.month - i, 1);
+        final key = '${m.year}-${m.month.toString().padLeft(2, '0')}';
+        points.add(MonthlyRevenuePoint(m, byMonth[key] ?? 0));
+      }
+      return points;
+    } catch (_) {
+      return [];
     }
-
-    final points = <MonthlyRevenuePoint>[];
-    for (var i = 5; i >= 0; i--) {
-      final m = DateTime(now.year, now.month - i, 1);
-      final key = '${m.year}-${m.month.toString().padLeft(2, '0')}';
-      points.add(MonthlyRevenuePoint(m, byMonth[key] ?? 0));
-    }
-    return points;
-  } catch (_) {
-    return [];
-  }
-});
+  },
+);
 
 final dashboardSubscriptionBreakdownProvider =
     FutureProvider<List<PlanBreakdown>>((ref) async {
-  final kpis = await ref.watch(dashboardKpisProvider.future);
-  final total = kpis.planCounts.values.fold<int>(0, (s, c) => s + c);
-  if (total == 0) return [];
+      final kpis = await ref.watch(dashboardKpisProvider.future);
+      final total = kpis.planCounts.values.fold<int>(0, (s, c) => s + c);
+      if (total == 0) return [];
 
-  final entries = kpis.planCounts.entries.toList()
-    ..sort((a, b) => b.value.compareTo(a.value));
+      final entries =
+          kpis.planCounts.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
 
-  return entries
-      .map((e) => PlanBreakdown(e.key, e.value, e.value / total * 100))
-      .toList();
-});
+      return entries
+          .map((e) => PlanBreakdown(e.key, e.value, e.value / total * 100))
+          .toList();
+    });
 
-final dashboardRecentBusinessesProvider =
-    FutureProvider<List<RecentBusiness>>((ref) async {
+final dashboardRecentBusinessesProvider = FutureProvider<List<RecentBusiness>>((
+  ref,
+) async {
   try {
     final client = Supabase.instance.client;
     final rows = await client
@@ -223,21 +233,24 @@ final dashboardRecentBusinessesProvider =
         .limit(5);
 
     return (rows as List)
-        .map((r) => RecentBusiness(
-              id: r['id'] as String,
-              name: r['name'] as String,
-              subscriptionPlan: r['subscription_plan'] as String? ?? 'unknown',
-              isActive: r['is_active'] as bool? ?? false,
-              createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
-            ))
+        .map(
+          (r) => RecentBusiness(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            subscriptionPlan: r['subscription_plan'] as String? ?? 'unknown',
+            isActive: r['is_active'] as bool? ?? false,
+            createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+          ),
+        )
         .toList();
   } catch (_) {
     return [];
   }
 });
 
-final dashboardRecentPaymentsProvider =
-    FutureProvider<List<RecentPayment>>((ref) async {
+final dashboardRecentPaymentsProvider = FutureProvider<List<RecentPayment>>((
+  ref,
+) async {
   try {
     final client = Supabase.instance.client;
     // No FK-based embed to businesses in the schema shown for payments →
@@ -247,7 +260,9 @@ final dashboardRecentPaymentsProvider =
     // queries (id list, then a `.in_` lookup on businesses).
     final rows = await client
         .from('payments')
-        .select('id, amount, currency, status, provider, created_at, businesses(name)')
+        .select(
+          'id, amount, currency, status, provider, created_at, businesses(name)',
+        )
         .order('created_at', ascending: false)
         .limit(5);
 
@@ -268,13 +283,16 @@ final dashboardRecentPaymentsProvider =
   }
 });
 
-final dashboardActivityFeedProvider =
-    FutureProvider<List<AdminActivityEntry>>((ref) async {
+final dashboardActivityFeedProvider = FutureProvider<List<AdminActivityEntry>>((
+  ref,
+) async {
   try {
     final client = Supabase.instance.client;
     final rows = await client
         .from('admin_activity_logs')
-        .select('id, admin_user_id, action, target_type, target_id, created_at, admin_users(role)')
+        .select(
+          'id, admin_user_id, action, target_type, target_id, created_at, admin_users(role)',
+        )
         .order('created_at', ascending: false)
         .limit(8);
 

@@ -51,9 +51,10 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
         .eq('is_active', true)
         .order('name');
 
-    final products = (rows as List)
-        .map((m) => Product.fromMap(m as Map<String, dynamic>))
-        .toList();
+    final products =
+        (rows as List)
+            .map((m) => Product.fromMap(m as Map<String, dynamic>))
+            .toList();
 
     await local.upsertProducts(products);
 
@@ -69,9 +70,10 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
         .eq('is_active', true)
         .inFilter('product_id', productIds);
 
-    final allVariants = (variantRows as List)
-        .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
-        .toList();
+    final allVariants =
+        (variantRows as List)
+            .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
+            .toList();
 
     // Cache variants locally (bulk upsert)
     if (allVariants.isNotEmpty) {
@@ -145,11 +147,13 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
       )
       .subscribe((status, [error]) {
         debugPrint(
-            '[productListProvider] Realtime status: $status error: $error');
+          '[productListProvider] Realtime status: $status error: $error',
+        );
         if (status == RealtimeSubscribeStatus.channelError ||
             status == RealtimeSubscribeStatus.timedOut) {
           debugPrint(
-              '[productListProvider] Realtime failed, will rely on lifecycle refresh');
+            '[productListProvider] Realtime failed, will rely on lifecycle refresh',
+          );
         }
       });
 
@@ -273,10 +277,10 @@ class InventoryService {
     required LocalDbService local,
     required SyncQueueService syncQueue,
     required Ref ref,
-  })  : _client = client,
-        _local = local,
-        _syncQueue = syncQueue,
-        _ref = ref;
+  }) : _client = client,
+       _local = local,
+       _syncQueue = syncQueue,
+       _ref = ref;
 
   Future<void> adjustStock({
     required String businessId,
@@ -336,16 +340,19 @@ class InventoryService {
 
     if (_ref.read(isOnlineProvider)) {
       try {
-        await _client.rpc('apply_stock_change', params: {
-          'p_business_id': businessId,
-          'p_product_id': productId,
-          'p_variant_id': variantId,
-          'p_delta': delta,
-          'p_action': action,
-          'p_performed_by': performedBy,
-          'p_notes': notes,
-          'p_idempotency_key': key,
-        });
+        await _client.rpc(
+          'apply_stock_change',
+          params: {
+            'p_business_id': businessId,
+            'p_product_id': productId,
+            'p_variant_id': variantId,
+            'p_delta': delta,
+            'p_action': action,
+            'p_performed_by': performedBy,
+            'p_notes': notes,
+            'p_idempotency_key': key,
+          },
+        );
         return;
       } catch (e) {
         debugPrint('[InventoryService] RPC failed, queuing with same key: $e');

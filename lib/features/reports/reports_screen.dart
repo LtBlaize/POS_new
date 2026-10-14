@@ -10,7 +10,7 @@ import '../../core/services/connectivity_service.dart';
 import '../../shared/widgets/app_colors.dart';
 import 'reports_providers.dart';
 import 'widgets/daily_tab.dart';
-import 'widgets/export_button.dart';   // FIX: was never imported
+import 'widgets/export_button.dart'; // FIX: was never imported
 import 'widgets/shifts_tab.dart';
 import 'widgets/audit_log_tab.dart';
 import '../../core/models/staff.dart';
@@ -40,22 +40,26 @@ class ReportsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen(currentShiftProvider,
-        (_, __) => ref.invalidate(shiftReportProvider));
+    ref.listen(
+      currentShiftProvider,
+      (_, __) => ref.invalidate(shiftReportProvider),
+    );
     final selectedDate = ref.watch(selectedDateProvider);
     final dateRange = ref.watch(dateRangeProvider);
     final activeTab = ref.watch(reportTabProvider);
     final isOnline = ref.watch(isOnlineProvider);
-    final isRestaurant = featureManager.hasFeature('kitchen') ||
+    final isRestaurant =
+        featureManager.hasFeature('kitchen') ||
         featureManager.hasFeature('tables');
     final layout = layoutOf(context);
 
     final isRangeMode = !dateRange.isSingleDay;
 
     // Use period provider when range selected, daily otherwise
-    final reportAsync = isRangeMode
-        ? ref.watch(periodReportProvider(dateRange))
-        : ref.watch(dailyReportProvider(selectedDate));
+    final reportAsync =
+        isRangeMode
+            ? ref.watch(periodReportProvider(dateRange))
+            : ref.watch(dailyReportProvider(selectedDate));
     final shiftAsync = ref.watch(shiftReportProvider(selectedDate));
 
     final dailyReport = reportAsync.valueOrNull;
@@ -70,8 +74,7 @@ class ReportsScreen extends ConsumerWidget {
             Container(
               width: double.infinity,
               color: const Color(0xFFB71C1C),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
               child: const Row(
                 children: [
                   Icon(Icons.wifi_off_rounded, size: 14, color: Colors.white),
@@ -79,9 +82,10 @@ class ReportsScreen extends ConsumerWidget {
                   Text(
                     'Offline — showing cached report data',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500),
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -102,14 +106,19 @@ class ReportsScreen extends ConsumerWidget {
                 ref.invalidate(shiftReportProvider);
               }
             },
-            onPrev: isRangeMode
-                ? null
-                : () => ref.read(selectedDateProvider.notifier).state =
-                    selectedDate.subtract(const Duration(days: 1)),
-            onNext: isRangeMode || _isToday(selectedDate)
-                ? null
-                : () => ref.read(selectedDateProvider.notifier).state =
-                    selectedDate.add(const Duration(days: 1)),
+            onPrev:
+                isRangeMode
+                    ? null
+                    : () =>
+                        ref.read(selectedDateProvider.notifier).state =
+                            selectedDate.subtract(const Duration(days: 1)),
+            onNext:
+                isRangeMode || _isToday(selectedDate)
+                    ? null
+                    : () =>
+                        ref
+                            .read(selectedDateProvider.notifier)
+                            .state = selectedDate.add(const Duration(days: 1)),
             onPick: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -126,18 +135,19 @@ class ReportsScreen extends ConsumerWidget {
                 );
               }
             },
-            onToday: _isToday(selectedDate) && !isRangeMode
-                ? null
-                : () {
-                    final now = DateTime.now();
-                    final today = DateTime(now.year, now.month, now.day);
-                    ref.read(selectedDateProvider.notifier).state = today;
-                    ref.read(dateRangeProvider.notifier).state = DateRange(
-                      start: today,
-                      end: today,
-                      preset: RangePreset.day,
-                    );
-                  },
+            onToday:
+                _isToday(selectedDate) && !isRangeMode
+                    ? null
+                    : () {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      ref.read(selectedDateProvider.notifier).state = today;
+                      ref.read(dateRangeProvider.notifier).state = DateRange(
+                        start: today,
+                        end: today,
+                        preset: RangePreset.day,
+                      );
+                    },
             onRangeChanged: (range) {
               ref.read(dateRangeProvider.notifier).state = range;
               ref.read(selectedDateProvider.notifier).state = range.start;
@@ -166,44 +176,51 @@ class ReportsScreen extends ConsumerWidget {
 
           // ── Body ─────────────────────────────────────────────────────────
           Expanded(
-            child: activeTab == ReportTab.auditLog
-                ? const AuditLogTab()
-                : activeTab == ReportTab.daily
+            child:
+                activeTab == ReportTab.auditLog
+                    ? const AuditLogTab()
+                    : activeTab == ReportTab.daily
                     ? reportAsync.when(
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (e, _) => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text('Error loading report: $e',
-                                style: const TextStyle(
-                                    color: AppColors.danger)),
+                      loading:
+                          () =>
+                              const Center(child: CircularProgressIndicator()),
+                      error:
+                          (e, _) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'Error loading report: $e',
+                                style: const TextStyle(color: AppColors.danger),
+                              ),
+                            ),
                           ),
-                        ),
-                        data: (report) => DailyTab(
-                          report: report,
-                          isRestaurant: isRestaurant,
-                          layout: layout,
-                          isToday: _isToday(selectedDate) && !isRangeMode,
-                          dateRange: isRangeMode ? dateRange : null,
-                        ),
-                      )
+                      data:
+                          (report) => DailyTab(
+                            report: report,
+                            isRestaurant: isRestaurant,
+                            layout: layout,
+                            isToday: _isToday(selectedDate) && !isRangeMode,
+                            dateRange: isRangeMode ? dateRange : null,
+                          ),
+                    )
                     : shiftAsync.when(
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (e, _) => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text('Error loading shifts: $e',
-                                style: const TextStyle(
-                                    color: AppColors.danger)),
+                      loading:
+                          () =>
+                              const Center(child: CircularProgressIndicator()),
+                      error:
+                          (e, _) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'Error loading shifts: $e',
+                                style: const TextStyle(color: AppColors.danger),
+                              ),
+                            ),
                           ),
-                        ),
-                        data: (entries) => ShiftsTab(
-                          entries: entries,
-                          layout: layout,
-                        ),
-                      ),
+                      data:
+                          (entries) =>
+                              ShiftsTab(entries: entries, layout: layout),
+                    ),
           ),
         ],
       ),
@@ -268,8 +285,20 @@ class ReportHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           isPhone
-              ? _phoneTitleRow(selectedDate, isRestaurant, dailyReport, shifts, dateRange)
-          : _wideTitleRow(selectedDate, isRestaurant, dailyReport, shifts, dateRange),
+              ? _phoneTitleRow(
+                selectedDate,
+                isRestaurant,
+                dailyReport,
+                shifts,
+                dateRange,
+              )
+              : _wideTitleRow(
+                selectedDate,
+                isRestaurant,
+                dailyReport,
+                shifts,
+                dateRange,
+              ),
           SizedBox(height: isPhone ? 10 : 14),
           isPhone ? _phoneDateRow() : _wideDateRow(),
           const SizedBox(height: 8),
@@ -292,46 +321,47 @@ class ReportHeader extends StatelessWidget {
     DailyReport? dailyReport,
     List<ShiftEntry>? shifts,
     DateRange dateRange,
-  ) =>
-      Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  ) => Row(
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Reports',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TypeBadge(isRestaurant: isRestaurant),
-                  ],
+                const Text(
+                  'Reports',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _formatDate(date),
-                  style: const TextStyle(
-                      fontSize: 11, color: AppColors.textSecondary),
-                ),
+                const SizedBox(width: 8),
+                TypeBadge(isRestaurant: isRestaurant),
               ],
             ),
-          ),
-          // FIX: ExportButton placed here — was missing entirely before
-          ExportButton(
-            date: date,
-            dateRange: dateRange,
-            dailyReport: dailyReport,
-            shifts: shifts,
-          ),
-        ],
-      );
+            const SizedBox(height: 2),
+            Text(
+              _formatDate(date),
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+      // FIX: ExportButton placed here — was missing entirely before
+      ExportButton(
+        date: date,
+        dateRange: dateRange,
+        dailyReport: dailyReport,
+        shifts: shifts,
+      ),
+    ],
+  );
 
   Widget _wideTitleRow(
     DateTime date,
@@ -339,162 +369,183 @@ class ReportHeader extends StatelessWidget {
     DailyReport? dailyReport,
     List<ShiftEntry>? shifts,
     DateRange dateRange,
-  ) =>
-      Row(
+  ) => Row(
+    children: [
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Row(
-                children: [
-                  const Text(
-                    'Reports',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  TypeBadge(isRestaurant: isRestaurant),
-                ],
+              const Text(
+                'Reports',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.5,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(width: 10),
+              TypeBadge(isRestaurant: isRestaurant),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatDate(date),
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      const Spacer(),
+      // FIX: ExportButton placed here — was missing entirely before
+      ExportButton(
+        date: date,
+        dateRange: dateRange,
+        dailyReport: dailyReport,
+        shifts: shifts,
+      ),
+    ],
+  );
+
+  Widget _phoneDateRow() => Row(
+    children: [
+      DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
+      const SizedBox(width: 6),
+      Expanded(
+        child: GestureDetector(
+          onTap: onPick,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 13,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _formatDateShort(selectedDate),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 6),
+      DateNavButton(icon: Icons.chevron_right, onTap: onNext),
+      if (onToday != null) ...[
+        const SizedBox(width: 6),
+        TextButton(
+          onPressed: onToday,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'Today',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ],
+  );
+
+  Widget _wideDateRow() => Row(
+    children: [
+      DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
+      const SizedBox(width: 4),
+      GestureDetector(
+        onTap: onPick,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.divider),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
               Text(
-                _formatDate(date),
+                _formatDateShort(selectedDate),
                 style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
-          const Spacer(),
-          // FIX: ExportButton placed here — was missing entirely before
-          ExportButton(
-            date: date,
-            dateRange: dateRange,
-            dailyReport: dailyReport,
-            shifts: shifts,
+        ),
+      ),
+      const SizedBox(width: 4),
+      DateNavButton(icon: Icons.chevron_right, onTap: onNext),
+      if (onToday != null) ...[
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: onToday,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-        ],
-      );
-
-  Widget _phoneDateRow() => Row(
-        children: [
-          DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
-          const SizedBox(width: 6),
-          Expanded(
-            child: GestureDetector(
-              onTap: onPick,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.divider),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 13, color: AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      _formatDateShort(selectedDate),
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          child: const Text(
+            'Today',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 6),
-          DateNavButton(icon: Icons.chevron_right, onTap: onNext),
-          if (onToday != null) ...[
-            const SizedBox(width: 6),
-            TextButton(
-              onPressed: onToday,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Today',
-                  style:
-                      TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ],
-      );
-
-  Widget _wideDateRow() => Row(
-        children: [
-          DateNavButton(icon: Icons.chevron_left, onTap: onPrev),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onPick,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.divider),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    _formatDateShort(selectedDate),
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          DateNavButton(icon: Icons.chevron_right, onTap: onNext),
-          if (onToday != null) ...[
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: onToday,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              child: const Text('Today',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-          ],
-          const Spacer(),
-        ],
-      );
+        ),
+      ],
+      const Spacer(),
+    ],
+  );
 
   static String _formatDate(DateTime d) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     const days = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
     ];
     return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
-  static String _formatDateShort(DateTime d) =>
-      '${d.month}/${d.day}/${d.year}';
+  static String _formatDateShort(DateTime d) => '${d.month}/${d.day}/${d.year}';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -572,10 +623,11 @@ class _Tab extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 14,
-                color:
-                    active ? AppColors.primary : AppColors.textSecondary),
+            Icon(
+              icon,
+              size: 14,
+              color: active ? AppColors.primary : AppColors.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -602,18 +654,20 @@ class TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
+    final color = isRestaurant ? const Color(0xFF1A1A2E) : AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         isRestaurant ? 'Restaurant' : 'Retail',
         style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.w600, color: color),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }
@@ -636,11 +690,14 @@ class DateNavButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           color: onTap == null ? AppColors.surface : Colors.white,
         ),
-        child: Icon(icon,
-            size: 16,
-            color: onTap == null
-                ? AppColors.textSecondary.withValues(alpha:0.3)
-                : AppColors.textSecondary),
+        child: Icon(
+          icon,
+          size: 16,
+          color:
+              onTap == null
+                  ? AppColors.textSecondary.withValues(alpha: 0.3)
+                  : AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -673,37 +730,43 @@ class _RangePresetRow extends StatelessWidget {
           _PresetChip(
             label: 'Today',
             active: current.preset == RangePreset.day,
-            onTap: () => onChanged(DateRange(
-              start: today,
-              end: today,
-              preset: RangePreset.day,
-            )),
+            onTap:
+                () => onChanged(
+                  DateRange(start: today, end: today, preset: RangePreset.day),
+                ),
           ),
           const SizedBox(width: 6),
           _PresetChip(
             label: 'Last 7 Days',
             active: current.preset == RangePreset.week,
-            onTap: () => onChanged(DateRange(
-              start: today.subtract(const Duration(days: 6)),
-              end: today,
-              preset: RangePreset.week,
-            )),
+            onTap:
+                () => onChanged(
+                  DateRange(
+                    start: today.subtract(const Duration(days: 6)),
+                    end: today,
+                    preset: RangePreset.week,
+                  ),
+                ),
           ),
           const SizedBox(width: 6),
           _PresetChip(
             label: 'This Month',
             active: current.preset == RangePreset.month,
-            onTap: () => onChanged(DateRange(
-              start: DateTime(now.year, now.month, 1),
-              end: today,
-              preset: RangePreset.month,
-            )),
+            onTap:
+                () => onChanged(
+                  DateRange(
+                    start: DateTime(now.year, now.month, 1),
+                    end: today,
+                    preset: RangePreset.month,
+                  ),
+                ),
           ),
           const SizedBox(width: 6),
           _PresetChip(
-            label: current.preset == RangePreset.custom
-                ? '${_fmt(current.start)} – ${_fmt(current.end)}'
-                : 'Custom Range',
+            label:
+                current.preset == RangePreset.custom
+                    ? '${_fmt(current.start)} – ${_fmt(current.end)}'
+                    : 'Custom Range',
             active: current.preset == RangePreset.custom,
             icon: Icons.date_range_outlined,
             onTap: onCustomPick,
@@ -713,8 +776,7 @@ class _RangePresetRow extends StatelessWidget {
     );
   }
 
-  static String _fmt(DateTime d) =>
-      '${d.month}/${d.day}/${d.year}';
+  static String _fmt(DateTime d) => '${d.month}/${d.day}/${d.year}';
 }
 
 class _PresetChip extends StatelessWidget {
@@ -738,36 +800,35 @@ class _PresetChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active
-              ? AppColors.primary.withValues(alpha:0.1)
-              : AppColors.surface,
+          color:
+              active
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: active
-                ? AppColors.primary.withValues(alpha:0.4)
-                : AppColors.divider,
+            color:
+                active
+                    ? AppColors.primary.withValues(alpha: 0.4)
+                    : AppColors.divider,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon,
-                  size: 12,
-                  color: active
-                      ? AppColors.primary
-                      : AppColors.textSecondary),
+              Icon(
+                icon,
+                size: 12,
+                color: active ? AppColors.primary : AppColors.textSecondary,
+              ),
               const SizedBox(width: 4),
             ],
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight:
-                    active ? FontWeight.w700 : FontWeight.w500,
-                color: active
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? AppColors.primary : AppColors.textSecondary,
               ),
             ),
           ],

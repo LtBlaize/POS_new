@@ -19,36 +19,36 @@ class ReferenceNumberPanel extends StatelessWidget {
   });
 
   (Color accent, Color dim, String label, String hint, IconData icon)
-      get _meta => switch (method) {
-            PaymentMethod.gcash => (
-                CheckoutTheme.gcash,
-                CheckoutTheme.gcashDim,
-                'GCash Reference',
-                'e.g. 1234567890',
-                Icons.account_balance_wallet_outlined,
-              ),
-            PaymentMethod.maya => (
-                CheckoutTheme.maya,
-                CheckoutTheme.mayaDim,
-                'Maya Reference',
-                'e.g. TXN-XXXXXXXXXX',
-                Icons.phone_android_outlined,
-              ),
-            PaymentMethod.card => (
-                CheckoutTheme.card_,
-                CheckoutTheme.cardDim,
-                'Card Approval Code',
-                'e.g. 123456',
-                Icons.credit_card_outlined,
-              ),
-            _ => (
-                CheckoutTheme.mint,
-                CheckoutTheme.mintDim,
-                'Reference',
-                '',
-                Icons.receipt_outlined,
-              ),
-          };
+  get _meta => switch (method) {
+    PaymentMethod.gcash => (
+      CheckoutTheme.gcash,
+      CheckoutTheme.gcashDim,
+      'GCash Reference',
+      'e.g. 1234567890',
+      Icons.account_balance_wallet_outlined,
+    ),
+    PaymentMethod.maya => (
+      CheckoutTheme.maya,
+      CheckoutTheme.mayaDim,
+      'Maya Reference',
+      'e.g. TXN-XXXXXXXXXX',
+      Icons.phone_android_outlined,
+    ),
+    PaymentMethod.card => (
+      CheckoutTheme.card_,
+      CheckoutTheme.cardDim,
+      'Card Approval Code',
+      'e.g. 123456',
+      Icons.credit_card_outlined,
+    ),
+    _ => (
+      CheckoutTheme.mint,
+      CheckoutTheme.mintDim,
+      'Reference',
+      '',
+      Icons.receipt_outlined,
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +64,7 @@ class ReferenceNumberPanel extends StatelessWidget {
           decoration: BoxDecoration(
             color: dim,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: accent.withValues(alpha:0.25)),
+            border: Border.all(color: accent.withValues(alpha: 0.25)),
           ),
           child: Row(
             children: [
@@ -77,7 +77,7 @@ class ReferenceNumberPanel extends StatelessWidget {
                     'Amount to collect',
                     style: TextStyle(
                       fontSize: 11,
-                      color: accent.withValues(alpha:0.7),
+                      color: accent.withValues(alpha: 0.7),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -94,18 +94,20 @@ class ReferenceNumberPanel extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha:0.15),
+                  color: accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   method == PaymentMethod.card
                       ? 'CARD'
                       : method == PaymentMethod.gcash
-                          ? 'GCASH'
-                          : 'MAYA',
+                      ? 'GCASH'
+                      : 'MAYA',
                   style: TextStyle(
                     color: accent,
                     fontSize: 10,
@@ -128,7 +130,10 @@ class ReferenceNumberPanel extends StatelessWidget {
             color: CheckoutTheme.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: hasValue ? accent.withValues(alpha:0.5) : CheckoutTheme.border,
+              color:
+                  hasValue
+                      ? accent.withValues(alpha: 0.5)
+                      : CheckoutTheme.border,
               width: hasValue ? 1.5 : 1,
             ),
           ),
@@ -159,21 +164,29 @@ class ReferenceNumberPanel extends StatelessWidget {
                   size: 20,
                 ),
               ),
-              prefixIconConstraints:
-                  const BoxConstraints(minWidth: 0, minHeight: 0),
-              suffixIcon: hasValue
-                  ? GestureDetector(
-                      onTap: controller.clear,
-                      child: const Padding(
-                        padding: EdgeInsets.only(right: 12),
-                        child: Icon(Icons.close,
-                            color: CheckoutTheme.textMid, size: 18),
-                      ),
-                    )
-                  : null,
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 0,
+                minHeight: 0,
+              ),
+              suffixIcon:
+                  hasValue
+                      ? GestureDetector(
+                        onTap: controller.clear,
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: Icon(
+                            Icons.close,
+                            color: CheckoutTheme.textMid,
+                            size: 18,
+                          ),
+                        ),
+                      )
+                      : null,
               border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 16,
+              ),
             ),
           ),
         ),
@@ -183,35 +196,41 @@ class ReferenceNumberPanel extends StatelessWidget {
         // ── Validation hint ─────────────────────────────────────────────
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child: hasValue
-              ? Row(
-                  key: const ValueKey('ok'),
-                  children: [
-                    Icon(Icons.check_circle_outline, color: accent, size: 14),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Reference number entered',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: accent,
-                        fontWeight: FontWeight.w600,
+          child:
+              hasValue
+                  ? Row(
+                    key: const ValueKey('ok'),
+                    children: [
+                      Icon(Icons.check_circle_outline, color: accent, size: 14),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Reference number entered',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: accent,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : const Row(
-                  key: ValueKey('hint'),
-                  children: [
-                    Icon(Icons.info_outline,
-                        color: CheckoutTheme.textLow, size: 14),
-                    SizedBox(width: 5),
-                    Text(
-                      'Enter the reference number from the payment app',
-                      style: TextStyle(
-                          fontSize: 12, color: CheckoutTheme.textLow),
-                    ),
-                  ],
-                ),
+                    ],
+                  )
+                  : const Row(
+                    key: ValueKey('hint'),
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: CheckoutTheme.textLow,
+                        size: 14,
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        'Enter the reference number from the payment app',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: CheckoutTheme.textLow,
+                        ),
+                      ),
+                    ],
+                  ),
         ),
       ],
     );

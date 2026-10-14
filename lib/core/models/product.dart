@@ -56,9 +56,10 @@ class Product {
 
   /// The single stock number to show. With variants it is the sum of the
   /// active variants; the parent's own stock_quantity is ignored.
-  int get effectiveStock => hasVariants
-      ? activeVariants.fold<int>(0, (s, v) => s + v.stockQuantity)
-      : stockQuantity;
+  int get effectiveStock =>
+      hasVariants
+          ? activeVariants.fold<int>(0, (s, v) => s + v.stockQuantity)
+          : stockQuantity;
 
   /// Resolved price for a given variant (base + delta)
   double priceForVariant(ProductVariant variant) =>
@@ -85,7 +86,8 @@ class Product {
       isAvailable: map['is_available'] as bool? ?? true,
       isActive: map['is_active'] as bool? ?? true,
       sendToKitchen: map['send_to_kitchen'] as bool? ?? true,
-      category: map['category_name'] as String? ??
+      category:
+          map['category_name'] as String? ??
           categoryMap?['name'] as String? ??
           '',
       // variants are never embedded in the products row; they're joined separately
@@ -94,21 +96,21 @@ class Product {
   }
 
   Map<String, dynamic> toMap() => {
-        'business_id': businessId,
-        'category_id': categoryId,
-        'name': name,
-        'description': description,
-        'price': price,
-        'cost_price': costPrice,
-        'image_url': imageUrl,
-        'barcode': barcode,
-        'sku': sku,
-        'track_inventory': trackInventory,
-        'stock_quantity': stockQuantity,
-        'is_available': isAvailable,
-        'is_active': isActive,
-        'send_to_kitchen': sendToKitchen,
-      };
+    'business_id': businessId,
+    'category_id': categoryId,
+    'name': name,
+    'description': description,
+    'price': price,
+    'cost_price': costPrice,
+    'image_url': imageUrl,
+    'barcode': barcode,
+    'sku': sku,
+    'track_inventory': trackInventory,
+    'stock_quantity': stockQuantity,
+    'is_available': isAvailable,
+    'is_active': isActive,
+    'send_to_kitchen': sendToKitchen,
+  };
 
   Product copyWith({
     String? name,
@@ -120,27 +122,26 @@ class Product {
     String? imageUrl,
     String? localImagePath,
     List<ProductVariant>? variants,
-  }) =>
-      Product(
-        id: id,
-        businessId: businessId,
-        categoryId: categoryId,
-        name: name ?? this.name,
-        description: description,
-        price: price ?? this.price,
-        costPrice: costPrice ?? this.costPrice,
-        imageUrl: imageUrl ?? this.imageUrl,
-        localImagePath: localImagePath ?? this.localImagePath,
-        barcode: barcode,
-        sku: sku,
-        trackInventory: trackInventory,
-        sendToKitchen: sendToKitchen ?? this.sendToKitchen,
-        stockQuantity: stockQuantity ?? this.stockQuantity,
-        isAvailable: isAvailable ?? this.isAvailable,
-        isActive: isActive,
-        category: category,
-        variants: variants ?? this.variants,
-      );
+  }) => Product(
+    id: id,
+    businessId: businessId,
+    categoryId: categoryId,
+    name: name ?? this.name,
+    description: description,
+    price: price ?? this.price,
+    costPrice: costPrice ?? this.costPrice,
+    imageUrl: imageUrl ?? this.imageUrl,
+    localImagePath: localImagePath ?? this.localImagePath,
+    barcode: barcode,
+    sku: sku,
+    trackInventory: trackInventory,
+    sendToKitchen: sendToKitchen ?? this.sendToKitchen,
+    stockQuantity: stockQuantity ?? this.stockQuantity,
+    isAvailable: isAvailable ?? this.isAvailable,
+    isActive: isActive,
+    category: category,
+    variants: variants ?? this.variants,
+  );
 
   // ── Custom item support ───────────────────────────────────────────────────
 

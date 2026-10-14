@@ -72,14 +72,19 @@ class CreditService {
     final d = await _db.db;
     final batch = d.batch();
     for (final c in customers) {
-      batch.insert('credit_customers', _customerToLocalRow(c),
-          conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+        'credit_customers',
+        _customerToLocalRow(c),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await batch.commit(noResult: true);
   }
 
   Future<CreditCustomer?> findCustomerByPhone(
-      String businessId, String phone) async {
+    String businessId,
+    String phone,
+  ) async {
     try {
       final rows = await _supabase
           .from('credit_customers')
@@ -118,8 +123,11 @@ class CreditService {
       updatedAt: now,
     );
     final d = await _db.db;
-    await d.insert('credit_customers', _customerToLocalRow(customer),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await d.insert(
+      'credit_customers',
+      _customerToLocalRow(customer),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
     final row = {
       'id': customer.id,
@@ -137,7 +145,9 @@ class CreditService {
         debugPrint('[Credit] createCustomer failed, queuing: $e');
       }
     }
-    await _ref.read(syncQueueServiceProvider).enqueue(
+    await _ref
+        .read(syncQueueServiceProvider)
+        .enqueue(
           operation: 'upsert_credit_customer',
           tableName: 'credit_customers',
           recordId: customer.id,
@@ -179,8 +189,12 @@ class CreditService {
     final createdAt = DateTime.now().toUtc().toIso8601String();
 
     final d = await _db.db;
-    final custRows = await d.query('credit_customers',
-        where: 'id = ?', whereArgs: [customerId], limit: 1);
+    final custRows = await d.query(
+      'credit_customers',
+      where: 'id = ?',
+      whereArgs: [customerId],
+      limit: 1,
+    );
     await d.transaction((txn) async {
       await txn.insert('credit_transactions', {
         'id': txId,
@@ -202,15 +216,18 @@ class CreditService {
 
     if (_isOnline) {
       try {
-        await _supabase.rpc('add_credit', params: {
-          'p_id': txId,
-          'p_customer_id': customerId,
-          'p_business_id': businessId,
-          'p_amount': amount,
-          'p_note': note,
-          'p_order_id': orderId,
-          'p_created_at': createdAt,
-        });
+        await _supabase.rpc(
+          'add_credit',
+          params: {
+            'p_id': txId,
+            'p_customer_id': customerId,
+            'p_business_id': businessId,
+            'p_amount': amount,
+            'p_note': note,
+            'p_order_id': orderId,
+            'p_created_at': createdAt,
+          },
+        );
         return;
       } catch (e) {
         debugPrint('[Credit] add_credit failed, queuing: $e');
@@ -218,27 +235,29 @@ class CreditService {
     }
 
     final c = custRows.isEmpty ? null : custRows.first;
-    await _ref.read(syncQueueServiceProvider).enqueue(
-      operation: 'add_credit',
-      tableName: 'credit_transactions',
-      recordId: txId,
-      payload: {
-        'customer_id': customerId,
-        'business_id': businessId,
-        'amount': amount,
-        'note': note,
-        'order_id': orderId,
-        'created_at': createdAt,
-        // Lets the replay create the customer first if it isn't on the server.
-        if (c != null)
-          'customer': {
-            'id': c['id'],
-            'business_id': c['business_id'],
-            'name': c['name'],
-            'phone': c['phone'],
+    await _ref
+        .read(syncQueueServiceProvider)
+        .enqueue(
+          operation: 'add_credit',
+          tableName: 'credit_transactions',
+          recordId: txId,
+          payload: {
+            'customer_id': customerId,
+            'business_id': businessId,
+            'amount': amount,
+            'note': note,
+            'order_id': orderId,
+            'created_at': createdAt,
+            // Lets the replay create the customer first if it isn't on the server.
+            if (c != null)
+              'customer': {
+                'id': c['id'],
+                'business_id': c['business_id'],
+                'name': c['name'],
+                'phone': c['phone'],
+              },
           },
-      },
-    );
+        );
   }
 
   /// Record a payment. Local first, then one atomic server call (or queue).
@@ -264,79 +283,90 @@ class CreditService {
 
     if (_isOnline) {
       try {
-        await _supabase.rpc('apply_credit_payment', params: {
-          'p_payment_id': paymentTxId,
-          'p_customer_id': customerId,
-          'p_business_id': businessId,
-          'p_amount': amount,
-          'p_note': note,
-          'p_created_at': createdAt,
-        });
+        await _supabase.rpc(
+          'apply_credit_payment',
+          params: {
+            'p_payment_id': paymentTxId,
+            'p_customer_id': customerId,
+            'p_business_id': businessId,
+            'p_amount': amount,
+            'p_note': note,
+            'p_created_at': createdAt,
+          },
+        );
         return PaymentResult(
-            paymentTxId: paymentTxId, settledCredits: const [], leftoverCredit: 0);
+          paymentTxId: paymentTxId,
+          settledCredits: const [],
+          leftoverCredit: 0,
+        );
       } catch (e) {
         debugPrint('[Credit] apply_credit_payment failed, queuing: $e');
       }
     }
 
-    await _ref.read(syncQueueServiceProvider).enqueue(
-      operation: 'record_credit_payment',
-      tableName: 'credit_transactions',
-      recordId: paymentTxId,
-      payload: {
-        'payment_tx_id': paymentTxId,
-        'customer_id': customerId,
-        'business_id': businessId,
-        'amount': amount,
-        'note': note,
-        'created_at': createdAt,
-      },
-    );
+    await _ref
+        .read(syncQueueServiceProvider)
+        .enqueue(
+          operation: 'record_credit_payment',
+          tableName: 'credit_transactions',
+          recordId: paymentTxId,
+          payload: {
+            'payment_tx_id': paymentTxId,
+            'customer_id': customerId,
+            'business_id': businessId,
+            'amount': amount,
+            'note': note,
+            'created_at': createdAt,
+          },
+        );
     return PaymentResult(
-        paymentTxId: paymentTxId, settledCredits: const [], leftoverCredit: 0);
+      paymentTxId: paymentTxId,
+      settledCredits: const [],
+      leftoverCredit: 0,
+    );
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────────
 
   CreditCustomer _customerFromMap(Map<String, dynamic> r) => CreditCustomer(
-        id: r['id'] as String,
-        businessId: r['business_id'] as String,
-        name: r['name'] as String,
-        phone: r['phone'] as String,
-        totalOwed: (r['total_owed'] as num).toDouble(),
-        createdAt: DateTime.parse(r['created_at'] as String),
-        updatedAt: DateTime.parse(r['updated_at'] as String),
-      );
+    id: r['id'] as String,
+    businessId: r['business_id'] as String,
+    name: r['name'] as String,
+    phone: r['phone'] as String,
+    totalOwed: (r['total_owed'] as num).toDouble(),
+    createdAt: DateTime.parse(r['created_at'] as String),
+    updatedAt: DateTime.parse(r['updated_at'] as String),
+  );
 
   Map<String, dynamic> _customerToLocalRow(CreditCustomer c) => {
-        'id': c.id,
-        'business_id': c.businessId,
-        'name': c.name,
-        'phone': c.phone,
-        'total_owed': c.totalOwed,
-        'created_at': c.createdAt.toIso8601String(),
-        'updated_at': c.updatedAt.toIso8601String(),
-      };
+    'id': c.id,
+    'business_id': c.businessId,
+    'name': c.name,
+    'phone': c.phone,
+    'total_owed': c.totalOwed,
+    'created_at': c.createdAt.toIso8601String(),
+    'updated_at': c.updatedAt.toIso8601String(),
+  };
 
   CreditTransaction _txFromMap(Map<String, dynamic> r) => CreditTransaction(
-        id: r['id'] as String,
-        customerId: r['customer_id'] as String,
-        businessId: r['business_id'] as String? ?? '',
-        type: r['type'] == 'credit'
-            ? CreditTxType.credit
-            : CreditTxType.payment,
-        amount: (r['amount'] as num).toDouble(),
-        amountRemaining: r['amount_remaining'] != null
+    id: r['id'] as String,
+    customerId: r['customer_id'] as String,
+    businessId: r['business_id'] as String? ?? '',
+    type: r['type'] == 'credit' ? CreditTxType.credit : CreditTxType.payment,
+    amount: (r['amount'] as num).toDouble(),
+    amountRemaining:
+        r['amount_remaining'] != null
             ? (r['amount_remaining'] as num).toDouble()
             : null,
-        isSettled: r['is_settled'] == true || r['is_settled'] == 1,
-        settledAt: r['settled_at'] != null
+    isSettled: r['is_settled'] == true || r['is_settled'] == 1,
+    settledAt:
+        r['settled_at'] != null
             ? DateTime.parse(r['settled_at'] as String)
             : null,
-        note: r['note'] as String?,
-        orderId: r['order_id'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String),
-      );
+    note: r['note'] as String?,
+    orderId: r['order_id'] as String?,
+    createdAt: DateTime.parse(r['created_at'] as String),
+  );
 }
 
 /// Result of a payment operation

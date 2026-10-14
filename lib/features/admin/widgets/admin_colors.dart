@@ -17,7 +17,9 @@ class AdminColors {
   static const sidebarBg = Colors.white;
   static const sidebarActiveBg = Color(0xFFEFF3FE);
 
-  static const primary = Color(0xFF3B6FF3);   // logo, links, active nav, chart line
+  static const primary = Color(
+    0xFF3B6FF3,
+  ); // logo, links, active nav, chart line
   static const primaryText = Color(0xFF3B6FF3);
 
   static const textPrimary = Color(0xFF13151A);

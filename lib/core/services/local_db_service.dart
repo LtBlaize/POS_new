@@ -60,10 +60,10 @@ class LocalDbService {
   Future<Set<String>> getOrderIdsWithPendingQueue() async {
     final d = await db;
     final rows = await d.rawQuery(
-        "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'");
+      "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'",
+    );
     return rows.map((r) => r['record_id'] as String).toSet();
-  }  
-  
+  }
 
   Future<T> _write<T>(Future<T> Function(Database db) action) async {
     final prev = _current;
@@ -90,15 +90,21 @@ class LocalDbService {
             where: "order_id = ? AND round = ? AND kitchen_status != 'served'",
             whereArgs: [orderId, round],
           );
-          final rows = await txn.query('order_items',
-              columns: ['kitchen_status'],
-              where: 'order_id = ?',
-              whereArgs: [orderId]);
+          final rows = await txn.query(
+            'order_items',
+            columns: ['kitchen_status'],
+            where: 'order_id = ?',
+            whereArgs: [orderId],
+          );
           derived = deriveOrderStatus(
-              rows.map((r) => r['kitchen_status'] as String));
-          await txn.update('orders', {'status': derived},
-              where: "id = ? AND status != 'cancelled'",
-              whereArgs: [orderId]);
+            rows.map((r) => r['kitchen_status'] as String),
+          );
+          await txn.update(
+            'orders',
+            {'status': derived},
+            where: "id = ? AND status != 'cancelled'",
+            whereArgs: [orderId],
+          );
         });
         return derived;
       });
@@ -115,50 +121,61 @@ class LocalDbService {
 
   // ── Boot cache (profile, config, permissions, tables) ──────────────────────
   Future<void> setKv(String key, Object value) => _write((d) async {
-        await d.insert(
-          'kv_cache',
-          {
-            'key': key,
-            'json': jsonEncode(value),
-            'saved_at': DateTime.now().toIso8601String(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      });
+    await d.insert('kv_cache', {
+      'key': key,
+      'json': jsonEncode(value),
+      'saved_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  });
 
   Future<dynamic> getKv(String key) async {
     final d = await db;
-    final rows = await d.query('kv_cache',
-        where: 'key = ?', whereArgs: [key], limit: 1);
+    final rows = await d.query(
+      'kv_cache',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
     if (rows.isEmpty) return null;
     return jsonDecode(rows.first['json'] as String);
   }
 
-    /// Offline-opened shift lost to an existing server shift: drop the local
+  /// Offline-opened shift lost to an existing server shift: drop the local
   /// duplicate (if still open) and keep the server's row instead.
   Future<void> adoptServerShift({
     required String localId,
     required Map<String, dynamic> server,
-  }) =>
-      _write((d) async {
-        await d.transaction((txn) async {
-          final local = await txn.query('cashier_shifts',
-              columns: ['status'], where: 'id = ?', whereArgs: [localId], limit: 1);
-          if (local.isNotEmpty && local.first['status'] == 'open') {
-            await txn.delete('cashier_shifts',
-                where: 'id = ?', whereArgs: [localId]);
-          }
-          final cols = (await txn.rawQuery('PRAGMA table_info(cashier_shifts)'))
-              .map((r) => r['name'] as String)
-              .toSet();
-          final row = {
-            for (final e in server.entries)
-              if (cols.contains(e.key)) e.key: e.value,
-          };
-          await txn.insert('cashier_shifts', row,
-              conflictAlgorithm: ConflictAlgorithm.replace);
-        });
-      });
+  }) => _write((d) async {
+    await d.transaction((txn) async {
+      final local = await txn.query(
+        'cashier_shifts',
+        columns: ['status'],
+        where: 'id = ?',
+        whereArgs: [localId],
+        limit: 1,
+      );
+      if (local.isNotEmpty && local.first['status'] == 'open') {
+        await txn.delete(
+          'cashier_shifts',
+          where: 'id = ?',
+          whereArgs: [localId],
+        );
+      }
+      final cols =
+          (await txn.rawQuery(
+            'PRAGMA table_info(cashier_shifts)',
+          )).map((r) => r['name'] as String).toSet();
+      final row = {
+        for (final e in server.entries)
+          if (cols.contains(e.key)) e.key: e.value,
+      };
+      await txn.insert(
+        'cashier_shifts',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  });
 
   Future<Database> get db async {
     _db ??= await _open();
@@ -179,11 +196,10 @@ class LocalDbService {
         await _ensureOrderColumns(db);
         await _ensureProductColumns(db);
         await db.execute(
-            'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)');
+          'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)',
+        );
         if (!kIsWeb &&
-            (Platform.isWindows ||
-                Platform.isLinux ||
-                Platform.isMacOS)) {
+            (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
           await db.execute('PRAGMA journal_mode=WAL;');
           await db.execute('PRAGMA busy_timeout=5000;');
         }
@@ -192,41 +208,49 @@ class LocalDbService {
   }
 
   Future<void> _ensureOrderItemColumns(Database db) async {
-    final cols = (await db.rawQuery('PRAGMA table_info(order_items)'))
-        .map((r) => r['name'] as String)
-        .toSet();
+    final cols =
+        (await db.rawQuery(
+          'PRAGMA table_info(order_items)',
+        )).map((r) => r['name'] as String).toSet();
     if (!cols.contains('round')) {
       await db.execute(
-          'ALTER TABLE order_items ADD COLUMN round INTEGER NOT NULL DEFAULT 1');
+        'ALTER TABLE order_items ADD COLUMN round INTEGER NOT NULL DEFAULT 1',
+      );
     }
     if (!cols.contains('discount_amount')) {
       await db.execute(
-          'ALTER TABLE order_items ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0');
+        'ALTER TABLE order_items ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0',
+      );
     }
     if (!cols.contains('kitchen_status')) {
       await db.execute(
-          "ALTER TABLE order_items ADD COLUMN kitchen_status TEXT NOT NULL DEFAULT 'pending'");
+        "ALTER TABLE order_items ADD COLUMN kitchen_status TEXT NOT NULL DEFAULT 'pending'",
+      );
     }
     if (!cols.contains('discount_type')) {
       await db.execute(
-          "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'");
+        "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'",
+      );
     }
   }
 
   Future<void> _ensureProductColumns(Database db) async {
-    final cols = (await db.rawQuery('PRAGMA table_info(products)'))
-        .map((r) => r['name'] as String)
-        .toSet();
+    final cols =
+        (await db.rawQuery(
+          'PRAGMA table_info(products)',
+        )).map((r) => r['name'] as String).toSet();
     if (!cols.contains('send_to_kitchen')) {
       await db.execute(
-          'ALTER TABLE products ADD COLUMN send_to_kitchen INTEGER NOT NULL DEFAULT 1');
+        'ALTER TABLE products ADD COLUMN send_to_kitchen INTEGER NOT NULL DEFAULT 1',
+      );
     }
   }
 
   Future<void> _ensureOrderColumns(Database db) async {
-    final cols = (await db.rawQuery('PRAGMA table_info(orders)'))
-        .map((r) => r['name'] as String)
-        .toSet();
+    final cols =
+        (await db.rawQuery(
+          'PRAGMA table_info(orders)',
+        )).map((r) => r['name'] as String).toSet();
     if (!cols.contains('customer_name')) {
       await db.execute('ALTER TABLE orders ADD COLUMN customer_name TEXT');
     }
@@ -587,15 +611,11 @@ class LocalDbService {
     }
 
     if (oldVersion < 4) {
-      await db.execute(
-        'ALTER TABLE orders ADD COLUMN reference_number TEXT',
-      );
+      await db.execute('ALTER TABLE orders ADD COLUMN reference_number TEXT');
     }
 
     if (oldVersion < 5) {
-      await db.execute(
-        'ALTER TABLE cashier_shifts ADD COLUMN device_id TEXT',
-      );
+      await db.execute('ALTER TABLE cashier_shifts ADD COLUMN device_id TEXT');
     }
 
     if (oldVersion < 6) {
@@ -708,9 +728,7 @@ class LocalDbService {
 
     if (oldVersion < 13) {
       try {
-        await db.execute(
-          'ALTER TABLE order_items ADD COLUMN notes TEXT',
-        );
+        await db.execute('ALTER TABLE order_items ADD COLUMN notes TEXT');
         debugPrint('[LocalDb] v13: notes added to order_items');
       } catch (e) {
         debugPrint('[LocalDb] v13: notes already exists ($e)');
@@ -727,9 +745,7 @@ class LocalDbService {
 
     if (oldVersion < 14) {
       try {
-        await db.execute(
-          'ALTER TABLE staff_members ADD COLUMN pin_salt TEXT',
-        );
+        await db.execute('ALTER TABLE staff_members ADD COLUMN pin_salt TEXT');
         debugPrint('[LocalDb] v14: pin_salt added to staff_members');
       } catch (e) {
         debugPrint('[LocalDb] v14: pin_salt already exists ($e)');
@@ -737,9 +753,7 @@ class LocalDbService {
     }
     if (oldVersion < 15) {
       try {
-        await db.execute(
-          'ALTER TABLE order_items ADD COLUMN variant_id TEXT',
-        );
+        await db.execute('ALTER TABLE order_items ADD COLUMN variant_id TEXT');
         debugPrint('[LocalDb] v15: variant_id added to order_items');
       } catch (e) {
         debugPrint('[LocalDb] v15: variant_id already exists ($e)');
@@ -782,8 +796,12 @@ class LocalDbService {
     if (oldVersion < 19) {
       try {
         await db.execute('ALTER TABLE order_items ADD COLUMN promo_id TEXT');
-        await db.execute('ALTER TABLE order_items ADD COLUMN promo_group_id TEXT');
-        debugPrint('[LocalDb] v19: promo_id/promo_group_id added to order_items');
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN promo_group_id TEXT',
+        );
+        debugPrint(
+          '[LocalDb] v19: promo_id/promo_group_id added to order_items',
+        );
       } catch (e) {
         debugPrint('[LocalDb] v19: promo columns already exist ($e)');
       }
@@ -853,7 +871,7 @@ class LocalDbService {
       );
       debugPrint('[LocalDb] v21: order_payments table created');
     }
-    
+
     if (oldVersion < 22) {
       try {
         await db.execute(
@@ -901,13 +919,16 @@ class LocalDbService {
         ''');
         await db.execute('DROP TABLE void_order_items');
         await db.execute(
-            'ALTER TABLE void_order_items_v20tmp RENAME TO void_order_items');
-        debugPrint('[LocalDb] v20: void_order_items rebuilt with promo columns');
+          'ALTER TABLE void_order_items_v20tmp RENAME TO void_order_items',
+        );
+        debugPrint(
+          '[LocalDb] v20: void_order_items rebuilt with promo columns',
+        );
       } catch (e) {
         debugPrint('[LocalDb] v20: void_order_items migration error ($e)');
       }
     }
-        if (oldVersion < 23) {
+    if (oldVersion < 23) {
       // product_id must be nullable so a promo header row can be stored.
       try {
         await db.execute('DROP TABLE IF EXISTS order_items_v23tmp');
@@ -942,7 +963,8 @@ class LocalDbService {
         ''');
         await db.execute('DROP TABLE order_items');
         await db.execute(
-            'ALTER TABLE order_items_v23tmp RENAME TO order_items');
+          'ALTER TABLE order_items_v23tmp RENAME TO order_items',
+        );
         debugPrint('[LocalDb] v23: order_items.product_id now nullable');
       } catch (e) {
         debugPrint('[LocalDb] v23: order_items migration error ($e)');
@@ -950,20 +972,19 @@ class LocalDbService {
     }
   }
 
-
-
   // ─────────────────────────────────────────────────────────────────────────────
   // PRODUCTS
   // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> upsertProducts(List<Product> products) => _write((d) async {
-        final batch = d.batch();
-        final now = DateTime.now().toIso8601String();
-        for (final p in products) {
-          // Raw upsert (not a plain replace) so local_image_path survives a
-          // cloud sync — Product.fromMap from Supabase never carries it, and
-          // a blind replace would wipe the cached photo on every refresh.
-          batch.rawInsert('''
+    final batch = d.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final p in products) {
+      // Raw upsert (not a plain replace) so local_image_path survives a
+      // cloud sync — Product.fromMap from Supabase never carries it, and
+      // a blind replace would wipe the cached photo on every refresh.
+      batch.rawInsert(
+        '''
             INSERT INTO products (
               id, business_id, category_id, name, description, price,
               image_url, local_image_path, barcode, sku, track_inventory,
@@ -987,16 +1008,30 @@ class LocalDbService {
               category_name = excluded.category_name,
               synced_at = excluded.synced_at,
               send_to_kitchen = excluded.send_to_kitchen
-          ''', [
-            p.id, p.businessId, p.categoryId, p.name, p.description, p.price,
-            p.imageUrl, p.localImagePath, p.barcode, p.sku,
-            p.trackInventory ? 1 : 0, p.stockQuantity, p.isAvailable ? 1 : 0,
-            p.isActive ? 1 : 0, p.category, now,
-            p.sendToKitchen ? 1 : 0,
-          ]);
-        }
-        await batch.commit(noResult: true);
-      });
+          ''',
+        [
+          p.id,
+          p.businessId,
+          p.categoryId,
+          p.name,
+          p.description,
+          p.price,
+          p.imageUrl,
+          p.localImagePath,
+          p.barcode,
+          p.sku,
+          p.trackInventory ? 1 : 0,
+          p.stockQuantity,
+          p.isAvailable ? 1 : 0,
+          p.isActive ? 1 : 0,
+          p.category,
+          now,
+          p.sendToKitchen ? 1 : 0,
+        ],
+      );
+    }
+    await batch.commit(noResult: true);
+  });
 
   /// Fetches products and attaches their variants in one call.
   Future<List<Product>> getProducts(String businessId) async {
@@ -1034,10 +1069,7 @@ class LocalDbService {
     final d = await db;
     await d.update(
       'products',
-      {
-        'stock_quantity': newStock,
-        'is_available': newStock > 0 ? 1 : 0,
-      },
+      {'stock_quantity': newStock, 'is_available': newStock > 0 ? 1 : 0},
       where: 'id = ?',
       whereArgs: [productId],
     );
@@ -1056,7 +1088,9 @@ class LocalDbService {
   }
 
   Future<void> updateProductAvailability(
-      String productId, bool isAvailable) async {
+    String productId,
+    bool isAvailable,
+  ) async {
     final d = await db;
     await d.update(
       'products',
@@ -1069,7 +1103,9 @@ class LocalDbService {
   /// Sets the local cached file path right after a capture is compressed
   /// and saved to disk. Pass null to clear it (photo removed).
   Future<void> updateProductLocalImage(
-      String productId, String? localImagePath) async {
+    String productId,
+    String? localImagePath,
+  ) async {
     final d = await db;
     await d.update(
       'products',
@@ -1080,8 +1116,7 @@ class LocalDbService {
   }
 
   /// Sets the cloud image_url once a queued upload completes.
-  Future<void> updateProductImageUrl(
-      String productId, String imageUrl) async {
+  Future<void> updateProductImageUrl(String productId, String imageUrl) async {
     final d = await db;
     await d.update(
       'products',
@@ -1092,24 +1127,24 @@ class LocalDbService {
   }
 
   Product _productFromRow(Map<String, dynamic> row) => Product(
-        id: row['id'] as String,
-        businessId: row['business_id'] as String,
-        categoryId: row['category_id'] as String?,
-        name: row['name'] as String,
-        description: row['description'] as String?,
-        price: (row['price'] as num).toDouble(),
-        imageUrl: row['image_url'] as String?,
-        localImagePath: row['local_image_path'] as String?,
-        barcode: row['barcode'] as String?,
-        sku: row['sku'] as String?,
-        trackInventory: (row['track_inventory'] as int) == 1,
-        stockQuantity: row['stock_quantity'] as int,
-        isAvailable: (row['is_available'] as int) == 1,
-        isActive: (row['is_active'] as int) == 1,
-        category: row['category_name'] as String? ?? '',
-        sendToKitchen: ((row['send_to_kitchen'] as int?) ?? 1) == 1,
-        // variants attached by caller
-      );
+    id: row['id'] as String,
+    businessId: row['business_id'] as String,
+    categoryId: row['category_id'] as String?,
+    name: row['name'] as String,
+    description: row['description'] as String?,
+    price: (row['price'] as num).toDouble(),
+    imageUrl: row['image_url'] as String?,
+    localImagePath: row['local_image_path'] as String?,
+    barcode: row['barcode'] as String?,
+    sku: row['sku'] as String?,
+    trackInventory: (row['track_inventory'] as int) == 1,
+    stockQuantity: row['stock_quantity'] as int,
+    isAvailable: (row['is_available'] as int) == 1,
+    isActive: (row['is_active'] as int) == 1,
+    category: row['category_name'] as String? ?? '',
+    sendToKitchen: ((row['send_to_kitchen'] as int?) ?? 1) == 1,
+    // variants attached by caller
+  );
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRODUCT VARIANTS
@@ -1117,37 +1152,34 @@ class LocalDbService {
 
   /// Replaces all variants for a product — used after a Supabase fetch.
   Future<void> upsertVariants(
-          String productId, List<ProductVariant> variants) =>
-      _write((d) async {
-        final now = DateTime.now().toIso8601String();
-        await d.transaction((txn) async {
-          // Remove stale variants no longer returned by server
-          await txn.delete(
-            'product_variants',
-            where: 'product_id = ?',
-            whereArgs: [productId],
-          );
-          for (final v in variants) {
-            await txn.insert(
-              'product_variants',
-              {
-                'id': v.id,
-                'product_id': v.productId,
-                'name': v.name,
-                'option_type': v.optionType,
-                'price_delta': v.priceDelta,
-                'sku': v.sku,
-                'barcode': v.barcode,
-                'stock_quantity': v.stockQuantity,
-                'cost_price': v.costPrice,
-                'is_active': v.isActive ? 1 : 0,
-                'synced_at': now,
-              },
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
-        });
-      });
+    String productId,
+    List<ProductVariant> variants,
+  ) => _write((d) async {
+    final now = DateTime.now().toIso8601String();
+    await d.transaction((txn) async {
+      // Remove stale variants no longer returned by server
+      await txn.delete(
+        'product_variants',
+        where: 'product_id = ?',
+        whereArgs: [productId],
+      );
+      for (final v in variants) {
+        await txn.insert('product_variants', {
+          'id': v.id,
+          'product_id': v.productId,
+          'name': v.name,
+          'option_type': v.optionType,
+          'price_delta': v.priceDelta,
+          'sku': v.sku,
+          'barcode': v.barcode,
+          'stock_quantity': v.stockQuantity,
+          'cost_price': v.costPrice,
+          'is_active': v.isActive ? 1 : 0,
+          'synced_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  });
 
   /// Bulk upsert — used when syncing all variants for a business at once.
   Future<void> upsertAllVariants(List<ProductVariant> variants) =>
@@ -1155,29 +1187,24 @@ class LocalDbService {
         final now = DateTime.now().toIso8601String();
         final batch = d.batch();
         for (final v in variants) {
-          batch.insert(
-            'product_variants',
-            {
-              'id': v.id,
-              'product_id': v.productId,
-              'name': v.name,
-              'option_type': v.optionType,
-              'price_delta': v.priceDelta,
-              'sku': v.sku,
-              'barcode': v.barcode,
-              'stock_quantity': v.stockQuantity,
-              'cost_price': v.costPrice,
-              'is_active': v.isActive ? 1 : 0,
-              'synced_at': now,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          batch.insert('product_variants', {
+            'id': v.id,
+            'product_id': v.productId,
+            'name': v.name,
+            'option_type': v.optionType,
+            'price_delta': v.priceDelta,
+            'sku': v.sku,
+            'barcode': v.barcode,
+            'stock_quantity': v.stockQuantity,
+            'cost_price': v.costPrice,
+            'is_active': v.isActive ? 1 : 0,
+            'synced_at': now,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
         await batch.commit(noResult: true);
       });
 
-  Future<List<ProductVariant>> getVariantsForProduct(
-      String productId) async {
+  Future<List<ProductVariant>> getVariantsForProduct(String productId) async {
     final d = await db;
     final rows = await d.query(
       'product_variants',
@@ -1199,13 +1226,13 @@ class LocalDbService {
       });
 
   Future<void> deactivateVariant(String variantId) => _write((d) async {
-        await d.update(
-          'product_variants',
-          {'is_active': 0},
-          where: 'id = ?',
-          whereArgs: [variantId],
-        );
-      });
+    await d.update(
+      'product_variants',
+      {'is_active': 0},
+      where: 'id = ?',
+      whereArgs: [variantId],
+    );
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PROMOS
@@ -1214,70 +1241,68 @@ class LocalDbService {
   /// Full replace — mirrors upsertVariants' pattern (server is source of
   /// truth; local cache is read-through only, so a full replace per business
   /// is simpler and safer than diffing individual promo rows).
-  Future<void> replacePromos(String businessId, List<Promo> promos) =>
-      _write((d) async {
-        final now = DateTime.now().toIso8601String();
-        await d.transaction((txn) async {
-          final existingIds = (await txn.query(
+  Future<void> replacePromos(String businessId, List<Promo> promos) => _write((
+    d,
+  ) async {
+    final now = DateTime.now().toIso8601String();
+    await d.transaction((txn) async {
+      final existingIds =
+          (await txn.query(
             'promos',
             columns: ['id'],
             where: 'business_id = ?',
             whereArgs: [businessId],
           )).map((r) => r['id'] as String).toList();
 
-          if (existingIds.isNotEmpty) {
-            final placeholders = List.filled(existingIds.length, '?').join(',');
-            await txn.delete('promo_items',
-                where: 'promo_id IN ($placeholders)', whereArgs: existingIds);
-            await txn.delete('promos',
-                where: 'business_id = ?', whereArgs: [businessId]);
-          }
+      if (existingIds.isNotEmpty) {
+        final placeholders = List.filled(existingIds.length, '?').join(',');
+        await txn.delete(
+          'promo_items',
+          where: 'promo_id IN ($placeholders)',
+          whereArgs: existingIds,
+        );
+        await txn.delete(
+          'promos',
+          where: 'business_id = ?',
+          whereArgs: [businessId],
+        );
+      }
 
-          for (final p in promos) {
-            await txn.insert(
-              'promos',
-              {
-                'id': p.id,
-                'business_id': p.businessId,
-                'name': p.name,
-                'description': p.description,
-                'image_url': p.imageUrl,
-                'promo_type': p.promoType.value,
-                'bundle_price': p.bundlePrice,
-                'buy_quantity': p.buyQuantity,
-                'get_quantity': p.getQuantity,
-                'get_discount_percent': p.getDiscountPercent,
-                'is_active': p.isActive ? 1 : 0,
-                'start_date': p.startDate?.toIso8601String(),
-                'end_date': p.endDate?.toIso8601String(),
-                'synced_at': now,
-              },
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-            for (final i in p.items) {
-              await txn.insert(
-                'promo_items',
-                {
-                  'id': i.id,
-                  'promo_id': p.id,
-                  'product_id': i.productId,
-                  'variant_id': i.variantId,
-                  'quantity': i.quantity,
-                  'role': i.role.value,
-                  'product_name': i.productName,
-                  'variant_name': i.variantName,
-                  'product_price': i.productPrice,
-                  'product_track_inventory':
-                      i.productTrackInventory == true ? 1 : 0,
-                  'product_send_to_kitchen':
-                      i.productSendToKitchen == true ? 1 : 0,
-                },
-                conflictAlgorithm: ConflictAlgorithm.replace,
-              );
-            }
-          }
-        });
-      });
+      for (final p in promos) {
+        await txn.insert('promos', {
+          'id': p.id,
+          'business_id': p.businessId,
+          'name': p.name,
+          'description': p.description,
+          'image_url': p.imageUrl,
+          'promo_type': p.promoType.value,
+          'bundle_price': p.bundlePrice,
+          'buy_quantity': p.buyQuantity,
+          'get_quantity': p.getQuantity,
+          'get_discount_percent': p.getDiscountPercent,
+          'is_active': p.isActive ? 1 : 0,
+          'start_date': p.startDate?.toIso8601String(),
+          'end_date': p.endDate?.toIso8601String(),
+          'synced_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        for (final i in p.items) {
+          await txn.insert('promo_items', {
+            'id': i.id,
+            'promo_id': p.id,
+            'product_id': i.productId,
+            'variant_id': i.variantId,
+            'quantity': i.quantity,
+            'role': i.role.value,
+            'product_name': i.productName,
+            'variant_name': i.variantName,
+            'product_price': i.productPrice,
+            'product_track_inventory': i.productTrackInventory == true ? 1 : 0,
+            'product_send_to_kitchen': i.productSendToKitchen == true ? 1 : 0,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+    });
+  });
 
   Future<List<Promo>> getPromos(String businessId) async {
     final d = await db;
@@ -1290,8 +1315,7 @@ class LocalDbService {
 
     final itemRows = await d.query(
       'promo_items',
-      where:
-          'promo_id IN (SELECT id FROM promos WHERE business_id = ?)',
+      where: 'promo_id IN (SELECT id FROM promos WHERE business_id = ?)',
       whereArgs: [businessId],
     );
 
@@ -1338,89 +1362,80 @@ class LocalDbService {
   // ─────────────────────────────────────────────────────────────────────────────
   /// Writes all order_items rows for [order], including promo header +
   /// component rows. Shared by insertOfflineOrder and upsertOrders.
-    /// Lines with nothing for the kitchen to cook start as already served.
+  /// Lines with nothing for the kitchen to cook start as already served.
   String _ks(CartItem i) =>
       (i.kitchenStatus == 'pending' && !i.hasKitchenWork)
           ? 'served'
           : i.kitchenStatus;
 
-  Future<void> _writeOrderItems(Transaction txn, Order order,
-      {int startIndex = 0}) async {
+  Future<void> _writeOrderItems(
+    Transaction txn,
+    Order order, {
+    int startIndex = 0,
+  }) async {
     for (int n = 0; n < order.items.length; n++) {
       final i = n + startIndex;
       final item = order.items[n];
       if (!item.isPromo) {
-        await txn.insert(
-          'order_items',
-          {
-            'id': '${order.id}_${item.product.id}_$i',
-            'order_id': order.id,
-            'product_id': item.product.id,
-            'product_name': item.product.name,
-            'unit_price': item.effectivePrice,
-            'cost_at_sale': item.costAtSale,
-            'quantity': item.quantity,
-            'subtotal': item.total,
-            'notes': item.notes,
-            'variant_id': item.selectedVariant?.id,
-            'send_to_kitchen': item.product.sendToKitchen ? 1 : 0,
-            'round': item.round,
-            'kitchen_status': _ks(item),            
-            'discount_amount': item.discountAmount,
-            'discount_type': item.discountType.name,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-        continue;
-      }
-
-      final groupId = '${order.id}_promo_$i';
-      await txn.insert(
-        'order_items',
-        {
-          'id': '${order.id}_${item.product.id}_${i}_hdr',
+        await txn.insert('order_items', {
+          'id': '${order.id}_${item.product.id}_$i',
           'order_id': order.id,
-          'product_id': null,
+          'product_id': item.product.id,
           'product_name': item.product.name,
-          'unit_price': item.product.price,
+          'unit_price': item.effectivePrice,
           'cost_at_sale': item.costAtSale,
           'quantity': item.quantity,
           'subtotal': item.total,
           'notes': item.notes,
-          'variant_id': null,
-          'promo_id': item.promoId,
-          'promo_group_id': groupId,
-          'send_to_kitchen': 1,
+          'variant_id': item.selectedVariant?.id,
+          'send_to_kitchen': item.product.sendToKitchen ? 1 : 0,
           'round': item.round,
-          'kitchen_status': _ks(item),          
+          'kitchen_status': _ks(item),
           'discount_amount': item.discountAmount,
           'discount_type': item.discountType.name,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        continue;
+      }
+
+      final groupId = '${order.id}_promo_$i';
+      await txn.insert('order_items', {
+        'id': '${order.id}_${item.product.id}_${i}_hdr',
+        'order_id': order.id,
+        'product_id': null,
+        'product_name': item.product.name,
+        'unit_price': item.product.price,
+        'cost_at_sale': item.costAtSale,
+        'quantity': item.quantity,
+        'subtotal': item.total,
+        'notes': item.notes,
+        'variant_id': null,
+        'promo_id': item.promoId,
+        'promo_group_id': groupId,
+        'send_to_kitchen': 1,
+        'round': item.round,
+        'kitchen_status': _ks(item),
+        'discount_amount': item.discountAmount,
+        'discount_type': item.discountType.name,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
       for (int j = 0; j < item.promoComponents!.length; j++) {
         final c = item.promoComponents![j];
-        await txn.insert(
-          'order_items',
-          {
-            'id': '${order.id}_${item.product.id}_${i}_c$j',
-            'order_id': order.id,
-            'product_id': c.productId,
-            'product_name': c.productName,
-            'unit_price': 0,
-            'cost_at_sale': 0,
-            'quantity': c.quantity * item.quantity,
-            'subtotal': 0,
-            'notes': null,
-            'variant_id': c.variantId,
-            'promo_id': item.promoId,
-            'promo_group_id': groupId,
-            'send_to_kitchen': c.sendToKitchen ? 1 : 0,
-            'round': item.round,
-            'kitchen_status': _ks(item),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('order_items', {
+          'id': '${order.id}_${item.product.id}_${i}_c$j',
+          'order_id': order.id,
+          'product_id': c.productId,
+          'product_name': c.productName,
+          'unit_price': 0,
+          'cost_at_sale': 0,
+          'quantity': c.quantity * item.quantity,
+          'subtotal': 0,
+          'notes': null,
+          'variant_id': c.variantId,
+          'promo_id': item.promoId,
+          'promo_group_id': groupId,
+          'send_to_kitchen': c.sendToKitchen ? 1 : 0,
+          'round': item.round,
+          'kitchen_status': _ks(item),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     }
   }
@@ -1428,17 +1443,21 @@ class LocalDbService {
   // ── Add-to-tab support ──────────────────────────────────────────────────────
 
   Future<({bool paid, bool cancelled, int maxRound})?> getOrderAppendInfo(
-      String orderId) async {
+    String orderId,
+  ) async {
     final d = await db;
-    final o = await d.query('orders',
-        columns: ['status', 'paid_at'],
-        where: 'id = ?',
-        whereArgs: [orderId],
-        limit: 1);
+    final o = await d.query(
+      'orders',
+      columns: ['status', 'paid_at'],
+      where: 'id = ?',
+      whereArgs: [orderId],
+      limit: 1,
+    );
     if (o.isEmpty) return null;
     final r = await d.rawQuery(
-        'SELECT MAX(round) AS m FROM order_items WHERE order_id = ?',
-        [orderId]);
+      'SELECT MAX(round) AS m FROM order_items WHERE order_id = ?',
+      [orderId],
+    );
     return (
       paid: o.first['paid_at'] != null,
       cancelled: o.first['status'] == 'cancelled',
@@ -1454,27 +1473,31 @@ class LocalDbService {
     required double addSubtotal,
     required double addTax,
     required bool reopen,
-  }) =>
-      _write((d) async {
-        await d.transaction((txn) async {
-          final count = Sqflite.firstIntValue(await txn.rawQuery(
-                  'SELECT COUNT(*) FROM order_items WHERE order_id = ?',
-                  [orderId])) ??
-              0;
-          await _writeOrderItems(
-            txn,
-            Order(
-              id: orderId,
-              businessId: '',
-              orderNumber: 0,
-              subtotal: 0,
-              totalAmount: 0,
-              createdAt: DateTime.now(),
-              items: items,
+  }) => _write((d) async {
+    await d.transaction((txn) async {
+      final count =
+          Sqflite.firstIntValue(
+            await txn.rawQuery(
+              'SELECT COUNT(*) FROM order_items WHERE order_id = ?',
+              [orderId],
             ),
-            startIndex: count,
-          );
-          await txn.rawUpdate('''
+          ) ??
+          0;
+      await _writeOrderItems(
+        txn,
+        Order(
+          id: orderId,
+          businessId: '',
+          orderNumber: 0,
+          subtotal: 0,
+          totalAmount: 0,
+          createdAt: DateTime.now(),
+          items: items,
+        ),
+        startIndex: count,
+      );
+      await txn.rawUpdate(
+        '''
             UPDATE orders SET
               subtotal = subtotal + ?,
               tax_amount = tax_amount + ?,
@@ -1482,15 +1505,56 @@ class LocalDbService {
               status = CASE WHEN ? = 1 AND paid_at IS NULL AND status != 'cancelled'
                             THEN 'pending' ELSE status END
             WHERE id = ?
-          ''', [addSubtotal, addTax, addSubtotal + addTax, reopen ? 1 : 0, orderId]);
-        });
-      });
+          ''',
+        [addSubtotal, addTax, addSubtotal + addTax, reopen ? 1 : 0, orderId],
+      );
+    });
+  });
   Future<void> insertOfflineOrder(Order order) async {
     final d = await db;
     await d.transaction((txn) async {
-      await txn.insert(
-        'orders',
-        {
+      await txn.insert('orders', {
+        'id': order.id,
+        'business_id': order.businessId,
+        'table_id': order.tableId,
+        'cashier_id': order.cashierId,
+        'order_number': order.orderNumber,
+        'order_type': order.orderType.value,
+        'status': order.status.value,
+        'subtotal': order.subtotal,
+        'tax_amount': order.taxAmount,
+        'discount_amount': order.discountAmount,
+        'total_amount': order.totalAmount,
+        'payment_method': order.paymentMethod?.value,
+        'amount_tendered': order.amountTendered,
+        'change_amount': order.changeAmount,
+        'reference_number': order.referenceNumber,
+        'notes': order.notes,
+        'tip_amount': order.tipAmount,
+        'paid_at': order.paidAt?.toIso8601String(),
+        'created_at': order.createdAt.toIso8601String(),
+        'customer_name': order.customerName,
+        'is_offline': 1,
+        'synced_at': null,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      await _writeOrderItems(txn, order);
+    });
+  }
+
+  // (removed — replaced by markQueueDead below; dead entries are now kept
+  // and surfaced instead of silently deleted)
+
+  Future<void> upsertOrders(List<Order> orders) => _write((d) async {
+    final now = DateTime.now().toIso8601String();
+    final pending =
+        (await d.rawQuery(
+          "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'",
+        )).map((r) => r['record_id'] as String).toSet();
+    await d.transaction((txn) async {
+      for (final order in orders) {
+        if (pending.contains(order.id)) continue; // local copy is newer
+        await txn.insert('orders', {
           'id': order.id,
           'business_id': order.businessId,
           'table_id': order.tableId,
@@ -1511,66 +1575,19 @@ class LocalDbService {
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
           'customer_name': order.customerName,
-          'is_offline': 1,
-          'synced_at': null,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+          'is_offline': 0,
+          'synced_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-            await _writeOrderItems(txn, order);
+        await txn.delete(
+          'order_items',
+          where: 'order_id = ?',
+          whereArgs: [order.id],
+        );
+        await _writeOrderItems(txn, order);
+      }
     });
-  }
-
-  // (removed — replaced by markQueueDead below; dead entries are now kept
-  // and surfaced instead of silently deleted)
-
-  Future<void> upsertOrders(List<Order> orders) => _write((d) async {
-        final now = DateTime.now().toIso8601String();
-        final pending = (await d.rawQuery(
-                "SELECT DISTINCT record_id FROM sync_queue WHERE status = 'pending'"))
-            .map((r) => r['record_id'] as String)
-            .toSet();
-        await d.transaction((txn) async {
-          for (final order in orders) {
-            if (pending.contains(order.id)) continue; // local copy is newer
-            await txn.insert(
-              'orders',
-              {
-                'id': order.id,
-                'business_id': order.businessId,
-                'table_id': order.tableId,
-                'cashier_id': order.cashierId,
-                'order_number': order.orderNumber,
-                'order_type': order.orderType.value,
-                'status': order.status.value,
-                'subtotal': order.subtotal,
-                'tax_amount': order.taxAmount,
-                'discount_amount': order.discountAmount,
-                'total_amount': order.totalAmount,
-                'payment_method': order.paymentMethod?.value,
-                'amount_tendered': order.amountTendered,
-                'change_amount': order.changeAmount,
-                'reference_number': order.referenceNumber,
-                'notes': order.notes,
-                'tip_amount': order.tipAmount,
-                'paid_at': order.paidAt?.toIso8601String(),
-                'created_at': order.createdAt.toIso8601String(),
-                'customer_name': order.customerName,
-                'is_offline': 0,
-                'synced_at': now,
-              },
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-
-            await txn.delete(
-              'order_items',
-              where: 'order_id = ?',
-              whereArgs: [order.id],
-            );
-            await _writeOrderItems(txn, order);
-          }
-        });
-      });
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // ORDER PAYMENTS (split payments)
@@ -1582,27 +1599,29 @@ class LocalDbService {
     required PaymentMethod primaryMethod,
     required double amountTendered,
     required double changeAmount,
-  }) =>
-      _write((d) async {
-        await d.transaction((txn) async {
-          for (final row in rows) {
-            await txn.insert('order_payments', row,
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          }
-          await txn.update(
-            'orders',
-            {
-              'payment_method': primaryMethod.value,
-              'amount_tendered': amountTendered,
-              'change_amount': changeAmount,
-              'is_split_payment': 1,
-              'paid_at': DateTime.now().toIso8601String(),
-            },
-            where: 'id = ?',
-            whereArgs: [orderId],
-          );
-        });
-      });
+  }) => _write((d) async {
+    await d.transaction((txn) async {
+      for (final row in rows) {
+        await txn.insert(
+          'order_payments',
+          row,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await txn.update(
+        'orders',
+        {
+          'payment_method': primaryMethod.value,
+          'amount_tendered': amountTendered,
+          'change_amount': changeAmount,
+          'is_split_payment': 1,
+          'paid_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [orderId],
+      );
+    });
+  });
 
   Future<List<OrderPayment>> getOrderPayments(String orderId) async {
     final d = await db;
@@ -1620,16 +1639,18 @@ class LocalDbService {
     required String orderId,
     required double discount,
     required double tip,
-  }) =>
-      _write((d) async {
-        await d.rawUpdate('''
+  }) => _write((d) async {
+    await d.rawUpdate(
+      '''
           UPDATE orders SET
             discount_amount = ?,
             tip_amount = ?,
             total_amount = subtotal + tax_amount - ? + ?
           WHERE id = ? AND paid_at IS NULL
-        ''', [discount, tip, discount, tip, orderId]);
-      });
+        ''',
+      [discount, tip, discount, tip, orderId],
+    );
+  });
 
   Future<void> updateOrderPayment({
     required String orderId,
@@ -1637,50 +1658,55 @@ class LocalDbService {
     required double amountTendered,
     required double changeAmount,
     String? referenceNumber,
-  }) =>
-      _write((d) async {
-        await d.update(
-          'orders',
-          {
-            'payment_method': method.value,
-            'amount_tendered': amountTendered,
-            'change_amount': changeAmount,
-            'reference_number': referenceNumber,
-            'paid_at': DateTime.now().toIso8601String(),
-          },
-          where: 'id = ?',
-          whereArgs: [orderId],
-        );
-      });
+  }) => _write((d) async {
+    await d.update(
+      'orders',
+      {
+        'payment_method': method.value,
+        'amount_tendered': amountTendered,
+        'change_amount': changeAmount,
+        'reference_number': referenceNumber,
+        'paid_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [orderId],
+    );
+  });
 
   /// Deletes locally cached orders for [businessId] that are no longer in
   /// [keepIds] — used by the kitchen device to mirror the server's active-
   /// order snapshot so stale (completed/cancelled) orders don't resurface
   /// after a reboot.
   Future<void> pruneKitchenOrders(
-      String businessId, List<String> keepIds) => _write((d) async {
-        if (keepIds.isEmpty) {
-          await d.delete(
-            'order_items',
-            where: 'order_id IN (SELECT id FROM orders WHERE business_id = ?)',
-            whereArgs: [businessId],
-          );
-          await d.delete('orders', where: 'business_id = ?', whereArgs: [businessId]);
-          return;
-        }
-        final placeholders = List.filled(keepIds.length, '?').join(',');
-        await d.delete(
-          'order_items',
-          where:
-              'order_id IN (SELECT id FROM orders WHERE business_id = ? AND id NOT IN ($placeholders))',
-          whereArgs: [businessId, ...keepIds],
-        );
-        await d.delete(
-          'orders',
-          where: 'business_id = ? AND id NOT IN ($placeholders)',
-          whereArgs: [businessId, ...keepIds],
-        );
-      });
+    String businessId,
+    List<String> keepIds,
+  ) => _write((d) async {
+    if (keepIds.isEmpty) {
+      await d.delete(
+        'order_items',
+        where: 'order_id IN (SELECT id FROM orders WHERE business_id = ?)',
+        whereArgs: [businessId],
+      );
+      await d.delete(
+        'orders',
+        where: 'business_id = ?',
+        whereArgs: [businessId],
+      );
+      return;
+    }
+    final placeholders = List.filled(keepIds.length, '?').join(',');
+    await d.delete(
+      'order_items',
+      where:
+          'order_id IN (SELECT id FROM orders WHERE business_id = ? AND id NOT IN ($placeholders))',
+      whereArgs: [businessId, ...keepIds],
+    );
+    await d.delete(
+      'orders',
+      where: 'business_id = ? AND id NOT IN ($placeholders)',
+      whereArgs: [businessId, ...keepIds],
+    );
+  });
 
   Future<List<Order>> getOrders(String businessId) async {
     final d = await db;
@@ -1691,10 +1717,12 @@ class LocalDbService {
       orderBy: 'created_at DESC',
     );
 
-    return Future.wait(orderRows.map((row) async {
-      final items = await _getOrderItems(d, row['id'] as String);
-      return _orderFromRow(row, items);
-    }));
+    return Future.wait(
+      orderRows.map((row) async {
+        final items = await _getOrderItems(d, row['id'] as String);
+        return _orderFromRow(row, items);
+      }),
+    );
   }
 
   Future<List<Order>> getPendingOfflineOrders() async {
@@ -1704,11 +1732,14 @@ class LocalDbService {
       where: 'is_offline = 1 AND synced_at IS NULL',
       orderBy: 'created_at ASC',
     );
-    return Future.wait(rows.map((row) async {
-      final items = await _getOrderItems(d, row['id'] as String);
-      return _orderFromRow(row, items);
-    }));
+    return Future.wait(
+      rows.map((row) async {
+        final items = await _getOrderItems(d, row['id'] as String);
+        return _orderFromRow(row, items);
+      }),
+    );
   }
+
   Future<List<Order>> getActiveKitchenOrders(String businessId) async {
     final d = await db;
     final rows = await d.query(
@@ -1717,42 +1748,55 @@ class LocalDbService {
       whereArgs: [businessId],
       orderBy: 'created_at ASC',
     );
-    return Future.wait(rows.map((row) async {
-      final all = await _getOrderItems(d, row['id'] as String);
-      final kitchen = all
-          .where((i) => i.isPromo
-              ? i.promoComponents!.any((c) => c.sendToKitchen)
-              : i.product.sendToKitchen)
-          .toList();
-      return _orderFromRow(row, kitchen);
-    }));
+    return Future.wait(
+      rows.map((row) async {
+        final all = await _getOrderItems(d, row['id'] as String);
+        final kitchen =
+            all
+                .where(
+                  (i) =>
+                      i.isPromo
+                          ? i.promoComponents!.any((c) => c.sendToKitchen)
+                          : i.product.sendToKitchen,
+                )
+                .toList();
+        return _orderFromRow(row, kitchen);
+      }),
+    );
   }
 
   Future<Set<String>> getUnsyncedOrderIds() async {
     final d = await db;
-    final rows = await d.query('orders',
-        columns: ['id'], where: 'is_offline = 1 AND synced_at IS NULL');
+    final rows = await d.query(
+      'orders',
+      columns: ['id'],
+      where: 'is_offline = 1 AND synced_at IS NULL',
+    );
     return rows.map((r) => r['id'] as String).toSet();
   }
 
   Future<bool> isOrderPendingSync(String orderId) async {
     final d = await db;
-    final rows = await d.query('orders',
-        columns: ['id'],
-        where: 'id = ? AND is_offline = 1 AND synced_at IS NULL',
-        whereArgs: [orderId],
-        limit: 1);
+    final rows = await d.query(
+      'orders',
+      columns: ['id'],
+      where: 'id = ? AND is_offline = 1 AND synced_at IS NULL',
+      whereArgs: [orderId],
+      limit: 1,
+    );
     return rows.isNotEmpty;
   }
+
   /// Temporary number for an order made offline: one past the highest real
   /// number this device knows. The server's official number replaces it on
   /// sync. The < 1e9 filter ignores old millisecond-style numbers.
   Future<int> nextLocalOrderNumber(String businessId) async {
     final d = await db;
     final r = await d.rawQuery(
-        'SELECT MAX(order_number) AS m FROM orders '
-        'WHERE business_id = ? AND order_number < 1000000000',
-        [businessId]);
+      'SELECT MAX(order_number) AS m FROM orders '
+      'WHERE business_id = ? AND order_number < 1000000000',
+      [businessId],
+    );
     return ((r.first['m'] as int?) ?? 0) + 1;
   }
 
@@ -1760,8 +1804,12 @@ class LocalDbService {
   /// the official per-business number, overwrite the local one.
   Future<void> updateOrderNumber(String orderId, int orderNumber) =>
       _write((d) async {
-        await d.update('orders', {'order_number': orderNumber},
-            where: 'id = ?', whereArgs: [orderId]);
+        await d.update(
+          'orders',
+          {'order_number': orderNumber},
+          where: 'id = ?',
+          whereArgs: [orderId],
+        );
       });
 
   Future<void> markOrderSynced(String orderId) async {
@@ -1775,12 +1823,15 @@ class LocalDbService {
   }
 
   Future<List<CartItem>> _getOrderItems(Database d, String orderId) async {
-    final rows = await d.rawQuery('''
+    final rows = await d.rawQuery(
+      '''
       SELECT oi.*, pv.name AS variant_name
       FROM order_items oi
       LEFT JOIN product_variants pv ON pv.id = oi.variant_id
       WHERE oi.order_id = ?
-    ''', [orderId]);
+    ''',
+      [orderId],
+    );
     return CartItem.groupOrderItemRows<Map<String, dynamic>>(
       rows,
       promoGroupId: (r) => r['promo_group_id'] as String?,
@@ -1798,10 +1849,11 @@ class LocalDbService {
             notes: r['notes'] as String?,
             promoId: r['promo_id'] as String?,
             round: (r['round'] as int?) ?? 1,
-            kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',            
+            kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',
             discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
-            discountType:
-                CartItem.discountTypeFromString(r['discount_type'] as String?),
+            discountType: CartItem.discountTypeFromString(
+              r['discount_type'] as String?,
+            ),
           );
         }
         final product = Product(
@@ -1812,13 +1864,14 @@ class LocalDbService {
           sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
         );
         final variantId = r['variant_id'] as String?;
-        final selectedVariant = variantId != null
-            ? ProductVariant(
-                id: variantId,
-                productId: r['product_id'] as String,
-                name: (r['variant_name'] as String?) ?? '',
-              )
-            : null;
+        final selectedVariant =
+            variantId != null
+                ? ProductVariant(
+                  id: variantId,
+                  productId: r['product_id'] as String,
+                  name: (r['variant_name'] as String?) ?? '',
+                )
+                : null;
         return CartItem(
           product: product,
           quantity: r['quantity'] as int,
@@ -1826,52 +1879,56 @@ class LocalDbService {
           notes: r['notes'] as String?,
           selectedVariant: selectedVariant,
           round: (r['round'] as int?) ?? 1,
-          kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',          
+          kitchenStatus: (r['kitchen_status'] as String?) ?? 'pending',
           discountAmount: (r['discount_amount'] as num?)?.toDouble() ?? 0,
-          discountType:
-              CartItem.discountTypeFromString(r['discount_type'] as String?),
+          discountType: CartItem.discountTypeFromString(
+            r['discount_type'] as String?,
+          ),
         );
       },
-      buildComponent: (r) => PromoComponent(
-        promoId: r['promo_id'] as String? ?? '',
-        productId: r['product_id'] as String,
-        variantId: r['variant_id'] as String?,
-        productName: r['product_name'] as String,
-        quantity: r['quantity'] as int,
-        trackInventory: false, // historical row — not needed for local display
-        sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
-      ),
+      buildComponent:
+          (r) => PromoComponent(
+            promoId: r['promo_id'] as String? ?? '',
+            productId: r['product_id'] as String,
+            variantId: r['variant_id'] as String?,
+            productName: r['product_name'] as String,
+            quantity: r['quantity'] as int,
+            trackInventory:
+                false, // historical row — not needed for local display
+            sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
+          ),
     );
   }
 
-  Order _orderFromRow(Map<String, dynamic> row, List<CartItem> items) =>
-      Order(
-        id: row['id'] as String,
-        businessId: row['business_id'] as String,
-        tableId: row['table_id'] as String?,
-        cashierId: row['cashier_id'] as String?,
-        orderNumber: row['order_number'] as int,
-        orderType: OrderTypeX.fromString(row['order_type'] as String),
-        status: OrderStatusX.fromString(row['status'] as String),
-        subtotal: (row['subtotal'] as num).toDouble(),
-        taxAmount: (row['tax_amount'] as num).toDouble(),
-        discountAmount: (row['discount_amount'] as num).toDouble(),
-        tipAmount: (row['tip_amount'] as num?)?.toDouble() ?? 0.0,
-        totalAmount: (row['total_amount'] as num).toDouble(),
-        paymentMethod: row['payment_method'] != null
+  Order _orderFromRow(Map<String, dynamic> row, List<CartItem> items) => Order(
+    id: row['id'] as String,
+    businessId: row['business_id'] as String,
+    tableId: row['table_id'] as String?,
+    cashierId: row['cashier_id'] as String?,
+    orderNumber: row['order_number'] as int,
+    orderType: OrderTypeX.fromString(row['order_type'] as String),
+    status: OrderStatusX.fromString(row['status'] as String),
+    subtotal: (row['subtotal'] as num).toDouble(),
+    taxAmount: (row['tax_amount'] as num).toDouble(),
+    discountAmount: (row['discount_amount'] as num).toDouble(),
+    tipAmount: (row['tip_amount'] as num?)?.toDouble() ?? 0.0,
+    totalAmount: (row['total_amount'] as num).toDouble(),
+    paymentMethod:
+        row['payment_method'] != null
             ? PaymentMethodX.fromString(row['payment_method'] as String)
             : null,
-        amountTendered: (row['amount_tendered'] as num?)?.toDouble(),
-        changeAmount: (row['change_amount'] as num?)?.toDouble(),
-        referenceNumber: row['reference_number'] as String?,
-        notes: row['notes'] as String?,
-        customerName: row['customer_name'] as String?,
-        paidAt: row['paid_at'] != null
+    amountTendered: (row['amount_tendered'] as num?)?.toDouble(),
+    changeAmount: (row['change_amount'] as num?)?.toDouble(),
+    referenceNumber: row['reference_number'] as String?,
+    notes: row['notes'] as String?,
+    customerName: row['customer_name'] as String?,
+    paidAt:
+        row['paid_at'] != null
             ? DateTime.parse(row['paid_at'] as String).toLocal()
             : null,
-        createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
-        items: items,
-      );
+    createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    items: items,
+  );
 
   // ─────────────────────────────────────────────────────────────────────────────
   // VOID ITEMS
@@ -1889,90 +1946,84 @@ class LocalDbService {
     required String voidedByStaffId,
     required String voidedByStaffName,
     String? variantId,
-  }) =>
-      _write((d) async {
-        final now = DateTime.now().toIso8601String();
+  }) => _write((d) async {
+    final now = DateTime.now().toIso8601String();
 
-        await d.transaction((txn) async {
-          await txn.insert(
-            'void_order_items',
-            {
-              'id': voidId,
-              'order_id': orderId,
-              'product_id': productId,
-              'product_name': productName,
-              'unit_price': unitPrice,
-              'quantity': quantity,
-              'subtotal': subtotal,
-              'reason': reason,
-              'voided_by_staff_id': voidedByStaffId,
-              'voided_by_staff_name': voidedByStaffName,
-              'voided_at': now,
-              'synced': 0,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+    await d.transaction((txn) async {
+      await txn.insert('void_order_items', {
+        'id': voidId,
+        'order_id': orderId,
+        'product_id': productId,
+        'product_name': productName,
+        'unit_price': unitPrice,
+        'quantity': quantity,
+        'subtotal': subtotal,
+        'reason': reason,
+        'voided_by_staff_id': voidedByStaffId,
+        'voided_by_staff_name': voidedByStaffName,
+        'voided_at': now,
+        'synced': 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-          await txn.rawDelete('''
+      await txn.rawDelete(
+        '''
             DELETE FROM order_items WHERE id = (
               SELECT id FROM order_items
               WHERE order_id = ? AND product_id = ?
                 ${variantId != null ? 'AND variant_id = ?' : ''}
               LIMIT 1)
-          ''', [orderId, productId, if (variantId != null) variantId]);
+          ''',
+        [orderId, productId, if (variantId != null) variantId],
+      );
 
-          final remaining = await txn.query(
-            'order_items',
-            where: 'order_id = ?',
-            whereArgs: [orderId],
-          );
+      final remaining = await txn.query(
+        'order_items',
+        where: 'order_id = ?',
+        whereArgs: [orderId],
+      );
 
-          if (remaining.isEmpty) {
-            await txn.update(
-              'orders',
-              {'status': 'cancelled'},
-              where: 'id = ?',
-              whereArgs: [orderId],
-            );
-          } else {
-            final newSubtotal = remaining.fold<double>(
-              0,
-              (s, r) => s + (r['subtotal'] as num).toDouble(),
-            );
+      if (remaining.isEmpty) {
+        await txn.update(
+          'orders',
+          {'status': 'cancelled'},
+          where: 'id = ?',
+          whereArgs: [orderId],
+        );
+      } else {
+        final newSubtotal = remaining.fold<double>(
+          0,
+          (s, r) => s + (r['subtotal'] as num).toDouble(),
+        );
 
-            final orderRows = await txn.query(
-              'orders',
-              where: 'id = ?',
-              whereArgs: [orderId],
-            );
-            final existingTax =
-                (orderRows.first['tax_amount'] as num).toDouble();
-            final existingDiscount =
-                (orderRows.first['discount_amount'] as num).toDouble();
-            final oldSubtotal =
-                (orderRows.first['subtotal'] as num).toDouble();
+        final orderRows = await txn.query(
+          'orders',
+          where: 'id = ?',
+          whereArgs: [orderId],
+        );
+        final existingTax = (orderRows.first['tax_amount'] as num).toDouble();
+        final existingDiscount =
+            (orderRows.first['discount_amount'] as num).toDouble();
+        final oldSubtotal = (orderRows.first['subtotal'] as num).toDouble();
 
-            final taxRate =
-                oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
-            final newTax = newSubtotal * taxRate;
-            final newDiscount =
-                existingDiscount.clamp(0.0, newSubtotal);
-            final newTotal = newSubtotal + newTax - newDiscount;
+        final taxRate = oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
+        final newTax = newSubtotal * taxRate;
+        final newDiscount = existingDiscount.clamp(0.0, newSubtotal);
+        final newTotal = newSubtotal + newTax - newDiscount;
 
-            await txn.update(
-              'orders',
-              {
-                'subtotal': newSubtotal,
-                'tax_amount': newTax,
-                'discount_amount': newDiscount,
-                'total_amount': newTotal,
-              },
-              where: 'id = ?',
-              whereArgs: [orderId],
-            );
-          }
-        });
-      });
+        await txn.update(
+          'orders',
+          {
+            'subtotal': newSubtotal,
+            'tax_amount': newTax,
+            'discount_amount': newDiscount,
+            'total_amount': newTotal,
+          },
+          where: 'id = ?',
+          whereArgs: [orderId],
+        );
+      }
+    });
+  });
 
   /// Writes pre-built void_order_items rows in one batch — used by a
   /// whole-order void (see OrderService.voidOrder), which unlike
@@ -1982,14 +2033,18 @@ class LocalDbService {
       _write((d) async {
         final batch = d.batch();
         for (final row in rows) {
-          batch.insert('void_order_items', row,
-              conflictAlgorithm: ConflictAlgorithm.replace);
+          batch.insert(
+            'void_order_items',
+            row,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
         await batch.commit(noResult: true);
       });
 
   Future<List<Map<String, dynamic>>> getVoidedItemsForOrder(
-      String orderId) async {
+    String orderId,
+  ) async {
     final d = await db;
     return d.query(
       'void_order_items',
@@ -2000,13 +2055,13 @@ class LocalDbService {
   }
 
   Future<void> markVoidSynced(String voidId) => _write((d) async {
-        await d.update(
-          'void_order_items',
-          {'synced': 1},
-          where: 'id = ?',
-          whereArgs: [voidId],
-        );
-      });
+    await d.update(
+      'void_order_items',
+      {'synced': 1},
+      where: 'id = ?',
+      whereArgs: [voidId],
+    );
+  });
 
   Future<List<Map<String, dynamic>>> getUnsyncedVoids() async {
     final d = await db;
@@ -2030,63 +2085,53 @@ class LocalDbService {
     String? note,
     String? orderId,
     required String createdAt,
-  }) =>
-      _write((d) async {
-        await d.insert(
-          'credit_transactions',
-          {
-            'id': id,
-            'customer_id': customerId,
-            'business_id': businessId,
-            'type': type,
-            'amount': amount,
-            'note': note,
-            'order_id': orderId,
-            'created_at': createdAt,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      });
+  }) => _write((d) async {
+    await d.insert('credit_transactions', {
+      'id': id,
+      'customer_id': customerId,
+      'business_id': businessId,
+      'type': type,
+      'amount': amount,
+      'note': note,
+      'order_id': orderId,
+      'created_at': createdAt,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  });
 
   Future<void> updateCreditCustomerOwed({
     required String customerId,
     required double delta,
-  }) =>
-      _write((d) async {
-        await d.rawUpdate(
-          'UPDATE credit_customers '
-          'SET total_owed = MAX(0, total_owed + ?), '
-          '    updated_at = ? '
-          'WHERE id = ?',
-          [delta, DateTime.now().toIso8601String(), customerId],
-        );
-      });
+  }) => _write((d) async {
+    await d.rawUpdate(
+      'UPDATE credit_customers '
+      'SET total_owed = MAX(0, total_owed + ?), '
+      '    updated_at = ? '
+      'WHERE id = ?',
+      [delta, DateTime.now().toIso8601String(), customerId],
+    );
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // STAFF
   // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> upsertStaff(List<StaffMember> members) => _write((d) async {
-        final batch = d.batch();
-        final now = DateTime.now().toIso8601String();
-        for (final m in members) {
-          batch.insert(
-            'staff_members',
-            {
-              'id': m.id,
-              'business_id': m.businessId,
-              'name': m.name,
-              'role': m.role.value,
-              'pin_hash': m.pinHash,
-              'pin_salt': m.pinSalt,
-              'is_active': m.isActive ? 1 : 0,
-              'synced_at': now,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-        }
-        await batch.commit(noResult: true);
-      });
+    final batch = d.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final m in members) {
+      batch.insert('staff_members', {
+        'id': m.id,
+        'business_id': m.businessId,
+        'name': m.name,
+        'role': m.role.value,
+        'pin_hash': m.pinHash,
+        'pin_salt': m.pinSalt,
+        'is_active': m.isActive ? 1 : 0,
+        'synced_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  });
 
   Future<List<StaffMember>> getStaff(String businessId) async {
     final d = await db;
@@ -2096,18 +2141,20 @@ class LocalDbService {
       whereArgs: [businessId],
     );
     return rows
-        .map((r) => StaffMember(
-              id: r['id'] as String,
-              businessId: r['business_id'] as String,
-              name: r['name'] as String,
-              role: StaffRole.values.firstWhere(
-                (e) => e.value == r['role'],
-                orElse: () => StaffRole.cashier,
-              ),
-              pinHash: r['pin_hash'] as String,
-              pinSalt: r['pin_salt'] as String?,
-              isActive: (r['is_active'] as int) == 1,
-            ))
+        .map(
+          (r) => StaffMember(
+            id: r['id'] as String,
+            businessId: r['business_id'] as String,
+            name: r['name'] as String,
+            role: StaffRole.values.firstWhere(
+              (e) => e.value == r['role'],
+              orElse: () => StaffRole.cashier,
+            ),
+            pinHash: r['pin_hash'] as String,
+            pinSalt: r['pin_salt'] as String?,
+            isActive: (r['is_active'] as int) == 1,
+          ),
+        )
         .toList();
   }
 
@@ -2137,8 +2184,11 @@ class LocalDbService {
   /// (status = 'failed') are excluded so they stop being replayed forever.
   Future<List<Map<String, dynamic>>> getPendingQueue() async {
     final d = await db;
-    return d.query('sync_queue',
-        where: "status = 'pending'", orderBy: 'id ASC');
+    return d.query(
+      'sync_queue',
+      where: "status = 'pending'",
+      orderBy: 'id ASC',
+    );
   }
 
   Future<void> dequeue(int queueId) async {
@@ -2170,8 +2220,11 @@ class LocalDbService {
   /// sync doesn't vanish silently.
   Future<List<Map<String, dynamic>>> getFailedQueue() async {
     final d = await db;
-    return d.query('sync_queue',
-        where: "status = 'failed'", orderBy: 'id DESC');
+    return d.query(
+      'sync_queue',
+      where: "status = 'failed'",
+      orderBy: 'id DESC',
+    );
   }
 
   /// Re-queues a dead-lettered entry for another attempt (e.g. user tapped
@@ -2189,7 +2242,8 @@ class LocalDbService {
   Future<int> failedQueueCount() async {
     final d = await db;
     final result = await d.rawQuery(
-        "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'failed'");
+      "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'failed'",
+    );
     return (result.first['c'] as int?) ?? 0;
   }
 
@@ -2206,19 +2260,15 @@ class LocalDbService {
     required List<Map<String, dynamic>> topProducts,
   }) async {
     final d = await db;
-    await d.insert(
-      'reports_cache',
-      {
-        'date': date,
-        'business_id': businessId,
-        'total_sales': totalSales,
-        'order_count': orderCount,
-        'avg_order_value': avgOrderValue,
-        'top_products': jsonEncode(topProducts),
-        'synced_at': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await d.insert('reports_cache', {
+      'date': date,
+      'business_id': businessId,
+      'total_sales': totalSales,
+      'order_count': orderCount,
+      'avg_order_value': avgOrderValue,
+      'top_products': jsonEncode(topProducts),
+      'synced_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Map<String, dynamic>>> getReports(
@@ -2244,10 +2294,12 @@ class LocalDbService {
       orderBy: 'date DESC',
     );
     return rows
-        .map((r) => {
-              ...r,
-              'top_products': jsonDecode(r['top_products'] as String),
-            })
+        .map(
+          (r) => {
+            ...r,
+            'top_products': jsonDecode(r['top_products'] as String),
+          },
+        )
         .toList();
   }
 
@@ -2258,17 +2310,18 @@ class LocalDbService {
   Future<int> pendingQueueCount() async {
     final d = await db;
     final result = await d.rawQuery(
-        "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'pending'");
+      "SELECT COUNT(*) as c FROM sync_queue WHERE status = 'pending'",
+    );
     return (result.first['c'] as int?) ?? 0;
   }
 
   Future<void> clearStaleData(String businessId) async {
     final d = await db;
-    final cutoff = DateTime.now()
-        .subtract(const Duration(days: 30))
-        .toIso8601String();
+    final cutoff =
+        DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
 
-    await d.rawDelete('''
+    await d.rawDelete(
+      '''
       DELETE FROM order_items
       WHERE order_id IN (
         SELECT id FROM orders
@@ -2276,7 +2329,9 @@ class LocalDbService {
           AND created_at < ?
           AND is_offline = 0
       )
-    ''', [businessId, cutoff]);
+    ''',
+      [businessId, cutoff],
+    );
 
     await d.delete(
       'orders',
@@ -2308,14 +2363,13 @@ class LocalDbService {
   // PARKED ORDERS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  Future<void> insertParkedOrder(Map<String, dynamic> map) =>
-      _write((d) async {
-        await d.insert(
-          'parked_orders',
-          map,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      });
+  Future<void> insertParkedOrder(Map<String, dynamic> map) => _write((d) async {
+    await d.insert(
+      'parked_orders',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  });
 
   Future<List<Map<String, dynamic>>> getParkedOrders() async {
     final d = await db;
@@ -2323,12 +2377,8 @@ class LocalDbService {
   }
 
   Future<void> deleteParkedOrder(String id) => _write((d) async {
-        await d.delete(
-          'parked_orders',
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      });
+    await d.delete('parked_orders', where: 'id = ?', whereArgs: [id]);
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // LOW STOCK ALERTS
@@ -2337,9 +2387,8 @@ class LocalDbService {
   /// Returns product IDs that have already been alerted recently (within 24h).
   Future<Set<String>> getRecentlyAlertedProductIds(String businessId) async {
     final d = await db;
-    final cutoff = DateTime.now()
-        .subtract(const Duration(hours: 24))
-        .toIso8601String();
+    final cutoff =
+        DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
     final rows = await d.query(
       'low_stock_alerts',
       columns: ['product_id'],
@@ -2355,27 +2404,21 @@ class LocalDbService {
     required String businessId,
     required String productName,
     required int stockQuantity,
-  }) =>
-      _write((d) async {
-        await d.insert(
-          'low_stock_alerts',
-          {
-            'product_id': productId,
-            'business_id': businessId,
-            'product_name': productName,
-            'stock_quantity': stockQuantity,
-            'alerted_at': DateTime.now().toIso8601String(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      });
+  }) => _write((d) async {
+    await d.insert('low_stock_alerts', {
+      'product_id': productId,
+      'business_id': businessId,
+      'product_name': productName,
+      'stock_quantity': stockQuantity,
+      'alerted_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  });
 
   /// Clears stale alert records older than 24h — call on app start.
   Future<void> pruneStaleAlerts() async {
     final d = await db;
-    final cutoff = DateTime.now()
-        .subtract(const Duration(hours: 24))
-        .toIso8601String();
+    final cutoff =
+        DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
     await d.delete(
       'low_stock_alerts',
       where: 'alerted_at < ?',

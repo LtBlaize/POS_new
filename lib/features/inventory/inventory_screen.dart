@@ -16,8 +16,9 @@ import '../../core/models/staff.dart';
 import '../../core/providers/staff_provider.dart';
 // ── Filter state provider ─────────────────────────────────────────────────────
 
-final _filterProvider =
-    StateProvider<InventoryFilterState>((ref) => const InventoryFilterState());
+final _filterProvider = StateProvider<InventoryFilterState>(
+  (ref) => const InventoryFilterState(),
+);
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,9 @@ class InventoryScreen extends ConsumerWidget {
                   indicatorColor: AppColors.primary,
                   dividerColor: AppColors.divider,
                   labelStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                   tabs: const [
                     Tab(text: 'Products'),
                     Tab(text: 'Promos & Packages'),
@@ -118,16 +121,20 @@ class _ProductsTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_outlined,
-                  size: 48, color: AppColors.danger),
+              const Icon(
+                Icons.cloud_off_outlined,
+                size: 48,
+                color: AppColors.danger,
+              ),
               const SizedBox(height: 12),
-              const Text('Offline — no cached inventory yet',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey)),
+              const Text(
+                'Offline — no cached inventory yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () =>
-                    ref.read(inventoryProvider.notifier).refresh(),
+                onPressed: () => ref.read(inventoryProvider.notifier).refresh(),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
               ),
@@ -140,11 +147,8 @@ class _ProductsTab extends ConsumerWidget {
     final entries = inventoryState.entries;
     final lowCount = inventoryState.lowStockItems.length;
 
-    final categories = entries
-        .map((e) => e.product.category)
-        .toSet()
-        .toList()
-      ..sort();
+    final categories =
+        entries.map((e) => e.product.category).toSet().toList()..sort();
 
     final filtered = _applyFilters(entries, filter);
 
@@ -194,37 +198,49 @@ class _ProductsTab extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (_) => const AddProductDialog(),
-                          ),
+                          onPressed:
+                              () => showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const AddProductDialog(),
+                              ),
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Add Product',
-                              style: TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                          label: const Text(
+                            'Add Product',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        onPressed: () =>
-                            showCategoryManagementDialog(context),
-                        icon: const Icon(Icons.category_outlined,
-                            size: 18, color: AppColors.primary),
+                        onPressed: () => showCategoryManagementDialog(context),
+                        icon: const Icon(
+                          Icons.category_outlined,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                         tooltip: 'Manage Categories',
                         style: IconButton.styleFrom(
-                          backgroundColor:
-                              AppColors.primary.withValues(alpha:0.08),
+                          backgroundColor: AppColors.primary.withValues(
+                            alpha: 0.08,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -233,15 +249,20 @@ class _ProductsTab extends ConsumerWidget {
                       _ExportButton(),
                       const SizedBox(width: 4),
                       IconButton(
-                        onPressed: () =>
-                            ref.read(inventoryProvider.notifier).refresh(),
-                        icon: const Icon(Icons.refresh,
-                            size: 18, color: AppColors.textSecondary),
+                        onPressed:
+                            () =>
+                                ref.read(inventoryProvider.notifier).refresh(),
+                        icon: const Icon(
+                          Icons.refresh,
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
                         tooltip: 'Refresh',
                         style: IconButton.styleFrom(
                           backgroundColor: AppColors.surface,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],
@@ -275,42 +296,53 @@ class _ProductsTab extends ConsumerWidget {
                         const SizedBox(width: 8),
                       ],
                       ElevatedButton.icon(
-                        onPressed: () => showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (_) => const AddProductDialog(),
-                        ),
+                        onPressed:
+                            () => showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => const AddProductDialog(),
+                            ),
                         icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add Product',
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600)),
+                        label: const Text(
+                          'Add Product',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            showCategoryManagementDialog(context),
-                        icon: const Icon(Icons.category_outlined,
-                            size: 15),
-                        label: const Text('Categories',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
+                        onPressed: () => showCategoryManagementDialog(context),
+                        icon: const Icon(Icons.category_outlined, size: 15),
+                        label: const Text(
+                          'Categories',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primary,
-                          side: const BorderSide(
-                              color: AppColors.primary),
+                          side: const BorderSide(color: AppColors.primary),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -319,15 +351,20 @@ class _ProductsTab extends ConsumerWidget {
                       _ExportButton(),
                       const SizedBox(width: 4),
                       IconButton(
-                        onPressed: () =>
-                            ref.read(inventoryProvider.notifier).refresh(),
-                        icon: const Icon(Icons.refresh,
-                            size: 18, color: AppColors.textSecondary),
+                        onPressed:
+                            () =>
+                                ref.read(inventoryProvider.notifier).refresh(),
+                        icon: const Icon(
+                          Icons.refresh,
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
                         tooltip: 'Refresh',
                         style: IconButton.styleFrom(
                           backgroundColor: AppColors.surface,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],
@@ -335,7 +372,6 @@ class _ProductsTab extends ConsumerWidget {
                 ],
 
                 const SizedBox(height: 16),
-  
 
                 // Search + filter row
                 Row(
@@ -351,24 +387,31 @@ class _ProductsTab extends ConsumerWidget {
                         child: Row(
                           children: [
                             const SizedBox(width: 12),
-                            const Icon(Icons.search,
-                                size: 16, color: AppColors.textSecondary),
+                            const Icon(
+                              Icons.search,
+                              size: 16,
+                              color: AppColors.textSecondary,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
-                                onChanged: (v) => ref
-                                    .read(_filterProvider.notifier)
-                                    .state = ref
-                                    .read(_filterProvider)
-                                    .copyWith(search: v),
+                                onChanged:
+                                    (v) =>
+                                        ref
+                                            .read(_filterProvider.notifier)
+                                            .state = ref
+                                            .read(_filterProvider)
+                                            .copyWith(search: v),
                                 style: const TextStyle(fontSize: 13),
                                 decoration: InputDecoration(
                                   hintText:
                                       'Search by name, category or barcode…',
                                   hintStyle: TextStyle(
-                                      color: AppColors.textSecondary
-                                          .withValues(alpha:0.6),
-                                      fontSize: 13),
+                                    color: AppColors.textSecondary.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                    fontSize: 13,
+                                  ),
                                   border: InputBorder.none,
                                   isDense: true,
                                   contentPadding: EdgeInsets.zero,
@@ -384,31 +427,38 @@ class _ProductsTab extends ConsumerWidget {
                       filter: filter,
                       categories: categories,
                       entries: entries,
-                      onChanged: (f) =>
-                          ref.read(_filterProvider.notifier).state = f,
+                      onChanged:
+                          (f) => ref.read(_filterProvider.notifier).state = f,
                     ),
                     const SizedBox(width: 8),
                     SortButton(
                       sort: filter.sort,
-                      onChanged: (s) => ref
-                          .read(_filterProvider.notifier)
-                          .state = filter.copyWith(sort: s),
+                      onChanged:
+                          (s) =>
+                              ref.read(_filterProvider.notifier).state = filter
+                                  .copyWith(sort: s),
                     ),
                     if (filter.hasActiveFilters) ...[
                       const SizedBox(width: 8),
                       Tooltip(
                         message: 'Clear all filters',
                         child: IconButton(
-                          onPressed: () => ref
-                              .read(_filterProvider.notifier)
-                              .state = const InventoryFilterState(),
-                          icon: const Icon(Icons.filter_alt_off_outlined,
-                              size: 18, color: AppColors.danger),
+                          onPressed:
+                              () =>
+                                  ref.read(_filterProvider.notifier).state =
+                                      const InventoryFilterState(),
+                          icon: const Icon(
+                            Icons.filter_alt_off_outlined,
+                            size: 18,
+                            color: AppColors.danger,
+                          ),
                           style: IconButton.styleFrom(
-                            backgroundColor:
-                                AppColors.danger.withValues(alpha:0.07),
+                            backgroundColor: AppColors.danger.withValues(
+                              alpha: 0.07,
+                            ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
@@ -419,8 +469,8 @@ class _ProductsTab extends ConsumerWidget {
 
                 ActiveFilterChips(
                   filter: filter,
-                  onChanged: (f) =>
-                      ref.read(_filterProvider.notifier).state = f,
+                  onChanged:
+                      (f) => ref.read(_filterProvider.notifier).state = f,
                 ),
 
                 const SizedBox(height: 8),
@@ -434,27 +484,30 @@ class _ProductsTab extends ConsumerWidget {
           // ── Low stock banner ───────────────────────────────────────
           if (lowCount > 0)
             Container(
-              color: AppColors.danger.withValues(alpha:0.06),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              color: AppColors.danger.withValues(alpha: 0.06),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha:0.1),
+                      color: AppColors.danger.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.warning_amber_rounded,
-                        color: AppColors.danger, size: 16),
+                    child: const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.danger,
+                      size: 16,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Text(
                     '$lowCount item${lowCount > 1 ? 's' : ''} running low — reorder soon.',
                     style: const TextStyle(
-                        color: AppColors.danger,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500),
+                      color: AppColors.danger,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -462,24 +515,32 @@ class _ProductsTab extends ConsumerWidget {
 
           if (inventoryState.error != null)
             Container(
-              color: AppColors.danger.withValues(alpha:0.08),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              color: AppColors.danger.withValues(alpha: 0.08),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline,
-                      color: AppColors.danger, size: 16),
+                  const Icon(
+                    Icons.error_outline,
+                    color: AppColors.danger,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(inventoryState.error!,
-                        style: const TextStyle(
-                            color: AppColors.danger, fontSize: 12)),
+                    child: Text(
+                      inventoryState.error!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                   TextButton(
-                    onPressed: () =>
-                        ref.read(inventoryProvider.notifier).refresh(),
-                    child: const Text('Retry',
-                        style: TextStyle(color: AppColors.danger)),
+                    onPressed:
+                        () => ref.read(inventoryProvider.notifier).refresh(),
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(color: AppColors.danger),
+                    ),
                   ),
                 ],
               ),
@@ -488,21 +549,23 @@ class _ProductsTab extends ConsumerWidget {
           // ── Results count ─────────────────────────────────────────
           if (filter.hasActiveFilters)
             Container(
-              color: AppColors.primary.withValues(alpha:0.04),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+              color: AppColors.primary.withValues(alpha: 0.04),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
               child: Row(
                 children: [
-                  Icon(Icons.filter_list_rounded,
-                      size: 14,
-                      color: AppColors.primary.withValues(alpha:0.7)),
+                  Icon(
+                    Icons.filter_list_rounded,
+                    size: 14,
+                    color: AppColors.primary.withValues(alpha: 0.7),
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Showing ${filtered.length} of ${entries.length} products',
                     style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary.withValues(alpha:0.7),
-                        fontWeight: FontWeight.w500),
+                      fontSize: 12,
+                      color: AppColors.primary.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -510,44 +573,59 @@ class _ProductsTab extends ConsumerWidget {
 
           // ── List ──────────────────────────────────────────────────
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.inventory_2_outlined,
+            child:
+                filtered.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
                             size: 48,
-                            color: AppColors.textSecondary.withValues(alpha:0.3)),
-                        const SizedBox(height: 12),
-                        Text(
-                          filter.hasActiveFilters
-                              ? 'No products match the current filters'
-                              : 'No products found',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 14),
-                        ),
-                        if (filter.hasActiveFilters) ...[
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () => ref
-                                .read(_filterProvider.notifier)
-                                .state = const InventoryFilterState(),
-                            child: const Text('Clear filters'),
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
+                          const SizedBox(height: 12),
+                          Text(
+                            filter.hasActiveFilters
+                                ? 'No products match the current filters'
+                                : 'No products found',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (filter.hasActiveFilters) ...[
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed:
+                                  () =>
+                                      ref.read(_filterProvider.notifier).state =
+                                          const InventoryFilterState(),
+                              child: const Text('Clear filters'),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
+                    )
+                    : ListView.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder:
+                          (_, _) =>
+                              layout == InventoryLayout.phone
+                                  ? const SizedBox.shrink()
+                                  : const Divider(
+                                    height: 1,
+                                    indent: 24,
+                                    endIndent: 24,
+                                  ),
+                      itemBuilder:
+                          (context, index) => InventoryRow(
+                            entry: filtered[index],
+                            layout: layout,
+                          ),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => layout == InventoryLayout.phone
-                        ? const SizedBox.shrink()
-                        : const Divider(height: 1, indent: 24, endIndent: 24),
-                    itemBuilder: (context, index) => InventoryRow(
-                      entry: filtered[index],
-                      layout: layout,
-                    ),
-                  ),
           ),
         ],
       ),
@@ -558,43 +636,50 @@ class _ProductsTab extends ConsumerWidget {
 // ── Filter logic (pure, no widgets) ──────────────────────────────────────────
 
 List<InventoryEntry> _applyFilters(
-    List<InventoryEntry> entries, InventoryFilterState f) {
-  var list = entries.where((e) {
-    if (f.search.isNotEmpty) {
-      final q = f.search.toLowerCase();
-      final match = e.product.name.toLowerCase().contains(q) ||
-          e.product.category.toLowerCase().contains(q) ||
-          (e.product.barcode?.contains(q) ?? false);
-      if (!match) return false;
-    }
+  List<InventoryEntry> entries,
+  InventoryFilterState f,
+) {
+  var list =
+      entries.where((e) {
+        if (f.search.isNotEmpty) {
+          final q = f.search.toLowerCase();
+          final match =
+              e.product.name.toLowerCase().contains(q) ||
+              e.product.category.toLowerCase().contains(q) ||
+              (e.product.barcode?.contains(q) ?? false);
+          if (!match) return false;
+        }
 
-    if (f.category != null && e.product.category != f.category) return false;
+        if (f.category != null && e.product.category != f.category)
+          return false;
 
-    switch (f.stockFilter) {
-      case StockFilter.out:
-        if (e.stock > 0) return false;
-      case StockFilter.low:
-        if (!e.isLowStock || e.stock == 0) return false;
-      case StockFilter.ok:
-        if (e.isLowStock || e.stock == 0) return false;
-      case StockFilter.all:
-        break;
-    }
+        switch (f.stockFilter) {
+          case StockFilter.out:
+            if (e.stock > 0) return false;
+          case StockFilter.low:
+            if (!e.isLowStock || e.stock == 0) return false;
+          case StockFilter.ok:
+            if (e.isLowStock || e.stock == 0) return false;
+          case StockFilter.all:
+            break;
+        }
 
-    if (f.minPrice != null && e.product.price < f.minPrice!) return false;
-    if (f.maxPrice != null && e.product.price > f.maxPrice!) return false;
+        if (f.minPrice != null && e.product.price < f.minPrice!) return false;
+        if (f.maxPrice != null && e.product.price > f.maxPrice!) return false;
 
-    return true;
-  }).toList();
+        return true;
+      }).toList();
 
-  list.sort((a, b) => switch (f.sort) {
-        SortOrder.nameAsc => a.product.name.compareTo(b.product.name),
-        SortOrder.nameDesc => b.product.name.compareTo(a.product.name),
-        SortOrder.priceAsc => a.product.price.compareTo(b.product.price),
-        SortOrder.priceDesc => b.product.price.compareTo(a.product.price),
-        SortOrder.stockAsc => a.stock.compareTo(b.stock),
-        SortOrder.stockDesc => b.stock.compareTo(a.stock),
-      });
+  list.sort(
+    (a, b) => switch (f.sort) {
+      SortOrder.nameAsc => a.product.name.compareTo(b.product.name),
+      SortOrder.nameDesc => b.product.name.compareTo(a.product.name),
+      SortOrder.priceAsc => a.product.price.compareTo(b.product.price),
+      SortOrder.priceDesc => b.product.price.compareTo(a.product.price),
+      SortOrder.stockAsc => a.stock.compareTo(b.stock),
+      SortOrder.stockDesc => b.stock.compareTo(a.stock),
+    },
+  );
 
   return list;
 }
@@ -621,10 +706,11 @@ class _ImportButtonState extends ConsumerState<_ImportButton> {
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => ImportPreviewDialog(
-          preview: preview,
-          onConfirm: () => _commit(preview),
-        ),
+        builder:
+            (_) => ImportPreviewDialog(
+              preview: preview,
+              onConfirm: () => _commit(preview),
+            ),
       );
     } catch (e) {
       if (mounted) {
@@ -645,7 +731,10 @@ class _ImportButtonState extends ConsumerState<_ImportButton> {
     final messenger = ScaffoldMessenger.of(context);
 
     messenger.showSnackBar(
-      const SnackBar(content: Text('Importing…'), duration: Duration(seconds: 60)),
+      const SnackBar(
+        content: Text('Importing…'),
+        duration: Duration(seconds: 60),
+      ),
     );
 
     final result = await service.commit(preview);
@@ -680,18 +769,21 @@ class _ImportButtonState extends ConsumerState<_ImportButton> {
       message: 'Import from CSV',
       child: IconButton(
         onPressed: _busy ? null : _onPressed,
-        icon: _busy
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.upload_outlined,
-                size: 18, color: AppColors.textSecondary),
+        icon:
+            _busy
+                ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(
+                  Icons.upload_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
         style: IconButton.styleFrom(
           backgroundColor: AppColors.surface,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );
@@ -742,18 +834,21 @@ class _ExportButtonState extends ConsumerState<_ExportButton> {
       message: 'Export to CSV',
       child: IconButton(
         onPressed: _busy ? null : _onPressed,
-        icon: _busy
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.download_outlined,
-                size: 18, color: AppColors.textSecondary),
+        icon:
+            _busy
+                ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(
+                  Icons.download_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
         style: IconButton.styleFrom(
           backgroundColor: AppColors.surface,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );

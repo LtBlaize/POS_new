@@ -38,7 +38,10 @@ class ProfileRefreshService {
   void init() {
     if (!kEnforceCoreAccess) return; // no-op until enforcement is live
 
-    _authSub = _ref.listen<AsyncValue<dynamic>>(authStateProvider, (prev, next) {
+    _authSub = _ref.listen<AsyncValue<dynamic>>(authStateProvider, (
+      prev,
+      next,
+    ) {
       final hasSession = next.valueOrNull != null;
       if (hasSession) {
         _startTimer();

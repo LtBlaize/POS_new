@@ -80,9 +80,9 @@ class _ActionBarState extends State<ActionBar> {
     }
     return switch (widget.method) {
       PaymentMethod.gcash => 'Confirm GCash Payment',
-      PaymentMethod.maya  => 'Confirm Maya Payment',
-      PaymentMethod.card  => 'Confirm Card Payment',
-      _                   => 'Confirm Payment',
+      PaymentMethod.maya => 'Confirm Maya Payment',
+      PaymentMethod.card => 'Confirm Card Payment',
+      _ => 'Confirm Payment',
     };
   }
 
@@ -92,7 +92,8 @@ class _ActionBarState extends State<ActionBar> {
     try {
       await ThermalPrintService.printBill(
         order: widget.currentOrder!.copyWith(
-            items: mergeForReceipt(widget.currentOrder!.items)),
+          items: mergeForReceipt(widget.currentOrder!.items),
+        ),
         businessName: widget.businessName,
         businessAddress: widget.businessAddress,
         tableNumber: widget.tableNumber,
@@ -100,8 +101,9 @@ class _ActionBarState extends State<ActionBar> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Print failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Print failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _printing = false);
@@ -110,14 +112,16 @@ class _ActionBarState extends State<ActionBar> {
 
   @override
   Widget build(BuildContext context) {
-    final showPrintBill = widget.isRestaurant &&
+    final showPrintBill =
+        widget.isRestaurant &&
         widget.existingOrderId != null &&
         widget.currentOrder != null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: CheckoutTheme.border))),
+        border: Border(top: BorderSide(color: CheckoutTheme.border)),
+      ),
       child: Column(
         children: [
           Row(
@@ -126,7 +130,8 @@ class _ActionBarState extends State<ActionBar> {
               if (widget.isRestaurant && widget.existingOrderId == null) ...[
                 Expanded(
                   child: _GhostButton(
-                    label: widget.sendingToKitchen ? 'Sending...' : 'Open Ticket',
+                    label:
+                        widget.sendingToKitchen ? 'Sending...' : 'Open Ticket',
                     icon: Icons.kitchen_outlined,
                     loading: widget.sendingToKitchen,
                     disabled: widget.isBusy,
@@ -164,9 +169,10 @@ class _ActionBarState extends State<ActionBar> {
               '"Open Ticket" saves the order and sends it to the kitchen — customer pays later',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 11,
-                  color: CheckoutTheme.textLow,
-                  fontStyle: FontStyle.italic),
+                fontSize: 11,
+                color: CheckoutTheme.textLow,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ],
@@ -193,38 +199,50 @@ class _ConfirmButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: enabled ? () {
-        HapticFeedback.mediumImpact();
-        onTap();
-      } : null,
+      onTap:
+          enabled
+              ? () {
+                HapticFeedback.mediumImpact();
+                onTap();
+              }
+              : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         height: 52,
         decoration: BoxDecoration(
           color: enabled ? CheckoutTheme.mint : CheckoutTheme.elevated,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: enabled
-              ? [BoxShadow(
-                  color: CheckoutTheme.mint.withValues(alpha:0.30),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                )]
-              : [],
+          boxShadow:
+              enabled
+                  ? [
+                    BoxShadow(
+                      color: CheckoutTheme.mint.withValues(alpha: 0.30),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                  : [],
         ),
         alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: CheckoutTheme.bg))
-            : Text(
-                label,
-                style: TextStyle(
+        child:
+            loading
+                ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: CheckoutTheme.bg,
+                  ),
+                )
+                : Text(
+                  label,
+                  style: TextStyle(
                     color: enabled ? CheckoutTheme.bg : CheckoutTheme.textLow,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2),
-              ),
+                    letterSpacing: -0.2,
+                  ),
+                ),
       ),
     );
   }
@@ -259,23 +277,31 @@ class _GhostButton extends StatelessWidget {
           border: Border.all(color: CheckoutTheme.border),
         ),
         alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: CheckoutTheme.textMid))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: CheckoutTheme.textMid, size: 16),
-                  const SizedBox(width: 6),
-                  Text(label,
+        child:
+            loading
+                ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: CheckoutTheme.textMid,
+                  ),
+                )
+                : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: CheckoutTheme.textMid, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
                       style: const TextStyle(
-                          color: CheckoutTheme.textMid,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
+                        color: CheckoutTheme.textMid,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -306,29 +332,40 @@ class _PrintBillButton extends StatelessWidget {
           color: const Color(0xFFFFB547),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: disabled ? CheckoutTheme.border : amber.withValues(alpha:0.5),
+            color:
+                disabled ? CheckoutTheme.border : amber.withValues(alpha: 0.5),
           ),
         ),
         alignment: Alignment.center,
-        child: loading
-            ? const SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: amber))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.receipt_long_outlined,
+        child:
+            loading
+                ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: amber,
+                  ),
+                )
+                : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
                       color: disabled ? CheckoutTheme.textLow : amber,
-                      size: 16),
-                  const SizedBox(width: 6),
-                  Text('Print Bill',
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Print Bill',
                       style: TextStyle(
-                          color: disabled ? CheckoutTheme.textLow : amber,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
+                        color: disabled ? CheckoutTheme.textLow : amber,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }

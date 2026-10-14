@@ -6,9 +6,10 @@ import '../../../shared/widgets/app_colors.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final categoryListProvider =
-    StateNotifierProvider<CategoryListNotifier,
-        AsyncValue<List<Map<String, dynamic>>>>((ref) {
+final categoryListProvider = StateNotifierProvider<
+  CategoryListNotifier,
+  AsyncValue<List<Map<String, dynamic>>>
+>((ref) {
   final profile = ref.watch(profileProvider).asData?.value;
   return CategoryListNotifier(
     client: ref.watch(supabaseClientProvider),
@@ -22,9 +23,9 @@ class CategoryListNotifier
   final String? _businessId;
 
   CategoryListNotifier({required dynamic client, required String? businessId})
-      : _client = client,
-        _businessId = businessId,
-        super(const AsyncValue.loading()) {
+    : _client = client,
+      _businessId = businessId,
+      super(const AsyncValue.loading()) {
     load();
   }
 
@@ -41,8 +42,7 @@ class CategoryListNotifier
           .eq('is_active', true)
           .order('sort_order')
           .order('name');
-      state = AsyncValue.data(
-          List<Map<String, dynamic>>.from(rows as List));
+      state = AsyncValue.data(List<Map<String, dynamic>>.from(rows as List));
     } catch (e, s) {
       state = AsyncValue.error(e, s);
     }
@@ -51,11 +51,12 @@ class CategoryListNotifier
   Future<void> add(String name, String? icon) async {
     if (_businessId == null) return;
     final current = state.asData?.value ?? [];
-    final maxSort = current.isEmpty
-        ? 0
-        : current
-            .map((c) => c['sort_order'] as int? ?? 0)
-            .reduce((a, b) => a > b ? a : b);
+    final maxSort =
+        current.isEmpty
+            ? 0
+            : current
+                .map((c) => c['sort_order'] as int? ?? 0)
+                .reduce((a, b) => a > b ? a : b);
     await _client.from('categories').insert({
       'business_id': _businessId,
       'name': name.trim(),
@@ -67,26 +68,28 @@ class CategoryListNotifier
   }
 
   Future<void> rename(String id, String name, String? icon) async {
-    await _client.from('categories').update({
-      'name': name.trim(),
-      'icon': icon?.trim().isEmpty == true ? null : icon?.trim(),
-    }).eq('id', id);
+    await _client
+        .from('categories')
+        .update({
+          'name': name.trim(),
+          'icon': icon?.trim().isEmpty == true ? null : icon?.trim(),
+        })
+        .eq('id', id);
     await load();
   }
 
   Future<void> reorder(String id, int newSortOrder) async {
     await _client
         .from('categories')
-        .update({'sort_order': newSortOrder}).eq('id', id);
+        .update({'sort_order': newSortOrder})
+        .eq('id', id);
     await load();
   }
 
   Future<void> delete(String id) async {
     // Soft-delete — products with this category_id keep working,
     // category just stops appearing in filters and add-product dropdown.
-    await _client
-        .from('categories')
-        .update({'is_active': false}).eq('id', id);
+    await _client.from('categories').update({'is_active': false}).eq('id', id);
     await load();
   }
 }
@@ -109,8 +112,7 @@ class _CategoryManagementDialog extends ConsumerWidget {
 
     return Dialog(
       backgroundColor: Colors.white,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SizedBox(
         width: 480,
         child: Column(
@@ -121,24 +123,32 @@ class _CategoryManagementDialog extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
               decoration: const BoxDecoration(
                 color: AppColors.primary,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.category_outlined,
-                      color: Colors.white, size: 20),
+                  const Icon(
+                    Icons.category_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
-                  const Text('Manage Categories',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  const Text(
+                    'Manage Categories',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -150,59 +160,82 @@ class _CategoryManagementDialog extends ConsumerWidget {
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 420),
               child: categoriesAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('Error: $e',
-                      style: const TextStyle(color: AppColors.danger)),
-                ),
-                data: (categories) => categories.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(
-                          child: Text(
-                            'No categories yet.\nAdd your first one below.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13),
-                          ),
-                        ),
-                      )
-                    : ReorderableListView.builder(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: categories.length,
-                        onReorder: (oldIndex, newIndex) async {
-                          if (newIndex > oldIndex) newIndex--;
-                          final notifier =
-                              ref.read(categoryListProvider.notifier);
-                          // Swap sort_order values
-                          final moved = categories[oldIndex];
-                          final target = categories[newIndex];
-                          final movedOrder = moved['sort_order'] as int? ?? oldIndex;
-                          final targetOrder = target['sort_order'] as int? ?? newIndex;
-                          await Future.wait([
-                            notifier.reorder(moved['id'] as String, targetOrder),
-                            notifier.reorder(target['id'] as String, movedOrder),
-                          ]);
-                        },
-                        itemBuilder: (_, i) => _CategoryTile(
-                          key: ValueKey(categories[i]['id']),
-                          category: categories[i],
-                          onRename: (name, icon) => ref
-                              .read(categoryListProvider.notifier)
-                              .rename(
-                                  categories[i]['id'] as String,
-                                  name,
-                                  icon),
-                          onDelete: () => _confirmDelete(
-                              context, ref, categories[i]),
-                        ),
+                loading:
+                    () => const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                error:
+                    (e, _) => Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Error: $e',
+                        style: const TextStyle(color: AppColors.danger),
                       ),
+                    ),
+                data:
+                    (categories) =>
+                        categories.isEmpty
+                            ? const Padding(
+                              padding: EdgeInsets.all(40),
+                              child: Center(
+                                child: Text(
+                                  'No categories yet.\nAdd your first one below.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            )
+                            : ReorderableListView.builder(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: categories.length,
+                              onReorder: (oldIndex, newIndex) async {
+                                if (newIndex > oldIndex) newIndex--;
+                                final notifier = ref.read(
+                                  categoryListProvider.notifier,
+                                );
+                                // Swap sort_order values
+                                final moved = categories[oldIndex];
+                                final target = categories[newIndex];
+                                final movedOrder =
+                                    moved['sort_order'] as int? ?? oldIndex;
+                                final targetOrder =
+                                    target['sort_order'] as int? ?? newIndex;
+                                await Future.wait([
+                                  notifier.reorder(
+                                    moved['id'] as String,
+                                    targetOrder,
+                                  ),
+                                  notifier.reorder(
+                                    target['id'] as String,
+                                    movedOrder,
+                                  ),
+                                ]);
+                              },
+                              itemBuilder:
+                                  (_, i) => _CategoryTile(
+                                    key: ValueKey(categories[i]['id']),
+                                    category: categories[i],
+                                    onRename:
+                                        (name, icon) => ref
+                                            .read(categoryListProvider.notifier)
+                                            .rename(
+                                              categories[i]['id'] as String,
+                                              name,
+                                              icon,
+                                            ),
+                                    onDelete:
+                                        () => _confirmDelete(
+                                          context,
+                                          ref,
+                                          categories[i],
+                                        ),
+                                  ),
+                            ),
               ),
             ),
 
@@ -210,8 +243,9 @@ class _CategoryManagementDialog extends ConsumerWidget {
 
             // ── Add new category ──────────────────────────────────────
             _AddCategoryRow(
-              onAdd: (name, icon) =>
-                  ref.read(categoryListProvider.notifier).add(name, icon),
+              onAdd:
+                  (name, icon) =>
+                      ref.read(categoryListProvider.notifier).add(name, icon),
             ),
           ],
         ),
@@ -219,34 +253,38 @@ class _CategoryManagementDialog extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref,
-      Map<String, dynamic> category) {
+  void _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> category,
+  ) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Category?'),
-        content: Text(
-          'Delete "${category['name']}"? Products in this category '
-          'will keep their data but the category will no longer appear.',
-          style: const TextStyle(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete Category?'),
+            content: Text(
+              'Delete "${category['name']}"? Products in this category '
+              'will keep their data but the category will no longer appear.',
+              style: const TextStyle(fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await ref
+                      .read(categoryListProvider.notifier)
+                      .delete(category['id'] as String);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await ref
-                  .read(categoryListProvider.notifier)
-                  .delete(category['id'] as String);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -278,10 +316,10 @@ class _CategoryTileState extends State<_CategoryTile> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl =
-        TextEditingController(text: widget.category['name'] as String);
+    _nameCtrl = TextEditingController(text: widget.category['name'] as String);
     _iconCtrl = TextEditingController(
-        text: widget.category['icon'] as String? ?? '');
+      text: widget.category['icon'] as String? ?? '',
+    );
   }
 
   @override
@@ -320,8 +358,7 @@ class _CategoryTileState extends State<_CategoryTile> {
     final icon = widget.category['icon'] as String?;
     return Row(
       children: [
-        const Icon(Icons.drag_handle,
-            size: 16, color: AppColors.textSecondary),
+        const Icon(Icons.drag_handle, size: 16, color: AppColors.textSecondary),
         const SizedBox(width: 8),
         if (icon != null && icon.isNotEmpty) ...[
           Text(icon, style: const TextStyle(fontSize: 16)),
@@ -330,8 +367,7 @@ class _CategoryTileState extends State<_CategoryTile> {
         Expanded(
           child: Text(
             widget.category['name'] as String,
-            style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
         IconButton(
@@ -366,9 +402,12 @@ class _CategoryTileState extends State<_CategoryTile> {
               hintText: '🍔',
               hintStyle: const TextStyle(fontSize: 16),
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 6, vertical: 6),
+                horizontal: 6,
+                vertical: 6,
+              ),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
               isDense: true,
             ),
           ),
@@ -382,9 +421,12 @@ class _CategoryTileState extends State<_CategoryTile> {
             decoration: InputDecoration(
               hintText: 'Category name',
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
+                horizontal: 10,
+                vertical: 8,
+              ),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
               isDense: true,
             ),
             onSubmitted: (_) => _save(),
@@ -393,22 +435,29 @@ class _CategoryTileState extends State<_CategoryTile> {
         const SizedBox(width: 8),
         if (_saving)
           const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2))
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
         else ...[
           IconButton(
             onPressed: _save,
-            icon: const Icon(Icons.check_circle,
-                color: AppColors.success, size: 20),
+            icon: const Icon(
+              Icons.check_circle,
+              color: AppColors.success,
+              size: 20,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 4),
           IconButton(
             onPressed: () => setState(() => _editing = false),
-            icon: const Icon(Icons.cancel_outlined,
-                color: AppColors.textSecondary, size: 20),
+            icon: const Icon(
+              Icons.cancel_outlined,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -468,9 +517,12 @@ class _AddCategoryRowState extends State<_AddCategoryRow> {
                 hintText: '🍔',
                 hintStyle: const TextStyle(fontSize: 16),
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 8),
+                  horizontal: 6,
+                  vertical: 8,
+                ),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 isDense: true,
               ),
             ),
@@ -483,9 +535,12 @@ class _AddCategoryRowState extends State<_AddCategoryRow> {
               decoration: InputDecoration(
                 hintText: 'New category name',
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 isDense: true,
               ),
               onSubmitted: (_) => _add(),
@@ -497,20 +552,28 @@ class _AddCategoryRowState extends State<_AddCategoryRow> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Add',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
+            child:
+                _saving
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : const Text(
+                      'Add',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
           ),
         ],
       ),

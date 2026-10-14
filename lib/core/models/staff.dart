@@ -7,20 +7,20 @@ enum StaffRole { owner, manager, cashier, kitchen }
 
 extension StaffRolePermissions on StaffRole {
   String get key => switch (this) {
-        StaffRole.owner => 'owner',
-        StaffRole.manager => 'manager',
-        StaffRole.cashier => 'cashier',
-        StaffRole.kitchen => 'kitchen',
-      };
+    StaffRole.owner => 'owner',
+    StaffRole.manager => 'manager',
+    StaffRole.cashier => 'cashier',
+    StaffRole.kitchen => 'kitchen',
+  };
 }
 
 extension StaffRoleX on StaffRole {
   String get label => switch (this) {
-        StaffRole.owner => 'Owner',
-        StaffRole.manager => 'Manager',
-        StaffRole.cashier => 'Cashier',
-        StaffRole.kitchen => 'Kitchen',
-      };
+    StaffRole.owner => 'Owner',
+    StaffRole.manager => 'Manager',
+    StaffRole.cashier => 'Cashier',
+    StaffRole.kitchen => 'Kitchen',
+  };
 
   String get value => name;
 
@@ -79,26 +79,26 @@ class StaffMember {
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
-        id: json['id'] as String,
-        businessId: json['business_id'] as String,
-        name: json['name'] as String,
-        role: StaffRole.values.firstWhere(
-          (r) => r.value == json['role'],
-          orElse: () => StaffRole.cashier,
-        ),
-        pinHash: json['pin_hash'] as String,
-        pinSalt: json['pin_salt'] as String?,
-        isActive: json['is_active'] as bool? ?? true,
-      );
+    id: json['id'] as String,
+    businessId: json['business_id'] as String,
+    name: json['name'] as String,
+    role: StaffRole.values.firstWhere(
+      (r) => r.value == json['role'],
+      orElse: () => StaffRole.cashier,
+    ),
+    pinHash: json['pin_hash'] as String,
+    pinSalt: json['pin_salt'] as String?,
+    isActive: json['is_active'] as bool? ?? true,
+  );
 
   Map<String, dynamic> toJson() => {
-        'business_id': businessId,
-        'name': name,
-        'role': role.value,
-        'pin_hash': pinHash,
-        'pin_salt': pinSalt,
-        'is_active': isActive,
-      };
+    'business_id': businessId,
+    'name': name,
+    'role': role.value,
+    'pin_hash': pinHash,
+    'pin_salt': pinSalt,
+    'is_active': isActive,
+  };
 
   /// Generates a cryptographically random 32-byte hex salt.
   static String generateSalt() {
@@ -148,4 +148,4 @@ class StaffMember {
 
   /// Returns true if this staff member still uses the old unsalted hash.
   bool get needsPinUpgrade => pinSalt == null;
-} 
+}

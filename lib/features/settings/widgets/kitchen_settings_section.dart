@@ -3,10 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../../../config/business_config.dart';
+import 'kitchen_sound_section.dart';
 
-class KitchenModeSelector extends ConsumerWidget {
+/// Kitchen settings: display-mode picker + sound alert settings.
+class KitchenModeSelector extends StatelessWidget {
   final BusinessConfig config;
   const KitchenModeSelector({super.key, required this.config});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [_KitchenModeCard(config: config), const KitchenSoundSection()],
+  );
+}
+
+class _KitchenModeCard extends ConsumerWidget {
+  final BusinessConfig config;
+  const _KitchenModeCard({required this.config});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,15 +68,20 @@ class KitchenModeSelector extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.06),
+              color: AppColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.15),
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 14, color: AppColors.primary.withValues(alpha:0.7)),
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 14,
+                  color: AppColors.primary.withValues(alpha: 0.7),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -72,7 +90,7 @@ class KitchenModeSelector extends ConsumerWidget {
                         : 'Go to Settings → LAN Connection on the kitchen tablet and enter this device\'s IP address.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.primary.withValues(alpha:0.8),
+                      color: AppColors.primary.withValues(alpha: 0.8),
                       height: 1.4,
                     ),
                   ),
@@ -86,9 +104,9 @@ class KitchenModeSelector extends ConsumerWidget {
   }
 
   void _save(WidgetRef ref, String mode) {
-    ref.read(settingsProvider.notifier).saveConfig(
-          config.copyWith(kitchenMode: mode),
-        );
+    ref
+        .read(settingsProvider.notifier)
+        .saveConfig(config.copyWith(kitchenMode: mode));
   }
 }
 
@@ -117,9 +135,10 @@ class _ModeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primary.withValues(alpha:0.07)
-              : AppColors.surface,
+          color:
+              selected
+                  ? AppColors.primary.withValues(alpha: 0.07)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.divider,
@@ -134,9 +153,7 @@ class _ModeCard extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
+                  color: selected ? AppColors.primary : AppColors.textSecondary,
                 ),
                 const Spacer(),
                 AnimatedContainer(
@@ -147,16 +164,21 @@ class _ModeCard extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: selected ? AppColors.primary : Colors.transparent,
                     border: Border.all(
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.textSecondary.withValues(alpha:0.4),
+                      color:
+                          selected
+                              ? AppColors.primary
+                              : AppColors.textSecondary.withValues(alpha: 0.4),
                       width: 1.5,
                     ),
                   ),
-                  child: selected
-                      ? const Icon(Icons.check_rounded,
-                          size: 10, color: Colors.white)
-                      : null,
+                  child:
+                      selected
+                          ? const Icon(
+                            Icons.check_rounded,
+                            size: 10,
+                            color: Colors.white,
+                          )
+                          : null,
                 ),
               ],
             ),

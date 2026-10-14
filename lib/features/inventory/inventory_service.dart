@@ -18,18 +18,16 @@ class InventoryEntry {
   final Product product;
   final int lowStockThreshold;
 
-  const InventoryEntry({
-    required this.product,
-    this.lowStockThreshold = 5,
-  });
+  const InventoryEntry({required this.product, this.lowStockThreshold = 5});
 
   int get stock => product.effectiveStock;
 
   bool get isLowStock {
     if (!product.trackInventory) return false;
     if (product.hasVariants) {
-      return product.activeVariants
-          .any((v) => v.stockQuantity <= lowStockThreshold);
+      return product.activeVariants.any(
+        (v) => v.stockQuantity <= lowStockThreshold,
+      );
     }
     return stock <= lowStockThreshold;
   }
@@ -65,14 +63,13 @@ class InventoryState {
     String? error,
     bool? isOffline,
     String? lowStockAlert,
-  }) =>
-      InventoryState(
-        entries: entries ?? this.entries,
-        loading: loading ?? this.loading,
-        error: error,
-        isOffline: isOffline ?? this.isOffline,
-        lowStockAlert: lowStockAlert,
-      );
+  }) => InventoryState(
+    entries: entries ?? this.entries,
+    loading: loading ?? this.loading,
+    error: error,
+    isOffline: isOffline ?? this.isOffline,
+    lowStockAlert: lowStockAlert,
+  );
 
   List<InventoryEntry> get lowStockItems =>
       entries.where((e) => e.isLowStock).toList();
@@ -97,12 +94,12 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     required LocalDbService local,
     required SyncQueueService syncQueue,
     required Ref ref,
-  })  : _client = client,
-        _businessId = businessId,
-        _local = local,
-        _syncQueue = syncQueue,
-        _ref = ref,
-        super(const InventoryState(loading: true)) {
+  }) : _client = client,
+       _businessId = businessId,
+       _local = local,
+       _syncQueue = syncQueue,
+       _ref = ref,
+       super(const InventoryState(loading: true)) {
     if (_businessId.isEmpty) {
       state = const InventoryState(loading: false);
       return;
@@ -127,29 +124,32 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
   void _subscribeRealtime() {
     if (!_isOnline) return;
     try {
-      _channel = _client
-          .channel('inventory_products_$_businessId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'products',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'business_id',
-              value: _businessId,
-            ),
-            callback: (payload) {
-              debugPrint('📦 Realtime inventory change: ${payload.eventType}');
-              _load();
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'product_variants',
-            callback: (_) => _load(),
-          )
-          .subscribe();
+      _channel =
+          _client
+              .channel('inventory_products_$_businessId')
+              .onPostgresChanges(
+                event: PostgresChangeEvent.all,
+                schema: 'public',
+                table: 'products',
+                filter: PostgresChangeFilter(
+                  type: PostgresChangeFilterType.eq,
+                  column: 'business_id',
+                  value: _businessId,
+                ),
+                callback: (payload) {
+                  debugPrint(
+                    '📦 Realtime inventory change: ${payload.eventType}',
+                  );
+                  _load();
+                },
+              )
+              .onPostgresChanges(
+                event: PostgresChangeEvent.all,
+                schema: 'public',
+                table: 'product_variants',
+                callback: (_) => _load(),
+              )
+              .subscribe();
     } catch (e) {
       debugPrint('[Inventory] Realtime subscribe failed (offline?): $e');
     }
@@ -200,9 +200,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       final threshold =
           _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
 
-      final products = (rows as List)
-          .map((row) => Product.fromMap(row as Map<String, dynamic>))
-          .toList();
+      final products =
+          (rows as List)
+              .map((row) => Product.fromMap(row as Map<String, dynamic>))
+              .toList();
 
       await _local.upsertProducts(products);
 
@@ -212,17 +213,21 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
             .select()
             .eq('is_active', true)
             .inFilter('product_id', products.map((p) => p.id).toList());
-        final variants = (variantRows as List)
-            .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
-            .toList();
+        final variants =
+            (variantRows as List)
+                .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
+                .toList();
         if (variants.isNotEmpty) await _local.upsertAllVariants(variants);
       }
 
       // Re-read from local cache so local_image_path shows up immediately.
       final mergedProducts = await _local.getProducts(_businessId);
-      final entries = mergedProducts
-          .map((p) => InventoryEntry(product: p, lowStockThreshold: threshold))
-          .toList();
+      final entries =
+          mergedProducts
+              .map(
+                (p) => InventoryEntry(product: p, lowStockThreshold: threshold),
+              )
+              .toList();
 
       state = state.copyWith(
         entries: entries,
@@ -267,16 +272,19 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     if (_isOnline) {
       try {
-        await _client.rpc('apply_stock_change', params: {
-          'p_business_id': businessId,
-          'p_product_id': productId,
-          'p_variant_id': variantId,
-          'p_delta': delta,
-          'p_action': action,
-          'p_performed_by': performedBy,
-          'p_notes': notes,
-          'p_idempotency_key': key,
-        });
+        await _client.rpc(
+          'apply_stock_change',
+          params: {
+            'p_business_id': businessId,
+            'p_product_id': productId,
+            'p_variant_id': variantId,
+            'p_delta': delta,
+            'p_action': action,
+            'p_performed_by': performedBy,
+            'p_notes': notes,
+            'p_idempotency_key': key,
+          },
+        );
         return;
       } catch (e) {
         debugPrint('[Inventory] Stock RPC failed, queuing with same key: $e');
@@ -317,10 +325,9 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     // Optimistic UI + local SQLite first.
     _updateEntry(
-        index,
-        entry.copyWith(
-          product: entry.product.copyWith(stockQuantity: after),
-        ));
+      index,
+      entry.copyWith(product: entry.product.copyWith(stockQuantity: after)),
+    );
     await _local.updateProductStock(productId, after);
     _refreshProductList();
 
@@ -345,10 +352,9 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final after = value.clamp(0, 9999);
 
     _updateEntry(
-        index,
-        entry.copyWith(
-          product: entry.product.copyWith(stockQuantity: after),
-        ));
+      index,
+      entry.copyWith(product: entry.product.copyWith(stockQuantity: after)),
+    );
     await _local.updateProductStock(productId, after);
     _refreshProductList();
 
@@ -372,25 +378,29 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final newVal = !entry.product.isAvailable;
 
     _updateEntry(
-        index,
-        entry.copyWith(
-          product: entry.product.copyWith(isAvailable: newVal),
-        ));
+      index,
+      entry.copyWith(product: entry.product.copyWith(isAvailable: newVal)),
+    );
 
     await _local.updateProductAvailability(productId, newVal);
     _refreshProductList();
 
     if (_isOnline) {
       try {
-        await _client.from('products').update({
-          'is_available': newVal,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', productId);
+        await _client
+            .from('products')
+            .update({
+              'is_available': newVal,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', productId);
         _refreshProductList();
       } catch (e) {
         _updateEntry(index, entry);
         await _local.updateProductAvailability(
-            productId, entry.product.isAvailable);
+          productId,
+          entry.product.isAvailable,
+        );
         _refreshProductList();
         state = state.copyWith(error: 'Failed to update availability: $e');
       }
@@ -398,8 +408,12 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
   }
 
   Future<void> restock(String productId, int quantity, {String? notes}) =>
-      adjustStock(productId, quantity,
-          action: 'restock', notes: notes ?? 'Restock');
+      adjustStock(
+        productId,
+        quantity,
+        action: 'restock',
+        notes: notes ?? 'Restock',
+      );
 
   // ── Low stock alerts ──────────────────────────────────────────────────────
 
@@ -414,12 +428,14 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       final lowItems = entries.where((e) => e.isLowStock).toList();
       if (lowItems.isEmpty) return;
 
-      final alreadyAlerted =
-          await _local.getRecentlyAlertedProductIds(_businessId);
+      final alreadyAlerted = await _local.getRecentlyAlertedProductIds(
+        _businessId,
+      );
 
-      final toAlert = lowItems
-          .where((e) => !alreadyAlerted.contains(e.product.id))
-          .toList();
+      final toAlert =
+          lowItems
+              .where((e) => !alreadyAlerted.contains(e.product.id))
+              .toList();
       if (toAlert.isEmpty) return;
 
       // Mark first so concurrent loads don't double-fire.
@@ -471,8 +487,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     final newVariants = List<ProductVariant>.from(entry.product.variants);
     newVariants[vIdx] = newVariants[vIdx].copyWith(stockQuantity: after);
-    _updateEntry(index,
-        entry.copyWith(product: entry.product.copyWith(variants: newVariants)));
+    _updateEntry(
+      index,
+      entry.copyWith(product: entry.product.copyWith(variants: newVariants)),
+    );
 
     await adjustVariantStock(
       businessId: _businessId,
@@ -486,19 +504,36 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     _refreshProductList();
   }
 
-  Future<void> restockVariant(String productId, String variantId, int qty,
-          {String? notes}) =>
-      adjustVariant(productId, variantId, qty,
-          action: 'restock', notes: notes ?? 'Restock');
+  Future<void> restockVariant(
+    String productId,
+    String variantId,
+    int qty, {
+    String? notes,
+  }) => adjustVariant(
+    productId,
+    variantId,
+    qty,
+    action: 'restock',
+    notes: notes ?? 'Restock',
+  );
 
-  Future<void> setVariantStock(String productId, String variantId, int value,
-      {String? notes}) async {
+  Future<void> setVariantStock(
+    String productId,
+    String variantId,
+    int value, {
+    String? notes,
+  }) async {
     final entry = state.entries.firstWhere((e) => e.product.id == productId);
-    final current = entry.product.variants
-        .firstWhere((v) => v.id == variantId)
-        .stockQuantity;
-    await adjustVariant(productId, variantId, value.clamp(0, 9999) - current,
-        notes: notes ?? 'Manual stock set');
+    final current =
+        entry.product.variants
+            .firstWhere((v) => v.id == variantId)
+            .stockQuantity;
+    await adjustVariant(
+      productId,
+      variantId,
+      value.clamp(0, 9999) - current,
+      notes: notes ?? 'Manual stock set',
+    );
   }
 
   // ── Variant stock adjustment (low-level) ──────────────────────────────────
@@ -533,19 +568,19 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
 final inventoryProvider =
     StateNotifierProvider<InventoryNotifier, InventoryState>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  final businessId = ref.watch(activeBusinessIdProvider) ?? '';
-  final local = ref.read(localDbServiceProvider);
-  final syncQueue = ref.read(syncQueueServiceProvider);
+      final client = ref.watch(supabaseClientProvider);
+      final businessId = ref.watch(activeBusinessIdProvider) ?? '';
+      final local = ref.read(localDbServiceProvider);
+      final syncQueue = ref.read(syncQueueServiceProvider);
 
-  return InventoryNotifier(
-    client: client,
-    businessId: businessId,
-    local: local,
-    syncQueue: syncQueue,
-    ref: ref,
-  );
-});
+      return InventoryNotifier(
+        client: client,
+        businessId: businessId,
+        local: local,
+        syncQueue: syncQueue,
+        ref: ref,
+      );
+    });
 
 final lowStockProvider = Provider<List<InventoryEntry>>((ref) {
   return ref.watch(inventoryProvider).lowStockItems;
