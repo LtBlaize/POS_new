@@ -9,12 +9,32 @@ import '../../../../core/providers/product_provider.dart';
 import '../../../../core/providers/promo_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 
+const _kPromoColor = Color(0xFFE67700);
+
 class PromoGrid extends ConsumerWidget {
   const PromoGrid({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final promos = ref.watch(purchasablePromosProvider);
+    final allPromos = ref.watch(purchasablePromosProvider);
+    final query = ref.watch(posSearchQueryProvider).trim().toLowerCase();
+
+    final promos =
+        query.isEmpty
+            ? allPromos
+            : allPromos.where((p) {
+              if (p.name.toLowerCase().contains(query)) return true;
+              if ((p.description ?? '').toLowerCase().contains(query)) {
+                return true;
+              }
+              // Also match the products inside the promo, so "burger"
+              // finds "Burger Combo" and any promo containing a burger.
+              return p.items.any(
+                (i) =>
+                    (i.productName ?? '').toLowerCase().contains(query) ||
+                    (i.variantName ?? '').toLowerCase().contains(query),
+              );
+            }).toList();
 
     if (promos.isEmpty) {
       return Center(
@@ -28,7 +48,9 @@ class PromoGrid extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'No promos available right now',
+              query.isEmpty
+                  ? 'No promos available right now'
+                  : 'No promos match "$query"',
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary.withValues(alpha: 0.5),
@@ -49,6 +71,55 @@ class PromoGrid extends ConsumerWidget {
       ),
       itemCount: promos.length,
       itemBuilder: (context, i) => _PromoCard(promo: promos[i]),
+    );
+  }
+}
+
+/// Horizontal promo row shown above the product grid.
+/// Visible on "All", and on any category while a search is active.
+class PromoStrip extends ConsumerWidget {
+  const PromoStrip({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final category = ref.watch(selectedCategoryProvider);
+    final query = ref.watch(posSearchQueryProvider).trim().toLowerCase();
+
+    // On a specific category with no search, keep the grid clean.
+    if (category != null && query.isEmpty) return const SizedBox.shrink();
+
+    final all = ref.watch(purchasablePromosProvider);
+    final promos =
+        query.isEmpty
+            ? all
+            : all.where((p) {
+              if (p.name.toLowerCase().contains(query)) return true;
+              if ((p.description ?? '').toLowerCase().contains(query)) {
+                return true;
+              }
+              return p.items.any(
+                (i) =>
+                    (i.productName ?? '').toLowerCase().contains(query) ||
+                    (i.variantName ?? '').toLowerCase().contains(query),
+              );
+            }).toList();
+
+    if (promos.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 166,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: promos.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder:
+            (_, i) => SizedBox(width: 190, child: _PromoCard(promo: promos[i])),
+      ),
     );
   }
 }
@@ -126,78 +197,122 @@ class _PromoCard extends ConsumerWidget {
 
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: () => _handleTap(context, ref),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.divider),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                height: 48,
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  isBundle
-                      ? Icons.card_giftcard_rounded
-                      : Icons.local_offer_rounded,
-                  size: 16,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                promo.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isBundle
-                    ? '$itemCount item${itemCount == 1 ? '' : 's'}'
-                    : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '\u20b1${promo.effectivePrice.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                    ),
+                  color: _kPromoColor.withValues(alpha: 0.12),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(13),
                   ),
-                  if (promo.savings > 0) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      'Save \u20b1${promo.savings.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isBundle
+                          ? Icons.card_giftcard_rounded
+                          : Icons.local_offer_rounded,
+                      size: 22,
+                      color: _kPromoColor.withValues(alpha: 0.85),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _kPromoColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PROMO',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
-                ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        promo.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isBundle
+                            ? '$itemCount item${itemCount == 1 ? '' : 's'}'
+                            : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '\u20b1${promo.effectivePrice.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (promo.savings > 0) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              'Save \u20b1${promo.savings.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),

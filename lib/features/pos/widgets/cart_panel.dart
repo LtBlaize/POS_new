@@ -516,7 +516,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     const Text(
                       'Total',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 22,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
                       ),
@@ -525,9 +525,9 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                     Text(
                       '₱${total.toStringAsFixed(2)}',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 26,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -566,10 +566,10 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          hasKitchen ? AppColors.warning : AppColors.primary,
+                      backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.divider,
+                      disabledForegroundColor: AppColors.textSecondary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

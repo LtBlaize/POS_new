@@ -71,7 +71,9 @@ class KitchenAlertService {
 
   Future<void> _playOnce(Source src, double volume) async {
     final player = await _ensurePlayer();
-    final done = player.onPlayerComplete.first.catchError((_) {});
+    final Future<void> done = player.onPlayerComplete.first
+        .then<void>((_) {})
+        .catchError((_) {});
     await player.setVolume(volume);
     await player.play(src);
     await done.timeout(const Duration(seconds: 20), onTimeout: () {});

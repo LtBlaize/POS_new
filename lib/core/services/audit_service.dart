@@ -30,6 +30,7 @@ class AuditAction {
   static const inventoryAdjust = 'inventory_adjust';
   static const creditAdded = 'credit_added';
   static const creditPaid = 'credit_paid';
+  static const drawerOpenNoSale = 'drawer_open_no_sale';
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

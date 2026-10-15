@@ -97,12 +97,6 @@ class SettingsScreen extends ConsumerWidget {
                 _SectionCard(child: const TableSettingsSection()),
               ],
 
-              // ── Kitchen sound — restaurant only ───────────────────────
-              if (isRestaurant) ...[
-                const SizedBox(height: 16),
-                _SectionCard(child: const KitchenSoundSection()),
-              ],
-
               // ── Printer — all POS roles ───────────────────────────────
               const SizedBox(height: 16),
               _SectionCard(child: const PrinterSettingsSection()),

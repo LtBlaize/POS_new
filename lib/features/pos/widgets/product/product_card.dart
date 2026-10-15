@@ -8,18 +8,37 @@ import '../../../../core/providers/product_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../dialogs/variant_picker_dialog.dart';
 
-const _categoryGradients = <String, List<Color>>{
-  'Food': [Color(0xFFFF9966), Color(0xFFFF5E62)],
-  'Drinks': [Color(0xFF43C6AC), Color(0xFF191654)],
-  'Apparel': [Color(0xFF667EEA), Color(0xFF764BA2)],
-  'Stationery': [Color(0xFFF7971E), Color(0xFFFFD200)],
-  'Electronics': [Color(0xFF2193B0), Color(0xFF6DD5ED)],
-  'Desserts': [Color(0xFFDA4453), Color(0xFF89216B)],
-};
+const _tilePalette = <Color>[
+  Color(0xFF0C8599), // teal
+  Color(0xFF7048E8), // violet
+  Color(0xFF2F9E44), // green
+  Color(0xFFC2255C), // raspberry
+  Color(0xFF495057), // slate
+  Color(0xFF8D5524), // brown
+];
 
-List<Color> _gradientFor(String category) =>
-    _categoryGradients[category] ??
-    [AppColors.primary, const Color(0xFF1A4A8A)];
+/// Stable color per category (or per product name when there's no category).
+Color _tileColorFor(String key) {
+  final k = key.trim().toLowerCase();
+  if (k.isEmpty) return AppColors.textSecondary;
+  var h = 0;
+  for (final c in k.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return _tilePalette[h % _tilePalette.length];
+}
+
+IconData _tileIconFor(String category) =>
+    switch (category.trim().toLowerCase()) {
+      'food' || 'meal' || 'burger' => Icons.lunch_dining_rounded,
+      'drinks' || 'drink' || 'beverage' => Icons.local_drink_rounded,
+      'dessert' || 'desserts' || 'candy' => Icons.icecream_rounded,
+      'snack' || 'snacks' => Icons.cookie_rounded,
+      'apparel' => Icons.checkroom_rounded,
+      'stationery' => Icons.edit_rounded,
+      'electronics' => Icons.devices_rounded,
+      _ => Icons.sell_rounded,
+    };
 
 class ProductCard extends ConsumerStatefulWidget {
   final Product product;
@@ -111,7 +130,9 @@ class _ProductCardState extends ConsumerState<ProductCard>
     final inCart = cartItems
         .where((i) => i.product.id == widget.product.id)
         .fold(0, (sum, i) => sum + i.quantity);
-    final gradColors = _gradientFor(liveProduct.category);
+    final accent = _tileColorFor(
+      liveProduct.category.isEmpty ? liveProduct.name : liveProduct.category,
+    );
 
     return ScaleTransition(
       scale: _scaleAnim,
@@ -139,7 +160,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Gradient band (proportional height) ────────────────
+              // ── Icon band ────────────────
               SizedBox(
                 height: 75,
                 child: Stack(
@@ -147,11 +168,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: gradColors,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: accent.withValues(alpha: 0.12),
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(13),
                         ),
@@ -161,22 +178,17 @@ class _ProductCardState extends ConsumerState<ProductCard>
                           duration: const Duration(milliseconds: 200),
                           child:
                               _added
-                                  ? const Icon(
+                                  ? Icon(
                                     Icons.check_rounded,
-                                    color: Colors.white,
+                                    color: accent,
                                     size: 32,
-                                    key: ValueKey('check'),
+                                    key: const ValueKey('check'),
                                   )
-                                  : Text(
-                                    liveProduct.name[0],
-                                    key: const ValueKey('letter'),
-                                    style: TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.4,
-                                      ),
-                                    ),
+                                  : Icon(
+                                    _tileIconFor(liveProduct.category),
+                                    key: const ValueKey('icon'),
+                                    size: 30,
+                                    color: accent.withValues(alpha: 0.75),
                                   ),
                         ),
                       ),
@@ -205,7 +217,7 @@ class _ProductCardState extends ConsumerState<ProductCard>
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
-                              color: gradColors.first,
+                              color: accent,
                             ),
                           ),
                         ),
@@ -251,25 +263,23 @@ class _ProductCardState extends ConsumerState<ProductCard>
                                 child: Text(
                                   '₱${liveProduct.price.toStringAsFixed(0)}',
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: gradColors.first,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                               ),
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: gradColors.first.withValues(
-                                    alpha: 0.08,
-                                  ),
+                                  color: accent.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Icon(
                                   Icons.add_rounded,
                                   size: 13,
-                                  color: gradColors.first,
+                                  color: accent,
                                 ),
                               ),
                             ],

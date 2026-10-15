@@ -1,11 +1,14 @@
 // lib/features/pos/widgets/layout/top_bar.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/providers/cart_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../../../core/providers/product_provider.dart';
 import '../../../../features/auth/auth_provider.dart';
 import '../../../../core/providers/role_permissions_provider.dart';
+import '../../../../core/services/audit_service.dart';
+import '../../../../core/services/thermal_print_service.dart';
+import '../../../../features/auth/manager_override_dialog.dart';
 
 // Matches pos_screen.dart breakpoint
 const _kBreakpointSm = 900.0;
@@ -55,8 +58,7 @@ class TopBar extends ConsumerWidget {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < _kBreakpointSm;
 
-    final cartItems = ref.watch(cartProvider);
-    final itemCount = cartItems.fold(0, (sum, i) => sum + i.quantity);
+
     final businessName = ref.watch(businessProvider)?.name ?? '';
     final initials = _initials(businessName);
     final now = DateTime.now();
@@ -109,94 +111,17 @@ class TopBar extends ConsumerWidget {
 
           const Spacer(),
 
-          // Search bar — narrower on compact
-          Container(
-            width: isCompact ? 180 : 280,
-            height: isCompact ? 32 : 38,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: Row(
-              children: [
-                SizedBox(width: isCompact ? 8 : 10),
-                Icon(
-                  Icons.search,
-                  size: isCompact ? 15 : 18,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                // Replace the TextField widget in top_bar.dart
-                Expanded(
-                  child: TextField(
-                    onChanged:
-                        (v) =>
-                            ref.read(posSearchQueryProvider.notifier).state = v,
-                    style: TextStyle(fontSize: isCompact ? 12 : 13),
-                    decoration: InputDecoration(
-                      hintText:
-                          isCompact
-                              ? 'Search…'
-                              : 'Search products or scan barcode…',
-                      hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.7),
-                        fontSize: isCompact ? 12 : 13,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-                // Hide keyboard shortcut hint on compact
-                if (onCameraTap != null)
-                  GestureDetector(
-                    onTap: onCameraTap,
-                    child: Container(
-                      margin: const EdgeInsets.all(4),
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.qr_code_scanner_rounded,
-                        size: isCompact ? 16 : 18,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  )
-                else if (!isCompact)
-                  Container(
-                    margin: const EdgeInsets.all(4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      '⌘K',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          // Search bar
+          _SearchField(compact: isCompact, onCameraTap: onCameraTap),
 
           SizedBox(width: isCompact ? 8 : 16),
 
-          // Cart badge
-          _IconBadge(
-            icon: Icons.shopping_cart_outlined,
-            count: itemCount,
-            color: AppColors.primary,
-            compact: isCompact,
-          ),
+// Open cash drawer (manager PIN required)
+          _DrawerButton(compact: isCompact),
 
           SizedBox(width: isCompact ? 4 : 8),
+
+
 
           // Notifications — hide on very compact to save space
           if (!isCompact)
@@ -342,6 +267,120 @@ class TopBar extends ConsumerWidget {
       ][m - 1];
 }
 
+class _SearchField extends ConsumerStatefulWidget {
+  final bool compact;
+  final VoidCallback? onCameraTap;
+  const _SearchField({required this.compact, this.onCameraTap});
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String v) {
+    setState(() {}); // show/hide the clear button
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 180), () {
+      ref.read(posSearchQueryProvider.notifier).state = v;
+    });
+  }
+
+  void _clear() {
+    _debounce?.cancel();
+    _controller.clear();
+    setState(() {});
+    ref.read(posSearchQueryProvider.notifier).state = '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = widget.compact;
+
+    // If something else clears the query (category tap, tab switch),
+    // clear the visible text too so the box never lies.
+    ref.listen<String>(posSearchQueryProvider, (_, next) {
+      if (next.isEmpty && _controller.text.isNotEmpty) {
+        _debounce?.cancel();
+        _controller.clear();
+        setState(() {});
+      }
+    });
+
+    return Container(
+      width: compact ? 180 : 300,
+      height: compact ? 32 : 38,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: compact ? 8 : 10),
+          Icon(
+            Icons.search,
+            size: compact ? 15 : 18,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              onChanged: _onChanged,
+              style: TextStyle(fontSize: compact ? 12 : 13),
+              decoration: InputDecoration(
+                hintText:
+                    compact ? 'Search…' : 'Search products or scan barcode…',
+                hintStyle: TextStyle(
+                  color: AppColors.textSecondary.withValues(alpha: 0.7),
+                  fontSize: compact ? 12 : 13,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          if (_controller.text.isNotEmpty)
+            GestureDetector(
+              onTap: _clear,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(
+                  Icons.close,
+                  size: compact ? 15 : 17,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            )
+          else if (widget.onCameraTap != null)
+            GestureDetector(
+              onTap: widget.onCameraTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: compact ? 16 : 18,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _IconBadge extends StatelessWidget {
   final IconData icon;
   final int count;
@@ -396,6 +435,73 @@ class _IconBadge extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ── Cash drawer button ────────────────────────────────────────────────────────
+
+class _DrawerButton extends ConsumerWidget {
+  final bool compact;
+  const _DrawerButton({required this.compact});
+
+  Future<void> _open(BuildContext context, WidgetRef ref) async {
+    // Grab these before the await so we never touch ref after disposal.
+    final audit = ref.read(auditServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final approver = await requireManagerOverride(
+      context: context,
+      ref: ref,
+      action: 'Open Cash Drawer (No Sale)',
+    );
+    if (approver == null) return;
+
+    final ok = await ThermalPrintService.openCashDrawer();
+
+    await audit.log(
+      actionType: AuditAction.drawerOpenNoSale,
+      description:
+          ok
+              ? 'Cash drawer opened (no sale)'
+              : 'Cash drawer open FAILED (no sale)',
+      authorisedBy: approver,
+      metadata: {'success': ok},
+    );
+
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open drawer. Check the printer connection in Settings.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final size = compact ? 32.0 : 38.0;
+    return Tooltip(
+      message: 'Open cash drawer',
+      child: GestureDetector(
+        onTap: () => _open(context, ref),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(compact ? 8 : 10),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Icon(
+            Icons.point_of_sale,
+            size: compact ? 16 : 20,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ),
     );
   }
 }

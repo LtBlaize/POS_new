@@ -510,7 +510,12 @@ class _POSMainState extends ConsumerState<_POSMain> {
           child:
               ref.watch(posViewModeProvider) == PosViewMode.promos
                   ? const PromoGrid()
-                  : const ProductGrid(),
+                  : Column(
+                    children: const [
+                      PromoStrip(),
+                      Expanded(child: ProductGrid()),
+                    ],
+                  ),
         ),
       ],
     );
@@ -1218,114 +1223,59 @@ class _AdaptiveSidebar extends ConsumerWidget {
             ),
           ),
 
+          const Divider(color: Colors.white12, height: 1),
+          SizedBox(height: compact ? 6 : 8),
+
+          // Close shift: end-of-day action, visually distinct
           Consumer(
             builder: (context, ref, _) {
               final shift = ref.watch(currentShiftProvider).value;
               if (shift == null) return const SizedBox.shrink();
-              return Tooltip(
-                message: 'Close Shift',
-                child: GestureDetector(
-                  onTap: () => _showCloseShift(context, ref),
-                  child: Container(
-                    margin: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
-                    padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.lock_clock_outlined,
-                          color: const Color(0xFFE94560).withValues(alpha: 0.8),
-                          size: compact ? 18 : 22,
-                        ),
-                        if (!compact) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Close',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: const Color(
-                                0xFFE94560,
-                              ).withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+              return Column(
+                children: [
+                  _SidebarAction(
+                    icon: Icons.lock_clock_outlined,
+                    label: 'Close shift',
+                    tooltip: 'Close shift',
+                    color: accent,
+                    filled: true,
+                    compact: compact,
+                    onTap: () => _showCloseShift(context, ref),
                   ),
-                ),
+                  SizedBox(height: compact ? 4 : 6),
+                  const Divider(
+                    color: Colors.white12,
+                    height: 1,
+                    indent: 14,
+                    endIndent: 14,
+                  ),
+                  SizedBox(height: compact ? 4 : 6),
+                ],
               );
             },
           ),
 
-          const Divider(color: Colors.white12, height: 1),
-
-          Tooltip(
-            message: 'Lock',
-            child: GestureDetector(
-              onTap: () {
-                ref.read(activeStaffProvider.notifier).logout();
-                ref.read(appLockedProvider.notifier).state = true;
-              },
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
-                padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.lock_outline_rounded,
-                      color: Colors.white.withValues(alpha: 0.4),
-                      size: compact ? 18 : 22,
-                    ),
-                    if (!compact) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Lock',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.white.withValues(alpha: 0.4),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+          // Session actions: neutral, grouped together
+          _SidebarAction(
+            icon: Icons.lock_outline_rounded,
+            label: 'Lock',
+            tooltip: 'Lock',
+            color: Colors.white.withValues(alpha: 0.55),
+            compact: compact,
+            onTap: () {
+              ref.read(activeStaffProvider.notifier).logout();
+              ref.read(appLockedProvider.notifier).state = true;
+            },
           ),
-
           if (ref.watch(activeStaffTabsProvider).contains('settings'))
-            Tooltip(
-              message: 'Log out',
-              child: GestureDetector(
-                onTap: () => _logout(context, ref),
-                child: Container(
-                  margin: EdgeInsets.symmetric(
-                    vertical: compact ? 4 : 8,
-                    horizontal: compact ? 6 : 10,
-                  ),
-                  padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.logout_rounded,
-                        color: Colors.white.withValues(alpha: 0.4),
-                        size: compact ? 18 : 22,
-                      ),
-                      if (!compact) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Logout',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+            _SidebarAction(
+              icon: Icons.logout_rounded,
+              label: 'Logout',
+              tooltip: 'Log out',
+              color: Colors.white.withValues(alpha: 0.55),
+              compact: compact,
+              onTap: () => _logout(context, ref),
             ),
-
-          SizedBox(height: compact ? 4 : 8),
         ],
       ),
     );
@@ -1351,4 +1301,70 @@ class _ScreenEntry {
     required this.label,
     required this.widget,
   });
+}
+// ── Sidebar action tile (Close shift / Lock / Logout) ────────────────────────
+
+class _SidebarAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String tooltip;
+  final Color color;
+  final bool filled;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _SidebarAction({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.color,
+    required this.compact,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: double.infinity,
+          margin: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 10,
+            vertical: 2,
+          ),
+          padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
+          decoration:
+              filled
+                  ? BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(compact ? 8 : 10),
+                    border: Border.all(color: color.withValues(alpha: 0.35)),
+                  )
+                  : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: compact ? 18 : 22, color: color),
+              if (!compact) ...[
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
+                    color: color,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
