@@ -23,7 +23,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // Keep this in sync with the `subscription_plan` Postgres enum.
 const ALLOWED_PLANS = ["starter", "growth", "pro"] as const;
-const ALLOWED_ACTIONS = ["change_plan", "extend", "suspend", "reactivate"] as const;
+const ALLOWED_ACTIONS = ["change_plan", "check_downgrade", "extend", "suspend", "reactivate"] as const;
 type Action = (typeof ALLOWED_ACTIONS)[number];
 
 interface ActionBody {
@@ -69,7 +69,7 @@ serve(async (req: Request) => {
   if (!isUuid(body.business_id)) {
     return jsonRes({ error: "business_id must be a uuid" }, 400);
   }
-  if (body.action === "change_plan") {
+  if (body.action === "change_plan" || body.action === "check_downgrade") {
     if (!ALLOWED_PLANS.includes(body.new_plan as (typeof ALLOWED_PLANS)[number])) {
       return jsonRes({ error: `new_plan must be one of: ${ALLOWED_PLANS.join(", ")}` }, 400);
     }
@@ -131,6 +131,17 @@ serve(async (req: Request) => {
       }));
       break;
     }
+    case "check_downgrade": {
+      const { data, error } = await serviceClient.rpc("check_downgrade", {
+        p_business_id: body.business_id,
+        p_target_plan: body.new_plan,
+      });
+      if (error) {
+        console.error("check_downgrade failed:", error);
+        return jsonRes({ error: "failed to check downgrade" }, 500);
+      }
+      return jsonRes({ ok: true, blockers: data ?? [] }, 200);
+    }
     case "extend": {
       ({ error: rpcError } = await serviceClient.rpc("admin_extend_trial", {
         p_business_id: body.business_id,
@@ -152,10 +163,15 @@ serve(async (req: Request) => {
     }
   }
 
-  if (rpcError) {
-    console.error(`${body.action} failed:`, rpcError);
-    return jsonRes({ error: `failed to ${body.action}` }, 500);
+if (rpcError) {
+  if (rpcError.message?.includes("downgrade_blocked")) {
+    let blockers: unknown = [];
+    try { blockers = JSON.parse(rpcError.details ?? "[]"); } catch { /* keep [] */ }
+    return jsonRes({ error: "downgrade_blocked", blockers }, 409);
   }
+  console.error(`${body.action} failed:`, rpcError);
+  return jsonRes({ error: `failed to ${body.action}` }, 500);
+}
 
   return jsonRes({ ok: true }, 200);
 });

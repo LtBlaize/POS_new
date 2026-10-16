@@ -33,7 +33,23 @@ class LanServerService {
   // Injected from outside (see featureManagerProvider in auth_provider.dart)
   // so this core service never imports a feature-layer provider directly.
   // null = unlimited / not yet known.
-  int? maxTerminals;
+  int? _maxTerminals;
+  int? get maxTerminals => _maxTerminals;
+
+  /// Lowering the cap (e.g. Growth -> Starter) used to leave already-connected
+  /// devices attached. Now the newest connections beyond the cap are closed
+  /// with the same 4001 code the connect-time check uses. The main POS is
+  /// terminal #1, so LAN clients are allowed up to cap - 1.
+  set maxTerminals(int? cap) {
+    _maxTerminals = cap;
+    if (cap == null) return;
+    final allowed = cap < 1 ? 0 : cap - 1;
+    while (_clients.length > allowed) {
+      final extra = _clients.last; // Set keeps insertion order: last = newest
+      _clients.remove(extra);
+      extra.sink.close(4001, 'Terminal limit reached for your plan');
+    }
+  }
 
   LanServerService(this._ref);
 

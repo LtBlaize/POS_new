@@ -198,6 +198,8 @@ class SyncQueueService {
       case 'upsert_shift':
         return 'shift:$recordId';
       case 'adjust_stock':
+      case 'deactivate_product':
+      case 'restore_product':
         return 'product:$recordId';
       case 'adjust_variant_stock':
         return 'variant:$recordId';
@@ -621,6 +623,24 @@ class SyncQueueService {
             .from('audit_logs')
             .upsert(payload, onConflict: 'id', ignoreDuplicates: true);
 
+      case 'deactivate_product':
+        await _client
+            .from('products')
+            .update({
+              'is_active': false,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', recordId);
+
+      case 'restore_product':
+        await _client
+            .from('products')
+            .update({
+              'is_active': true,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', recordId);
+
       case 'add_staff':
         await _client.from('staff_members').insert(payload);
 
@@ -887,6 +907,9 @@ class SyncQueueService {
     }
     if (msg.contains('table_limit_exceeded')) {
       return 'This table couldn\'t be added — your plan\'s table limit was reached before this synced. Upgrade your plan to add more tables.';
+    }
+    if (msg.contains('room_limit_exceeded')) {
+      return 'This room couldn\'t be added, because your plan\'s room limit was reached before this synced. Upgrade your plan to add more rooms.';
     }
     return null;
   }

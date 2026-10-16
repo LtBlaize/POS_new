@@ -1087,6 +1087,66 @@ class LocalDbService {
     return _productFromRow(rows.first);
   }
 
+  Future<void> reactivateProductLocal(String productId) => _write((d) async {
+    await d.update(
+      'products',
+      {'is_active': 1},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  });
+
+  /// Removed (soft-deleted) products, for the "Show removed" view when offline.
+  Future<List<Product>> getInactiveProducts(String businessId) async {
+    final d = await db;
+    final rows = await d.query(
+      'products',
+      where: 'business_id = ? AND is_active = 0',
+      whereArgs: [businessId],
+      orderBy: 'name',
+    );
+    return rows.map(_productFromRow).toList();
+  }
+
+  /// Soft delete: getProducts / findByBarcode both filter is_active = 1,
+  /// so the product disappears everywhere. order_items history is untouched.
+  Future<void> deactivateProductLocal(String productId) => _write((d) async {
+    await d.update(
+      'products',
+      {'is_active': 0},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  });
+
+  /// The server only returns ACTIVE products, so anything cached locally
+  /// that the server no longer lists was removed on another device.
+  Future<void> deactivateMissingProducts(
+    String businessId,
+    List<String> keepIds,
+  ) => _write((d) async {
+    final rows = await d.query(
+      'products',
+      columns: ['id'],
+      where: 'business_id = ? AND is_active = 1',
+      whereArgs: [businessId],
+    );
+    final keep = keepIds.toSet();
+    final stale =
+        rows.map((r) => r['id'] as String).where((id) => !keep.contains(id));
+    if (stale.isEmpty) return;
+    final batch = d.batch();
+    for (final id in stale) {
+      batch.update(
+        'products',
+        {'is_active': 0},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+
   Future<void> updateProductAvailability(
     String productId,
     bool isAvailable,
@@ -2131,6 +2191,47 @@ class LocalDbService {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
+  });
+
+  /// Makes the local staff set for [businessId] exactly match the server
+  /// snapshot. upsertStaff alone never removes anyone, so a deactivated
+  /// employee stayed in SQLite and could still unlock a device by PIN offline.
+  /// An empty snapshot is ignored (the owner always exists) so a bad fetch
+  /// can never wipe the cache and lock everyone out.
+  Future<void> replaceStaff(String businessId, List<StaffMember> members) =>
+      _write((d) async {
+        if (members.isEmpty) return;
+        final now = DateTime.now().toIso8601String();
+        await d.transaction((txn) async {
+          await txn.delete(
+            'staff_members',
+            where: 'business_id = ?',
+            whereArgs: [businessId],
+          );
+          for (final m in members) {
+            await txn.insert('staff_members', {
+              'id': m.id,
+              'business_id': m.businessId,
+              'name': m.name,
+              'role': m.role.value,
+              'pin_hash': m.pinHash,
+              'pin_salt': m.pinSalt,
+              'is_active': m.isActive ? 1 : 0,
+              'synced_at': now,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        });
+      });
+
+  /// Immediately blocks a removed staff member from PIN unlock on this
+  /// device, without waiting for the next server sync.
+  Future<void> deactivateStaffLocal(String staffId) => _write((d) async {
+    await d.update(
+      'staff_members',
+      {'is_active': 0},
+      where: 'id = ?',
+      whereArgs: [staffId],
+    );
   });
 
   Future<List<StaffMember>> getStaff(String businessId) async {

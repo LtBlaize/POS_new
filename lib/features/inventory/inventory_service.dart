@@ -11,6 +11,7 @@ import '../../core/providers/product_provider.dart';
 import '../../config/business_config.dart';
 import '../../core/providers/app_context_provider.dart';
 import '../../core/models/product_variant.dart';
+import '../../core/services/audit_service.dart';
 
 // ── InventoryEntry ────────────────────────────────────────────────────────────
 
@@ -206,6 +207,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
               .toList();
 
       await _local.upsertProducts(products);
+      await _local.deactivateMissingProducts(
+        _businessId,
+        products.map((p) => p.id).toList(),
+      );
 
       if (products.isNotEmpty) {
         final variantRows = await _client
@@ -407,6 +412,118 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     }
   }
 
+  // ── Remove (soft delete) ──────────────────────────────────────────────────
+
+  Future<void> restoreProduct(String productId) async {
+    _ref
+        .read(auditServiceProvider)
+        .log(
+          actionType: AuditAction.productRestored,
+          description: 'Restored product $productId',
+          entityType: 'product',
+          entityId: productId,
+        );
+    await _local.reactivateProductLocal(productId);
+    _refreshProductList();
+
+    var synced = false;
+    if (_isOnline) {
+      try {
+        await _client
+            .from('products')
+            .update({
+              'is_active': true,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', productId);
+        synced = true;
+      } catch (e) {
+        debugPrint('[Inventory] Restore failed online, queuing: $e');
+      }
+    }
+    if (!synced) {
+      await _syncQueue.enqueue(
+        operation: 'restore_product',
+        tableName: 'products',
+        recordId: productId,
+        payload: {'business_id': _businessId},
+      );
+    }
+
+    // Re-read from the local cache (not _load) so a queued restore isn't
+    // hidden again by deactivateMissingProducts before it syncs.
+    final threshold =
+        _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
+    final cached = await _local.getProducts(_businessId);
+    state = state.copyWith(
+      entries:
+          cached
+              .map((p) => InventoryEntry(product: p, lowStockThreshold: threshold))
+              .toList(),
+    );
+    _ref.invalidate(removedProductsProvider);
+  }
+
+  /// Returns null on success, or a message explaining why it was blocked.
+  Future<String?> removeProduct(String productId) async {
+    final index = state.entries.indexWhere((e) => e.product.id == productId);
+    if (index < 0) return null;
+
+    // Block if an active promo uses this product.
+    final promos = await _local.getPromos(_businessId);
+    final usedIn =
+        promos
+            .where(
+              (p) =>
+                  p.isActive && p.items.any((i) => i.productId == productId),
+            )
+            .map((p) => p.name)
+            .toList();
+    if (usedIn.isNotEmpty) {
+      return 'Used in active promo: ${usedIn.join(', ')}. '
+          'Deactivate the promo first.';
+    }
+
+    final removed = state.entries[index].product;
+    _ref
+        .read(auditServiceProvider)
+        .log(
+          actionType: AuditAction.productRemoved,
+          description: 'Removed product "${removed.name}"',
+          entityType: 'product',
+          entityId: productId,
+          metadata: {'name': removed.name, 'price': removed.price},
+        );
+
+    // Optimistic UI + local first.
+    state = state.copyWith(entries: List.of(state.entries)..removeAt(index));
+    await _local.deactivateProductLocal(productId);
+    _refreshProductList();
+
+    if (_isOnline) {
+      try {
+        await _client
+            .from('products')
+            .update({
+              'is_active': false,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', productId);
+        return null;
+      } catch (e) {
+        debugPrint('[Inventory] Remove failed online, queuing: $e');
+      }
+    }
+
+    await _syncQueue.enqueue(
+      operation: 'deactivate_product',
+      tableName: 'products',
+      recordId: productId,
+      payload: {'business_id': _businessId},
+    );
+    return null;
+  }
+
   Future<void> restock(String productId, int quantity, {String? notes}) =>
       adjustStock(
         productId,
@@ -581,6 +698,34 @@ final inventoryProvider =
         ref: ref,
       );
     });
+
+/// Soft-deleted products. Online reads the server, offline reads the cache.
+/// autoDispose, so it re-fetches each time the "Show removed" view opens.
+final removedProductsProvider = FutureProvider.autoDispose<List<Product>>((
+  ref,
+) async {
+  final businessId = ref.watch(activeBusinessIdProvider) ?? '';
+  if (businessId.isEmpty) return [];
+  final local = ref.read(localDbServiceProvider);
+
+  if (ref.read(isOnlineProvider)) {
+    try {
+      final rows = await ref
+          .read(supabaseClientProvider)
+          .from('products')
+          .select('*, categories(name)')
+          .eq('business_id', businessId)
+          .eq('is_active', false)
+          .order('name');
+      return (rows as List)
+          .map((r) => Product.fromMap(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[Inventory] Removed list fetch failed, using cache: $e');
+    }
+  }
+  return local.getInactiveProducts(businessId);
+});
 
 final lowStockProvider = Provider<List<InventoryEntry>>((ref) {
   return ref.watch(inventoryProvider).lowStockItems;

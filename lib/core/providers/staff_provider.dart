@@ -104,7 +104,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
 
       debugPrint('[Staff] Parsed ${members.length} StaffMember objects');
 
-      await _local.upsertStaff(members);
+      await _local.replaceStaff(_businessId, members);
 
       // Auto-create owner staff row for accounts registered before
       // staff_members insert was added to completeRegistration.
@@ -269,6 +269,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
           .from('staff_members')
           .update({'is_active': false})
           .eq('id', id);
+      await _local.deactivateStaffLocal(id);
       await load();
     } else {
       await _syncQueue.enqueue(
@@ -277,6 +278,9 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
         recordId: id,
         payload: {'is_active': false},
       );
+      // Without this the person vanished from the list but stayed in SQLite,
+      // reappearing after a restart and still passing offline PIN checks.
+      await _local.deactivateStaffLocal(id);
       final current = state.asData?.value ?? [];
       state = AsyncValue.data(current.where((m) => m.id != id).toList());
     }

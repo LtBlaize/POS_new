@@ -290,6 +290,17 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     }
 
     // ── Kitchen device: use LAN stream, fall back to Supabase if offline ──
+    // The POS refused this device (plan terminal limit). Don't fall through
+    // to the Supabase view below, or the cap would be silently bypassed.
+    if (ref.watch(terminalLimitReachedProvider)) {
+      return _TerminalLimitView(
+        onRetry:
+            () => ref
+                .read(lanClientServiceProvider)
+                .retryAfterLimit(ref.read(businessProvider)?.id ?? ''),
+      );
+    }
+
     final kitchenState = ref.watch(kitchenStateProvider);
     final isOffline =
         kitchenState.connection == LanConnectionState.disconnected;
@@ -502,6 +513,63 @@ class _KitchenBody extends StatelessWidget {
 }
 
 // ── Connection banner ──────────────────────────────────────────────────────────
+
+class _TerminalLimitView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _TerminalLimitView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.devices_other_rounded,
+                  size: 48,
+                  color: AppColors.warning.withValues(alpha: 0.8),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Terminal limit reached',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "Your plan doesn't allow any more connected devices. "
+                  'Disconnect another device or upgrade your plan, '
+                  'then tap Retry.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _ConnectionBanner extends StatelessWidget {
   final LanConnectionState state;

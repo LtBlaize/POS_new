@@ -16,6 +16,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/access_enforcement_flag.dart';
+import '../../core/services/connectivity_service.dart';
 import 'auth_provider.dart';
 
 const _kProfileRefreshInterval = Duration(minutes: 5);
@@ -36,7 +37,9 @@ class ProfileRefreshService {
   /// Call once from main() after ProviderScope is ready — mirrors the
   /// init() pattern used by ConnectivityService/SyncQueueService.
   void init() {
-    if (!kEnforceCoreAccess) return; // no-op until enforcement is live
+    // Runs even while kEnforceCoreAccess is false: a plan change (e.g. a
+    // downgrade) has to reach open devices. _tick keeps the full refresh
+    // gated and does a cheap plan check otherwise.
 
     _authSub = _ref.listen<AsyncValue<dynamic>>(authStateProvider, (
       prev,
@@ -59,11 +62,40 @@ class ProfileRefreshService {
 
   void _startTimer() {
     if (_timer != null) return; // already running — don't stack timers
-    _timer = Timer.periodic(_kProfileRefreshInterval, (_) {
-      if (_ref.read(authStateProvider).valueOrNull != null) {
+    _timer = Timer.periodic(_kProfileRefreshInterval, (_) => _tick());
+  }
+
+  Future<void> _tick() async {
+    if (_ref.read(authStateProvider).valueOrNull == null) return;
+    if (!_ref.read(isOnlineProvider)) return;
+
+    // Enforcement live: same full refresh as before.
+    if (kEnforceCoreAccess) {
+      _ref.invalidate(profileProvider);
+      return;
+    }
+
+    // Enforcement off: one tiny query, and only reload the profile if the
+    // plan or active flag actually changed. A blind invalidate would blank
+    // profileProvider for a moment and reset the POS tab on every device.
+    final biz = _ref.read(businessProvider);
+    if (biz == null) return;
+    try {
+      final row = await _ref
+          .read(supabaseClientProvider)
+          .from('businesses')
+          .select('subscription_plan, is_active')
+          .eq('id', biz.id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 6));
+      if (row == null) return;
+      if (row['subscription_plan'] != biz.subscriptionPlan.value ||
+          row['is_active'] != biz.isActive) {
         _ref.invalidate(profileProvider);
       }
-    });
+    } catch (_) {
+      // Offline or slow: try again next tick.
+    }
   }
 
   void _stopTimer() {

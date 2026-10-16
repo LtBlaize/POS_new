@@ -20,6 +20,8 @@ final _filterProvider = StateProvider<InventoryFilterState>(
   (ref) => const InventoryFilterState(),
 );
 
+final _showRemovedProvider = StateProvider<bool>((ref) => false);
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class InventoryScreen extends ConsumerWidget {
@@ -106,6 +108,10 @@ class _ProductsTab extends ConsumerWidget {
     final inventoryState = ref.watch(inventoryProvider);
     final filter = ref.watch(_filterProvider);
     final layout = inventoryLayoutOf(context);
+    final isOwnerUser =
+        ref.watch(activeStaffProvider)?.role == StaffRole.owner;
+    final showRemoved =
+        isOwnerUser && ref.watch(_showRemovedProvider);
 
     if (inventoryState.loading) {
       return const Scaffold(
@@ -431,6 +437,39 @@ class _ProductsTab extends ConsumerWidget {
                           (f) => ref.read(_filterProvider.notifier).state = f,
                     ),
                     const SizedBox(width: 8),
+                    if (isOwnerUser) ...[
+                      Tooltip(
+                        message:
+                            showRemoved ? 'Back to products' : 'Show removed',
+                        child: IconButton(
+                          onPressed:
+                              () =>
+                                  ref
+                                      .read(_showRemovedProvider.notifier)
+                                      .state = !showRemoved,
+                          icon: Icon(
+                            showRemoved
+                                ? Icons.inventory_2_outlined
+                                : Icons.delete_sweep_outlined,
+                            size: 18,
+                            color:
+                                showRemoved
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                showRemoved
+                                    ? AppColors.primary.withValues(alpha: 0.08)
+                                    : AppColors.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     SortButton(
                       sort: filter.sort,
                       onChanged:
@@ -574,7 +613,9 @@ class _ProductsTab extends ConsumerWidget {
           // ── List ──────────────────────────────────────────────────
           Expanded(
             child:
-                filtered.isEmpty
+                showRemoved
+                    ? const _RemovedList()
+                    : filtered.isEmpty
                     ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -629,6 +670,90 @@ class _ProductsTab extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Removed products (restore) ───────────────────────────────────────────────
+
+class _RemovedList extends ConsumerWidget {
+  const _RemovedList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(removedProductsProvider);
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error:
+          (e, _) => const Center(
+            child: Text(
+              'Could not load removed products',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+      data: (list) {
+        if (list.isEmpty) {
+          return const Center(
+            child: Text(
+              'No removed products',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+          );
+        }
+        return ListView.separated(
+          itemCount: list.length,
+          separatorBuilder:
+              (_, _) => const Divider(height: 1, indent: 24, endIndent: 24),
+          itemBuilder: (context, i) {
+            final p = list[i];
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 4,
+              ),
+              title: Text(
+                p.name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              subtitle: Text(
+                '${p.category.isEmpty ? 'Uncategorized' : p.category}'
+                ' · ₱${p.price.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              trailing: OutlinedButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  await ref
+                      .read(inventoryProvider.notifier)
+                      .restoreProduct(p.id);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('"${p.name}" restored'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.restore_rounded, size: 16),
+                label: const Text('Restore'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

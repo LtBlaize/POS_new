@@ -253,7 +253,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
             }).toList(),
           );
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(
+        error:
+            e.toString().contains('table_limit_exceeded')
+                ? 'Table limit reached for your plan.'
+                : e.toString(),
+      );
     }
   }
 
@@ -286,7 +291,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       });
       await _load();
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(
+        error:
+            e.toString().contains('room_limit_exceeded')
+                ? 'Room limit reached for your plan.'
+                : e.toString(),
+      );
     }
   }
 

@@ -7,6 +7,7 @@
 // subscription_expires_at as independent — this dialog reflects that by
 // letting you set either, both, or neither.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/admin_colors.dart';
 import 'admin_businesses_providers.dart';
@@ -255,6 +256,13 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Done')));
       }
+    } on DowngradeBlockedException catch (e) {
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (_) => _BlockedDialog(blockers: e.blockers),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -286,6 +294,23 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
             businessId: widget.biz.id,
             newPlan: result.plan,
             durationMonths: result.durationMonths,
+          ),
+    );
+  }
+
+  Future<void> _checkEligibility() async {
+    await showDialog<void>(
+      context: context,
+      builder:
+          (_) => _EligibilityDialog(
+            biz: widget.biz,
+            check:
+                (plan) => ref
+                    .read(adminSubscriptionServiceProvider)
+                    .checkDowngrade(
+                      businessId: widget.biz.id,
+                      targetPlan: plan,
+                    ),
           ),
     );
   }
@@ -385,6 +410,13 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
                   onPressed: _changePlan,
                   child: const Text(
                     'Change Plan',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: _checkEligibility,
+                  child: const Text(
+                    'Check Eligibility',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -583,6 +615,223 @@ class _PlanDurationDialogState extends State<_PlanDurationDialog> {
 }
 
 // ── Staff card ───────────────────────────────────────────────────────────
+
+// ── Downgrade eligibility ────────────────────────────────────────────────
+
+/// Plain-language message you can paste to the client (Messenger, SMS...).
+String _clientMessage(String? plan, List<DowngradeBlocker> blockers) {
+  final target =
+      plan == null
+          ? 'the lower plan'
+          : 'the ${plan[0].toUpperCase()}${plan.substring(1)} plan';
+  if (blockers.isEmpty) return 'You are eligible to move to $target.';
+  return 'Before we can move you to $target, please:\n'
+      '${blockers.map((b) => '• ${b.instruction}').join('\n')}\n'
+      'Let us know once that is done and we will switch your plan.';
+}
+
+class _EligibilityDialog extends StatefulWidget {
+  final BusinessDetail biz;
+  final Future<List<DowngradeBlocker>> Function(String plan) check;
+  const _EligibilityDialog({required this.biz, required this.check});
+
+  @override
+  State<_EligibilityDialog> createState() => _EligibilityDialogState();
+}
+
+class _EligibilityDialogState extends State<_EligibilityDialog> {
+  static const _allPlans = ['starter', 'growth', 'pro'];
+
+  late final List<String> _options =
+      _allPlans.where((p) => p != widget.biz.subscriptionPlan).toList();
+  late String _plan = _options.first;
+  bool _loading = false;
+  bool _copied = false;
+  String? _error;
+  List<DowngradeBlocker>? _blockers;
+
+  Future<void> _run() async {
+    setState(() {
+      _loading = true;
+      _copied = false;
+      _error = null;
+      _blockers = null;
+    });
+    try {
+      final b = await widget.check(_plan);
+      if (mounted) setState(() => _blockers = b);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(
+      ClipboardData(text: _clientMessage(_plan, _blockers!)),
+    );
+    if (mounted) setState(() => _copied = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final blockers = _blockers;
+    return AlertDialog(
+      title: Text('Check ${widget.biz.name}'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Currently on ${widget.biz.subscriptionPlan}. Move to:',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AdminColors.textMuted,
+                ),
+              ),
+              ..._options.map(
+                (p) => RadioListTile<String>(
+                  dense: true,
+                  title: Text(p),
+                  value: p,
+                  groupValue: _plan,
+                  onChanged:
+                      _loading
+                          ? null
+                          : (v) => setState(() {
+                            _plan = v!;
+                            _blockers = null;
+                            _error = null;
+                            _copied = false;
+                          }),
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_loading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (_error != null)
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AdminColors.danger,
+                  ),
+                )
+              else if (blockers != null && blockers.isEmpty)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      size: 18,
+                      color: Colors.green.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Eligible. You can apply this plan change.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AdminColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else if (blockers != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Not eligible yet. The client needs to:',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...blockers.map(
+                      (b) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(
+                          '• ${b.instruction}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AdminColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        if (blockers != null && blockers.isNotEmpty)
+          TextButton(
+            onPressed: _copy,
+            child: Text(_copied ? 'Copied' : 'Copy message'),
+          ),
+        FilledButton(
+          onPressed: _loading ? null : _run,
+          child: Text(_blockers == null ? 'Check' : 'Check again'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown when "Change Plan" is rejected server-side as a blocked downgrade.
+class _BlockedDialog extends StatelessWidget {
+  final List<DowngradeBlocker> blockers;
+  const _BlockedDialog({required this.blockers});
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Downgrade blocked'),
+    content: SizedBox(
+      width: 380,
+      child: Text(
+        _clientMessage(null, blockers),
+        style: const TextStyle(fontSize: 13, color: AdminColors.textPrimary),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Close'),
+      ),
+      FilledButton(
+        onPressed: () async {
+          await Clipboard.setData(
+            ClipboardData(text: _clientMessage(null, blockers)),
+          );
+          if (context.mounted) Navigator.pop(context);
+        },
+        child: const Text('Copy message'),
+      ),
+    ],
+  );
+}
 
 class _StaffCard extends StatelessWidget {
   final List<StaffSummary> staff;

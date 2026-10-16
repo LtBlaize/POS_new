@@ -177,8 +177,14 @@ class PromoRepository {
   PromoRepository(this._client);
 
   Future<Promo> create(Promo promo) async {
-    final row =
-        await _client.from('promos').insert(promo.toMap()).select().single();
+    final Map<String, dynamic> row;
+    try {
+      row =
+          await _client.from('promos').insert(promo.toMap()).select().single();
+    } on PostgrestException catch (e) {
+      _throwIfPromoLimit(e);
+      rethrow;
+    }
     final promoId = row['id'] as String;
 
     if (promo.items.isNotEmpty) {
@@ -224,13 +230,18 @@ class PromoRepository {
         'Active promo limit reached for your plan ($maxActivePromos max). Deactivate another promo first.',
       );
     }
-    await _client
-        .from('promos')
-        .update({
-          'is_active': isActive,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', promoId);
+    try {
+      await _client
+          .from('promos')
+          .update({
+            'is_active': isActive,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', promoId);
+    } on PostgrestException catch (e) {
+      _throwIfPromoLimit(e);
+      rethrow;
+    }
   }
 
   Future<void> delete(String promoId) async {
@@ -250,6 +261,15 @@ class PromoRepository {
         );
       }
       rethrow;
+    }
+  }
+
+  void _throwIfPromoLimit(PostgrestException e) {
+    if ((e.message).contains('promo_limit_exceeded')) {
+      throw Exception(
+        'Active promo limit reached for your plan. '
+        'Deactivate another promo first.',
+      );
     }
   }
 

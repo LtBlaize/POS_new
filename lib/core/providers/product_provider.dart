@@ -57,6 +57,12 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
             .toList();
 
     await local.upsertProducts(products);
+    // Products removed on another device are no longer returned by the
+    // server. Hide them in the local cache too.
+    await local.deactivateMissingProducts(
+      businessId,
+      products.map((p) => p.id).toList(),
+    );
 
     // 2. Fetch all variants for this business in one query
     if (products.isEmpty) return products;
@@ -207,17 +213,11 @@ final categoryListProvider = FutureProvider<List<String>>((ref) async {
   }
 });
 
-bool _fuzzyMatch(String source, String query) {
-  if (source.contains(query)) return true;
-  int si = 0;
-  for (int qi = 0; qi < query.length && si < source.length; qi++) {
-    while (si < source.length && source[si] != query[qi]) {
-      si++;
-    }
-    if (si >= source.length) return false;
-    si++;
-  }
-  return true;
+/// Every whitespace-separated token in the query must appear as a
+/// substring of the name. "coke 2l" matches "Coke 2L Bottle".
+bool _nameMatches(String name, String query) {
+  final tokens = query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+  return tokens.every(name.contains);
 }
 
 // ── Selected category ─────────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ final filteredProductsProvider = Provider<List<Product>>((ref) {
     if (!isVisible(p)) return false;
     if (category != null && p.category != category) return false;
     if (query.isNotEmpty) {
-      return _fuzzyMatch(p.name.toLowerCase(), query) ||
+      return _nameMatches(p.name.toLowerCase(), query) ||
           p.category.toLowerCase().contains(query) ||
           (p.barcode?.toLowerCase().contains(query) ?? false) ||
           (p.sku?.toLowerCase().contains(query) ?? false);

@@ -26,6 +26,11 @@ final hasEverPairedProvider = StateProvider<bool>((ref) => false);
 
 final cashierIpProvider = StateProvider<String?>((ref) => null);
 
+/// True when the POS closed this device's connection with code 4001
+/// (plan terminal limit reached). The client stops reconnecting and polling
+/// until retry() is called, e.g. after the business upgrades.
+final terminalLimitReachedProvider = StateProvider<bool>((ref) => false);
+
 final lanClientServiceProvider = Provider<LanClientService>((ref) {
   final s = LanClientService(ref);
   ref.onDispose(s.dispose);
@@ -41,6 +46,8 @@ class LanClientService {
   Timer? _reconnectTimer;
   Timer? _pollTimer;
   bool _disposed = false;
+  bool _limitBlocked = false;
+  Timer? _limitRetryTimer;
 
   // Callbacks registered by LanOrdersNotifier
   OrdersCallback? _onOrders;
@@ -89,6 +96,7 @@ class LanClientService {
 
   void dispose() {
     _disposed = true;
+    _limitRetryTimer?.cancel();
     _ws?.sink.close();
     _reconnectTimer?.cancel();
     _pollTimer?.cancel();
@@ -98,7 +106,7 @@ class LanClientService {
   /// Callers should enqueue to LanStatusQueue if this returns false.
   Future<bool> patchStatus(String orderId, String status, {int? round}) async {
     final base = _baseUrl;
-    if (base == null) return false;
+    if (base == null || _limitBlocked) return false;
     try {
       final res = await http
           .patch(
@@ -149,14 +157,14 @@ class LanClientService {
   // ── WebSocket ──────────────────────────────────────────────────────────────
 
   void _connectWs(String businessId) {
-    if (_disposed || _wsUrl == null) return;
+    if (_disposed || _limitBlocked || _wsUrl == null) return;
     _ws?.sink.close();
 
     try {
       _ws = WebSocketChannel.connect(Uri.parse(_wsUrl!));
       _ws!.stream.listen(
         (raw) => _handleWsMessage(raw as String, businessId),
-        onDone: () => _scheduleReconnect(businessId),
+        onDone: () => _onWsClosed(businessId),
         onError: (_) => _scheduleReconnect(businessId),
         cancelOnError: true,
       );
@@ -167,6 +175,47 @@ class LanClientService {
     } catch (_) {
       _scheduleReconnect(businessId);
     }
+  }
+
+  void _onWsClosed(String businessId) {
+    if (_ws?.closeCode == 4001) {
+      // The POS refused this device: plan terminal limit. Reconnecting or
+      // polling would just be rejected again (or quietly bypass the cap).
+      debugPrint('[LAN] Terminal limit reached - stopping reconnects');
+      _limitBlocked = true;
+      _reconnectTimer?.cancel();
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      _ref.read(terminalLimitReachedProvider.notifier).state = true;
+      // Keep trying quietly: an upgrade, or another device disconnecting,
+      // frees a slot. Only one timer ever runs (??=).
+      _limitRetryTimer ??= Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _tryUnblock(businessId),
+      );
+      return;
+    }
+    _scheduleReconnect(businessId);
+  }
+
+  /// Manual Retry button. The 30 s auto-retry uses the same path.
+  void retryAfterLimit(String businessId) => _tryUnblock(businessId);
+
+  void _tryUnblock(String businessId) {
+    if (_disposed || !_limitBlocked) return;
+    _limitBlocked = false;
+    _connectWs(businessId);
+    // If the POS still refuses us, _onWsClosed sets _limitBlocked again
+    // within a moment. If nothing re-blocked us after the grace period, the
+    // connection was accepted. The UI flag stays set until then, so the
+    // screen never flashes the Supabase fallback view.
+    Timer(const Duration(seconds: 3), () {
+      if (_disposed || _limitBlocked) return;
+      _limitRetryTimer?.cancel();
+      _limitRetryTimer = null;
+      _ref.read(terminalLimitReachedProvider.notifier).state = false;
+      _fetchOrders(businessId);
+    });
   }
 
   void _handleWsMessage(String raw, String businessId) {
@@ -187,6 +236,7 @@ class LanClientService {
 
   void _scheduleReconnect(String businessId) {
     if (_disposed) return;
+    if (_limitBlocked) return;
     debugPrint('[LAN] WS disconnected — falling back to polling');
     // Start poll fallback so kitchen isn't blind while WS is down
     _startPolling(businessId);

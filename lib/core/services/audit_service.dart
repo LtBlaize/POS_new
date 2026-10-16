@@ -28,6 +28,8 @@ class AuditAction {
   static const settingsChanged = 'settings_changed';
   static const orderRefund = 'order_refund';
   static const inventoryAdjust = 'inventory_adjust';
+  static const productRemoved = 'product_removed';
+  static const productRestored = 'product_restored';
   static const creditAdded = 'credit_added';
   static const creditPaid = 'credit_paid';
   static const drawerOpenNoSale = 'drawer_open_no_sale';

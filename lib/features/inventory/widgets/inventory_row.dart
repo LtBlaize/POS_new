@@ -36,7 +36,7 @@ class InventoryTableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('CATEGORY', style: style)),
           Expanded(flex: 2, child: Text('PRICE', style: style)),
           Expanded(flex: 3, child: Text('STOCK', style: style)),
-          SizedBox(width: 144),
+          SizedBox(width: 184),
         ],
       ),
     );
@@ -245,6 +245,50 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
     );
   }
 
+  Future<void> _confirmRemove() async {
+    final name = widget.entry.product.name;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Remove product?'),
+            content: Text(
+              'Remove "$name"? It will be hidden from the POS and '
+              'inventory. Past sales and reports are kept.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+    );
+    if (ok != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await ref
+        .read(inventoryProvider.notifier)
+        .removeProduct(widget.entry.product.id);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(error ?? '"$name" removed'),
+        backgroundColor: error != null ? AppColors.danger : AppColors.success,
+      ),
+    );
+  }
+
   void _showEditDialog() {
     showDialog(
       context: context,
@@ -269,6 +313,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
             phone: phone,
             expanded: _expanded,
             onToggle: () => setState(() => _expanded = !_expanded),
+            onRemove: isOwner ? _confirmRemove : null,
             onEdit: _showEditDialog,
           ),
           if (_expanded)
@@ -289,6 +334,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
 
     return widget.layout == InventoryLayout.phone
         ? _PhoneCard(
+          onRemove: isOwner ? _confirmRemove : null,
           entry: widget.entry,
           adjusting: _adjusting,
           onAdjust: _adjust,
@@ -297,6 +343,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
           isOwner: isOwner,
         )
         : _TableRow(
+          onRemove: isOwner ? _confirmRemove : null,
           entry: widget.entry,
           adjusting: _adjusting,
           onAdjust: _adjust,
@@ -312,6 +359,7 @@ class _InventoryRowState extends ConsumerState<InventoryRow> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PhoneCard extends StatelessWidget {
+  final VoidCallback? onRemove;
   final InventoryEntry entry;
   final bool adjusting;
   final bool isOwner;
@@ -320,6 +368,7 @@ class _PhoneCard extends StatelessWidget {
   final VoidCallback onEdit;
 
   const _PhoneCard({
+    this.onRemove,
     required this.entry,
     required this.adjusting,
     required this.isOwner,
@@ -519,6 +568,17 @@ class _PhoneCard extends StatelessWidget {
                 ),
 
                 const Spacer(),
+                if (onRemove != null)
+                  IconButton(
+                    onPressed: onRemove,
+                    tooltip: 'Remove',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 18,
+                      color: AppColors.danger,
+                    ),
+                  ),
 
                 // Set — all roles (min enforced inside dialog)
                 TextButton(
@@ -569,6 +629,7 @@ class _PhoneCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TableRow extends StatelessWidget {
+  final VoidCallback? onRemove;
   final InventoryEntry entry;
   final bool adjusting;
   final bool isOwner;
@@ -577,6 +638,7 @@ class _TableRow extends StatelessWidget {
   final VoidCallback onEdit;
 
   const _TableRow({
+    this.onRemove,
     required this.entry,
     required this.adjusting,
     required this.isOwner,
@@ -766,6 +828,22 @@ class _TableRow extends StatelessWidget {
               ),
             ),
           ),
+          SizedBox(
+            width: 40,
+            child:
+                onRemove == null
+                    ? null
+                    : IconButton(
+                      onPressed: onRemove,
+                      tooltip: 'Remove',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: AppColors.danger,
+                      ),
+                    ),
+          ),
         ],
       ),
     );
@@ -776,6 +854,7 @@ class _TableRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VariantParentRow extends StatelessWidget {
+  final VoidCallback? onRemove;
   final InventoryEntry entry;
   final bool phone;
   final bool expanded;
@@ -783,6 +862,7 @@ class _VariantParentRow extends StatelessWidget {
   final VoidCallback onEdit;
 
   const _VariantParentRow({
+    this.onRemove,
     required this.entry,
     required this.phone,
     required this.expanded,
@@ -883,6 +963,17 @@ class _VariantParentRow extends StatelessWidget {
                 ),
               ),
               editBtn,
+              if (onRemove != null)
+                IconButton(
+                  onPressed: onRemove,
+                  tooltip: 'Remove',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: AppColors.danger,
+                  ),
+                ),
             ],
           ),
         ),
@@ -965,6 +1056,22 @@ class _VariantParentRow extends StatelessWidget {
             ),
             const SizedBox(width: 72),
             SizedBox(width: 72, child: editBtn),
+            SizedBox(
+              width: 40,
+              child:
+                  onRemove == null
+                      ? null
+                      : IconButton(
+                        onPressed: onRemove,
+                        tooltip: 'Remove',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: AppColors.danger,
+                        ),
+                      ),
+            ),
           ],
         ),
       ),

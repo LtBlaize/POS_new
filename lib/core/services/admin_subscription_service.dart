@@ -15,19 +15,100 @@ class AdminActionException implements Exception {
   String toString() => message;
 }
 
+/// One limit that stops a downgrade, e.g. staff: 7 active, 2 allowed.
+class DowngradeBlocker {
+  final String limit; // staff | promos | tables | rooms | open_orders
+  final int current;
+  final int allowed;
+  final int mustRemove;
+  const DowngradeBlocker({
+    required this.limit,
+    required this.current,
+    required this.allowed,
+    required this.mustRemove,
+  });
+
+  factory DowngradeBlocker.fromMap(Map<String, dynamic> m) => DowngradeBlocker(
+    limit: m['limit'] as String,
+    current: (m['current'] as num).toInt(),
+    allowed: (m['allowed'] as num).toInt(),
+    mustRemove: (m['must_remove'] as num).toInt(),
+  );
+
+  /// Plain-language instruction you can send to the client.
+  String get instruction => switch (limit) {
+    'staff' =>
+      'Deactivate $mustRemove staff account${mustRemove == 1 ? '' : 's'} '
+          '(you have $current, the new plan allows $allowed).',
+    'promos' =>
+      'Deactivate $mustRemove promo${mustRemove == 1 ? '' : 's'} '
+          '(you have $current active, the new plan allows $allowed).',
+    'tables' =>
+      'Remove $mustRemove table${mustRemove == 1 ? '' : 's'} '
+          '(you have $current, the new plan allows $allowed).',
+    'rooms' =>
+      'Remove $mustRemove room${mustRemove == 1 ? '' : 's'} '
+          '(you have $current, the new plan allows $allowed).',
+    'open_orders' =>
+      'Settle or cancel the $current open unpaid '
+          'order${current == 1 ? '' : 's'} first.',
+    _ => 'Reduce $label to $allowed.',
+  };
+
+  String get label => switch (limit) {
+    'staff' => 'Staff accounts',
+    'promos' => 'Active promos',
+    'tables' => 'Tables',
+    'rooms' => 'Rooms',
+    'open_orders' => 'Open unpaid orders',
+    _ => limit,
+  };
+
+  @override
+  String toString() =>
+      limit == 'open_orders'
+          ? '$label: $current (settle or cancel them first)'
+          : '$label: $current in use, plan allows $allowed (remove $mustRemove)';
+}
+
+class DowngradeBlockedException extends AdminActionException {
+  final List<DowngradeBlocker> blockers;
+  DowngradeBlockedException(this.blockers)
+    : super(
+        'Downgrade blocked:\n${blockers.map((b) => '• $b').join('\n')}',
+      );
+}
+
 class AdminSubscriptionService {
   final _client = Supabase.instance.client;
 
   Future<void> _invoke(Map<String, dynamic> payload) async {
-    final res = await _client.functions.invoke(
-      'admin-subscription-action',
-      body: payload,
-    );
-    // FunctionsClient throws FunctionException on non-2xx in v2, but guard
-    // defensively anyway in case the error body comes back as data instead.
-    final data = res.data;
-    if (data is Map && data['error'] != null) {
-      throw AdminActionException(data['error'] as String);
+    try {
+      final res = await _client.functions.invoke(
+        'admin-subscription-action',
+        body: payload,
+      );
+      // Defensive: in case an error body ever comes back as data.
+      final data = res.data;
+      if (data is Map && data['error'] != null) {
+        throw AdminActionException(data['error'].toString());
+      }
+    } on FunctionException catch (e) {
+      // supabase_flutter throws on any non-2xx, so the 409 with the
+      // blockers list lands here, not in res.data above.
+      final d = e.details;
+      if (e.status == 409 && d is Map && d['error'] == 'downgrade_blocked') {
+        final raw = (d['blockers'] as List?) ?? const [];
+        throw DowngradeBlockedException([
+          for (final b in raw)
+            DowngradeBlocker.fromMap(Map<String, dynamic>.from(b as Map)),
+        ]);
+      }
+      final msg =
+          d is Map && d['error'] != null
+              ? d['error'].toString()
+              : (e.reasonPhrase ?? 'Request failed (${e.status})');
+      throw AdminActionException(msg);
     }
   }
 
@@ -46,6 +127,40 @@ class AdminSubscriptionService {
     if (durationMonths != null) 'duration_months': durationMonths,
     if (reason != null) 'reason': reason,
   });
+
+  /// Read-only: lists what would block a move to [targetPlan]. An empty
+  /// list means the business is eligible. Changes nothing.
+  Future<List<DowngradeBlocker>> checkDowngrade({
+    required String businessId,
+    required String targetPlan,
+  }) async {
+    try {
+      final res = await _client.functions.invoke(
+        'admin-subscription-action',
+        body: {
+          'action': 'check_downgrade',
+          'business_id': businessId,
+          'new_plan': targetPlan,
+        },
+      );
+      final data = res.data;
+      if (data is Map && data['error'] != null) {
+        throw AdminActionException(data['error'].toString());
+      }
+      final raw = (data is Map ? data['blockers'] : null) as List? ?? const [];
+      return [
+        for (final b in raw)
+          DowngradeBlocker.fromMap(Map<String, dynamic>.from(b as Map)),
+      ];
+    } on FunctionException catch (e) {
+      final d = e.details;
+      throw AdminActionException(
+        d is Map && d['error'] != null
+            ? d['error'].toString()
+            : (e.reasonPhrase ?? 'Request failed (${e.status})'),
+      );
+    }
+  }
 
   Future<void> extendTrial({
     required String businessId,
