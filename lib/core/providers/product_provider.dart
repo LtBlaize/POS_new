@@ -68,18 +68,7 @@ final productListProvider = StreamProvider<List<Product>>((ref) async* {
     if (products.isEmpty) return products;
 
     final productIds = products.map((p) => p.id).toList();
-
-    // Supabase: fetch variants where product_id is in our product list
-    final variantRows = await client
-        .from('product_variants')
-        .select()
-        .eq('is_active', true)
-        .inFilter('product_id', productIds);
-
-    final allVariants =
-        (variantRows as List)
-            .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
-            .toList();
+    final allVariants = await fetchVariantsChunked(client, productIds);
 
     // Cache variants locally (bulk upsert)
     if (allVariants.isNotEmpty) {
@@ -375,4 +364,29 @@ class InventoryService {
       },
     );
   }
+}
+/// Fetches active variants for [productIds] in URL-safe chunks.
+/// One inFilter with hundreds of UUIDs exceeds the gateway URL limit (400).
+Future<List<ProductVariant>> fetchVariantsChunked(
+  SupabaseClient client,
+  List<String> productIds, {
+  int chunkSize = 100,
+}) async {
+  final out = <ProductVariant>[];
+  for (var i = 0; i < productIds.length; i += chunkSize) {
+    final end =
+        (i + chunkSize) > productIds.length ? productIds.length : i + chunkSize;
+    final chunk = productIds.sublist(i, end);
+    final rows = await client
+        .from('product_variants')
+        .select()
+        .eq('is_active', true)
+        .inFilter('product_id', chunk);
+    out.addAll(
+      (rows as List).map(
+        (m) => ProductVariant.fromMap(m as Map<String, dynamic>),
+      ),
+    );
+  }
+  return out;
 }

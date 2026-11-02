@@ -8,6 +8,8 @@ import 'dart:typed_data';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import '../models/order.dart';
 
+import '../models/shift_report.dart';
+
 class EscPosReceipts {
   static const _cols = 32;
 
@@ -168,6 +170,78 @@ class EscPosReceipts {
     );
     b.addAll(
       g.text('Thank you!', styles: const PosStyles(align: PosAlign.center)),
+    );
+    b.addAll(g.feed(3));
+    b.addAll(g.cut());
+    return Uint8List.fromList(b);
+  }
+
+    /// 58mm shift report (32 cols). Mirrors the PDF via ShiftReportData.
+  static Future<Uint8List> shiftReport(ShiftReportData d) async {
+    final g = await _gen();
+    final b = <int>[];
+
+    List<int> row(ReportRow r) {
+      var right = _clean(r.value);
+      if (right.length > _cols - 4) right = right.substring(0, _cols - 4);
+      return _line(g, r.label, right, bold: r.bold);
+    }
+
+    b.addAll(g.reset());
+    if (d.businessName?.trim().isNotEmpty ?? false) {
+      b.addAll(
+        g.text(
+          _clean(d.businessName!.toUpperCase()),
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+    }
+    if (d.businessAddress?.trim().isNotEmpty ?? false) {
+      b.addAll(
+        g.text(
+          _clean(d.businessAddress!),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    b.addAll(
+      g.text(
+        'SHIFT REPORT',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      ),
+    );
+    b.addAll(g.hr());
+    for (final r in d.header) {
+      b.addAll(row(r));
+    }
+    for (final sec in d.sections) {
+      b.addAll(g.hr());
+      b.addAll(g.text(sec.title, styles: const PosStyles(bold: true)));
+      for (final r in sec.rows) {
+        b.addAll(row(r));
+      }
+    }
+    if (d.notes != null) {
+      b.addAll(g.hr());
+      b.addAll(g.text('NOTES', styles: const PosStyles(bold: true)));
+      b.addAll(g.text(_clean(d.notes!)));
+    }
+    b.addAll(g.hr());
+    b.addAll(g.feed(1));
+    b.addAll(g.text('Cashier: ______________'));
+    b.addAll(g.feed(1));
+    b.addAll(g.text('Manager: ______________'));
+    b.addAll(g.feed(1));
+    b.addAll(
+      g.text(
+        _clean(d.printedLabel),
+        styles: const PosStyles(align: PosAlign.center),
+      ),
     );
     b.addAll(g.feed(3));
     b.addAll(g.cut());

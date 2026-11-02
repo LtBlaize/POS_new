@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/order.dart';
 import 'escpos_receipts.dart';
 import 'thermal_transport.dart';
+import '../models/shift_report.dart';
 
 class PrinterNotFoundException implements Exception {
   final String message;
@@ -95,6 +96,10 @@ class ThermalPrintService {
   static Future<void> testPrint({Object? printer}) async {
     await _send(await EscPosReceipts.testPage(), 'test page');
   }
+
+  static Future<void> printShiftReport(ShiftReportData data) async {
+    await _send(await EscPosReceipts.shiftReport(data), 'shift report');
+  }  
 
   static Future<PrinterStatus> checkSelectedPrinterStatus() async {
     final p = await SharedPreferences.getInstance();

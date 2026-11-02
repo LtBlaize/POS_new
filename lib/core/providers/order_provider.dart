@@ -20,6 +20,7 @@ import '../services/event_bus.dart';
 import 'product_provider.dart';
 import '../models/order_payment.dart';
 import '../models/product_variant.dart';
+import '../config/access_enforcement_flag.dart';
 
 // ── Cache invalidation signal ─────────────────────────────────────────────────
 // Add an order ID here to force its items to be re-fetched on the next
@@ -305,6 +306,12 @@ final orderServiceProvider = Provider<OrderService>((ref) {
   );
 });
 
+class SubscriptionRequiredException implements Exception {
+  @override
+  String toString() =>
+      'Your subscription has expired. Renew your plan to make changes.';
+}
+
 class AlreadyPaidException implements Exception {
   @override
   String toString() =>
@@ -335,6 +342,15 @@ class OrderService {
 
   bool get _isOnline => _ref.read(isOnlineProvider);
 
+  /// Fail-closed at the service boundary so a direct call can't bypass a
+  /// hidden button. Settling an existing order (processPayment) stays allowed.
+  void _requireAccess() {
+    if (!kEnforceCoreAccess) return;
+    if (!_ref.read(featureManagerProvider).hasCoreAccess) {
+      throw SubscriptionRequiredException();
+    }
+  }
+
   // ── Place order ─────────────────────────────────────────────────────────────
 
   Future<Order> placeOrder({
@@ -349,6 +365,7 @@ class OrderService {
     OrderType orderType = OrderType.walkIn,
     String? customerName,
   }) async {
+    _requireAccess();
     // One id for the whole attempt, so an online try that fails halfway
     // and the offline fallback refer to the same order (replay is idempotent).
     final orderId = const Uuid().v4();
@@ -556,6 +573,7 @@ class OrderService {
     double taxRate = 0.0,
     bool reopenForKitchen = false,
   }) async {
+    _requireAccess();
     var paid = false, cancelled = false, maxRound = 1, checked = false;
 
     final insertPending = await _local.isOrderPendingSync(orderId);
@@ -1002,6 +1020,7 @@ class OrderService {
     int currentStock = 0,
     String? variantId,
   }) async {
+    _requireAccess();
     final voidId = const Uuid().v4();
     final subtotal = unitPrice * quantity;
     final now = DateTime.now();
@@ -1202,6 +1221,7 @@ class OrderService {
     required String voidedByStaffName,
     required List<CartItem> items,
   }) async {
+    _requireAccess();
     final now = DateTime.now();
 
     // 1. Cancel locally

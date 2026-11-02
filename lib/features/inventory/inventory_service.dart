@@ -213,15 +213,10 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       );
 
       if (products.isNotEmpty) {
-        final variantRows = await _client
-            .from('product_variants')
-            .select()
-            .eq('is_active', true)
-            .inFilter('product_id', products.map((p) => p.id).toList());
-        final variants =
-            (variantRows as List)
-                .map((m) => ProductVariant.fromMap(m as Map<String, dynamic>))
-                .toList();
+        final variants = await fetchVariantsChunked(
+          _client,
+          products.map((p) => p.id).toList(),
+        );
         if (variants.isNotEmpty) await _local.upsertAllVariants(variants);
       }
 

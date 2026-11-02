@@ -8,6 +8,10 @@ import '../../../shared/widgets/app_colors.dart';
 import '../reports_providers.dart';
 import '../reports_screen.dart' show ReportLayout;
 import 'report_widgets.dart';
+import '../../../core/models/shift_report.dart';
+import '../../shifts/widgets/shift_report_actions.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/auth_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHIFTS TAB
@@ -637,6 +641,22 @@ class ShiftDetail extends StatelessWidget {
             const DetailSectionLabel('CASH RECONCILIATION'),
             const SizedBox(height: 10),
             CashReconcile(shift: shift),
+            const SizedBox(height: 12),
+                        Consumer(
+              builder: (context, ref, _) {
+                final business = ref.watch(businessProvider);
+                return ShiftReportActions(
+                  color: AppColors.primary,
+                  data: ShiftReportData(
+                    shift: shift,
+                    orderCount: entry.orderCount,
+                    itemsSold: entry.itemsSold,
+                    businessName: business?.name,
+                    businessAddress: business?.address,
+                  ),
+                );
+              },
+            ),
           ],
 
           // ── Shift timing ───────────────────────────────────────────────
@@ -717,6 +737,12 @@ class CashReconcile extends StatelessWidget {
             value: '₱${fmtCurrency(shift.cashSales)}',
             color: const Color(0xFF10B981),
           ),
+                    if (shift.creditsPaid > 0)
+            ReconRow(
+              label: '+ Utang Collected',
+              value: '₱${fmtCurrency(shift.creditsPaid)}',
+              color: const Color(0xFF10B981),
+            ),
           if (shift.expenses > 0)
             ReconRow(
               label: '− Expenses',

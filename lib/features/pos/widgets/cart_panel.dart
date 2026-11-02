@@ -11,6 +11,7 @@ import '../../../features/auth/auth_provider.dart';
 import '../../tables/open_tab_provider.dart';
 import '../../tables/table_provider.dart';
 import '../../../core/services/checkout_service.dart';
+import '../../../core/config/access_enforcement_flag.dart';
 
 class CartPanel extends ConsumerStatefulWidget {
   final FeatureManager featureManager;
@@ -27,6 +28,7 @@ class _CartPanelState extends ConsumerState<CartPanel> {
     final items = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final hasKitchen = widget.featureManager.hasFeature('kitchen');
+    final locked = kEnforceCoreAccess && !widget.featureManager.hasCoreAccess;
     final total = ref.watch(cartProvider.notifier).grandTotal;
     final tabRaw = ref.watch(openTabProvider);
     final selectedTable = ref.watch(selectedTableProvider);
@@ -533,12 +535,22 @@ class _CartPanelState extends ConsumerState<CartPanel> {
                   ],
                 ),
                 const SizedBox(height: 14),
+                if (locked)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Subscription expired. Your cart is saved. '
+                      'Renew to complete this sale.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 11, color: AppColors.danger),
+                    ),
+                  ),
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
                     onPressed:
-                        items.isEmpty
+                        (items.isEmpty || locked)
                             ? null
                             : tab != null
                             ? () => _addToTab(context, tab)

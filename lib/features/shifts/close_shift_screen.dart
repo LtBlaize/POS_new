@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import '../../core/models/shift.dart';
 import '../../core/providers/shift_provider.dart';
 import '../../core/services/shift_service.dart';
+import '../../core/models/shift_report.dart';
+import 'widgets/shift_report_actions.dart';
+import '../auth/auth_provider.dart';
 
 final _liveExpensesProvider = StateProvider<double>((ref) => 0);
 
@@ -188,7 +191,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                   final liveExpenses = ref.watch(_liveExpensesProvider);
                   return _OverShortPreview(
                     expectedCash:
-                        shift.openingCash + shift.cashSales - liveExpenses,
+                        shift.openingCash + shift.cashSales + shift.creditsPaid - liveExpenses,
                     actualCash: _actualCash,
                   );
                 },
@@ -609,7 +612,7 @@ class _CashReconciliationCard extends StatelessWidget {
           ],
           _SummaryRow(
             label: 'Expected in Drawer',
-            value: shift.openingCash + shift.cashSales - liveExpenses,
+            value: shift.openingCash + shift.cashSales + shift.creditsPaid - liveExpenses,
             color: Colors.white,
             isBold: true,
           ),
@@ -767,7 +770,7 @@ class _OverShortPreview extends StatelessWidget {
 // ── Shift Receipt View ────────────────────────────────────────────────────────
 // FIX: labels updated to match shift_service.dart grouping
 
-class _ShiftReceiptView extends StatelessWidget {
+class _ShiftReceiptView extends ConsumerWidget {
   final CashierShift shift;
   final VoidCallback onDone;
 
@@ -779,7 +782,8 @@ class _ShiftReceiptView extends StatelessWidget {
   const _ShiftReceiptView({required this.shift, required this.onDone});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final business = ref.watch(profileProvider).asData?.value?.business;
     final diff = shift.overShort;
     final overShortColor =
         diff == 0
@@ -950,6 +954,13 @@ class _ShiftReceiptView extends StatelessWidget {
                     const SizedBox(height: 10),
                     _ReceiptRow('Opening Cash', shift.openingCash),
                     _ReceiptRow('Cash Sales', shift.cashSales, prefix: '+'),
+                    if (shift.creditsPaid > 0)
+                      _ReceiptRow(
+                        'Utang Collected',
+                        shift.creditsPaid,
+                        color: _green,
+                        prefix: '+',
+                      ),
                     if (shift.expenses > 0)
                       _ReceiptRow(
                         'Expenses',
@@ -960,7 +971,7 @@ class _ShiftReceiptView extends StatelessWidget {
                     const SizedBox(height: 8),
                     _ReceiptRow(
                       'Expected in Drawer',
-                      shift.openingCash + shift.cashSales - shift.expenses,
+                      shift.expectedCash,
                       bold: true,
                     ),
                     _ReceiptRow(
@@ -1031,7 +1042,20 @@ class _ShiftReceiptView extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+
+              ShiftReportActions(
+                dark: true,
+                color: _accent,
+                autoPrint: true, // set false to print only on button tap
+                data: ShiftReportData(
+                  shift: shift,
+                  businessName: business?.name,
+                  businessAddress: business?.address,
+                ),
+              ),
+
+              const SizedBox(height: 20),
 
               SizedBox(
                 height: 54,

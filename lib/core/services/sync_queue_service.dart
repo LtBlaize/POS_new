@@ -264,6 +264,9 @@ class SyncQueueService {
           break;
         }
 
+        // Subscription lapsed (server RLS 42501): not the entry's fault. Keep
+        // it pending; it replays on its own once access is restored.
+        if (e is PostgrestException && e.code == '42501') break;
         await _local.incrementRetry(id, e.toString());
         // Later entries in this group would likely fail for the same reason.
         break;

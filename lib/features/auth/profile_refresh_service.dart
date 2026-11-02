@@ -9,13 +9,13 @@
 // (and cancels its timer) the moment it doesn't, so there's never more
 // than one timer alive and nothing survives past logout.
 //
-// Gated behind kEnforceCoreAccess: while that flag is false, invalidating
-// profileProvider every 5 minutes is just wasted network calls, since
+// Every 5 minutes, runs one cheap query and only reloads profileProvider
+// if the plan, active flag, or subscription/trial dates actually changed.
+// A blind invalidate would blank the POS tab on every device.// profileProvider every 5 minutes is just wasted network calls, since
 // hasCoreAccess ignores the result anyway (see feature_manager.dart).
 // Flip both together once backfill + verification are done.
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/config/access_enforcement_flag.dart';
 import '../../core/services/connectivity_service.dart';
 import 'auth_provider.dart';
 
@@ -37,9 +37,7 @@ class ProfileRefreshService {
   /// Call once from main() after ProviderScope is ready — mirrors the
   /// init() pattern used by ConnectivityService/SyncQueueService.
   void init() {
-    // Runs even while kEnforceCoreAccess is false: a plan change (e.g. a
-    // downgrade) has to reach open devices. _tick keeps the full refresh
-    // gated and does a cheap plan check otherwise.
+
 
     _authSub = _ref.listen<AsyncValue<dynamic>>(authStateProvider, (
       prev,
@@ -69,28 +67,29 @@ class ProfileRefreshService {
     if (_ref.read(authStateProvider).valueOrNull == null) return;
     if (!_ref.read(isOnlineProvider)) return;
 
-    // Enforcement live: same full refresh as before.
-    if (kEnforceCoreAccess) {
-      _ref.invalidate(profileProvider);
-      return;
-    }
-
-    // Enforcement off: one tiny query, and only reload the profile if the
-    // plan or active flag actually changed. A blind invalidate would blank
-    // profileProvider for a moment and reset the POS tab on every device.
     final biz = _ref.read(businessProvider);
     if (biz == null) return;
     try {
       final row = await _ref
           .read(supabaseClientProvider)
           .from('businesses')
-          .select('subscription_plan, is_active')
+          .select(
+            'subscription_plan, is_active, trial_ends_at, subscription_expires_at',
+          )
           .eq('id', biz.id)
           .maybeSingle()
           .timeout(const Duration(seconds: 6));
       if (row == null) return;
+
+      DateTime? d(dynamic v) =>
+          v == null ? null : DateTime.parse(v as String).toUtc();
+      bool same(DateTime? a, DateTime? b) =>
+          (a == null || b == null) ? a == b : a.isAtSameMomentAs(b);
+
       if (row['subscription_plan'] != biz.subscriptionPlan.value ||
-          row['is_active'] != biz.isActive) {
+          row['is_active'] != biz.isActive ||
+          !same(d(row['trial_ends_at']), biz.trialEndsAt) ||
+          !same(d(row['subscription_expires_at']), biz.subscriptionExpiresAt)) {
         _ref.invalidate(profileProvider);
       }
     } catch (_) {

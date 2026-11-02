@@ -32,6 +32,7 @@ import '../features/admin/plans/admin_plans_screen.dart';
 import '../features/admin/activity/admin_activity_screen.dart';
 import '../features/admin/system/admin_system_screen.dart';
 import '../features/admin/settings/admin_settings_screen.dart';
+import '../features/auth/subscription_expired_screen.dart';
 
 // FIX: must be a stable top-level singleton. AppRouter is rebuilt by Riverpod
 // every time featureManagerProvider changes (which happens constantly during
@@ -176,9 +177,15 @@ class AppRouter {
       return _route(const LoginScreen());
     }
 
-    final fm = featureManager!;
+       final fm = featureManager!;
 
-    // ── Feature guards ────────────────────────────────────────────────────────
+       // ── Subscription lockout (business-wide) ────────────────────────────────
+       // hasBusiness avoids flashing this screen while the business is loading.
+       if (fm.hasBusiness && !fm.hasCoreAccess) {
+         return _route(const SubscriptionExpiredScreen());
+       }
+
+       // ── Feature guards ────────────────────────────────────────────────────
     final isOwner = _canAccessTab('settings');
     if (!isOwner && name == '/kitchen' && !fm.hasFeature('kitchen'))
       return _pos(fm);

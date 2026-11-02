@@ -79,7 +79,9 @@ class POSScreen extends ConsumerWidget {
     // below, which still govern Kitchen/Inventory/Utang for businesses that
     // DO have core access. Gated behind kEnforceCoreAccess until the
     // subscription backfill is confirmed complete — see that file's comment.
-    if (kEnforceCoreAccess && !fm.hasCoreAccess) {
+    final locked = kEnforceCoreAccess && fm.hasBusiness && !fm.hasCoreAccess;
+    // Suspended by an admin (is_active = false): no history either.
+    if (locked && !fm.canViewHistory) {
       return const SubscriptionExpiredScreen();
     }
     final screens = _buildScreens(
@@ -87,6 +89,7 @@ class POSScreen extends ConsumerWidget {
       activeStaff?.role ?? StaffRole.cashier,
       allowedTabs,
       layout,
+      locked: locked,
     );
 
     final safeIndex =
@@ -135,9 +138,34 @@ class POSScreen extends ConsumerWidget {
     FeatureManager fm,
     StaffRole role,
     Set<String> allowedTabs,
-    _Layout layout,
-  ) {
+    _Layout layout, {
+    bool locked = false,
+  }) {
     bool allowed(String tab) => allowedTabs.contains(tab);
+
+    // Expired: history only (writes are also rejected in the services),
+    // plus the plan/support screen. No POS, kitchen, inventory or settings.
+    if (locked) {
+      return [
+        if (allowed('orders'))
+          _ScreenEntry(
+            icon: Icons.receipt_long_rounded,
+            label: 'Orders',
+            widget: OrdersScreen(featureManager: fm),
+          ),
+        if (allowed('reports'))
+          _ScreenEntry(
+            icon: Icons.bar_chart_rounded,
+            label: 'Reports',
+            widget: ReportsScreen(featureManager: fm),
+          ),
+        const _ScreenEntry(
+          icon: Icons.lock_outline_rounded,
+          label: 'Plan',
+          widget: SubscriptionExpiredScreen(),
+        ),
+      ];
+    }
 
     return [
       if (allowed('pos'))
@@ -207,7 +235,8 @@ class _PortraitShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cartItems = ref.watch(cartProvider);
     final itemCount = cartItems.fold(0, (sum, i) => sum + i.quantity);
-    final isPOS = activeIndex == 0;
+    final isPOS =
+        activeIndex < screens.length && screens[activeIndex].label == 'POS';
 
     return Scaffold(
       backgroundColor: Colors.white,

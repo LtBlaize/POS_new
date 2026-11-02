@@ -117,12 +117,14 @@ class FeatureManager {
   final bool configBarcodeEnabled;
   final bool configKitchenEnabled;
   final bool configTablesEnabled;
+  final bool enforce;
 
   const FeatureManager(
     this._business, {
     this.configBarcodeEnabled = false,
     this.configKitchenEnabled = false,
     this.configTablesEnabled = false,
+    this.enforce = kEnforceCoreAccess,
   });
 
   bool get isOnActiveTrial => _business?.isOnActiveTrial ?? false;
@@ -145,10 +147,24 @@ class FeatureManager {
   // there's no risk of one enforcing before the other.
   bool get hasCoreAccess {
     if (_business == null) return false;
-    if (!kEnforceCoreAccess) return true;
+    if (!enforce) return true;
     return _business.isActive &&
         (isOnActiveTrial || _business.isSubscriptionActive);
   }
+
+  bool get hasBusiness => _business != null;
+
+  /// Show the "trial ends soon" banner: live trial, not paid, <= 3 days left.
+  bool get showTrialBanner =>
+      _business != null &&
+      hasCoreAccess &&
+      isOnActiveTrial &&
+      !_business.isSubscriptionActive &&
+      trialDaysLeft <= 3;
+
+  /// Owners may still read history when access is lost, but only if the
+  /// business itself has not been suspended.
+  bool get canViewHistory => _business != null && _business.isActive;
 
   bool hasFeature(String feature) {
     if (!hasCoreAccess) return false;

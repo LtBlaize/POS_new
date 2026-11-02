@@ -9,6 +9,8 @@ import '../../../../core/providers/role_permissions_provider.dart';
 import '../../../../core/services/audit_service.dart';
 import '../../../../core/services/thermal_print_service.dart';
 import '../../../../features/auth/manager_override_dialog.dart';
+import '../../../../core/utils/trusted_clock.dart';
+import '../../../auth/subscription_expired_screen.dart';
 
 // Matches pos_screen.dart breakpoint
 const _kBreakpointSm = 900.0;
@@ -513,33 +515,41 @@ class TrialBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fm = ref.watch(featureManagerProvider);
+    final biz = ref.watch(businessProvider);
+    // Paid, unknown, or no trial data: nothing to warn about.
+    if (biz == null || biz.isSubscriptionActive) {
+      return const SizedBox.shrink();
+    }
+    final end = biz.trialEndsAt;
+    if (end == null) return const SizedBox.shrink();
 
-    final days = fm.trialDaysLeft;
-    final isExpired = !fm.isOnActiveTrial && !fm.currentPlan.isPaid;
-
-    // Hide banner entirely if paid or trial hasn't started yet.
-    if (fm.currentPlan.isPaid ||
-        fm.isOnActiveTrial == false && days == 0 && !isExpired) {
+    final left = end.difference(TrustedClock.now());
+    // Already ended: the lockout / Plan tab handles that, not this banner.
+    if (left.isNegative || left == Duration.zero) {
       return const SizedBox.shrink();
     }
 
+    final days = (left.inHours / 24).ceil();
     final Color bg;
     final Color fg;
     final String message;
 
-    if (isExpired) {
+    if (left.inHours < 24) {
       bg = const Color(0xFFFFEBEB);
       fg = const Color(0xFFC0392B);
-      message = 'Your trial has expired — upgrade to keep full access.';
-    } else if (days <= 1) {
-      bg = const Color(0xFFFFEBEB);
-      fg = const Color(0xFFC0392B);
-      message = 'Last day of your trial — upgrade now to avoid losing access.';
-    } else if (days <= 2) {
+      final h = left.inHours;
+      message =
+          h < 1
+              ? 'Your free trial ends in less than an hour. '
+                  'Choose a plan to keep your POS running.'
+              : 'Your free trial ends in $h hour${h == 1 ? '' : 's'}. '
+                  'Choose a plan to keep your POS running.';
+    } else if (days <= 3) {
       bg = const Color(0xFFFFF3E0);
       fg = const Color(0xFFE65100);
-      message = '$days days left in your trial — upgrade to keep full access.';
+      message =
+          'Your free trial ends in $days days. '
+          'Choose a plan to keep your POS running.';
     } else {
       bg = const Color(0xFFFFF8E1);
       fg = const Color(0xFF856404);
@@ -565,7 +575,12 @@ class TrialBanner extends ConsumerWidget {
             ),
           ),
           GestureDetector(
-            onTap: () => _openUpgrade(context),
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SubscriptionExpiredScreen(),
+                  ),
+                ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
@@ -573,7 +588,7 @@ class TrialBanner extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                'Upgrade',
+                'Choose a plan',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -584,14 +599,6 @@ class TrialBanner extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _openUpgrade(BuildContext context) {
-    // Phase 8 will wire this to the settings upgrade screen.
-    // For now show a snackbar as a placeholder.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Upgrade coming soon — check Settings.')),
     );
   }
 }

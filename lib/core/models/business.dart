@@ -1,4 +1,5 @@
-// lib/core/models/business.dart
+   // lib/core/models/business.dart
+   import '../utils/trusted_clock.dart';
 
 enum BusinessType {
   restaurant('restaurant'),
@@ -90,12 +91,12 @@ class Business {
 
   bool get isOnActiveTrial {
     if (trialEndsAt == null) return false;
-    return DateTime.now().isBefore(trialEndsAt!);
+    return TrustedClock.now().isBefore(trialEndsAt!);
   }
 
   int get trialDaysLeft {
     if (trialEndsAt == null) return 0;
-    final diff = trialEndsAt!.difference(DateTime.now()).inDays;
+    final diff = trialEndsAt!.difference(TrustedClock.now()).inDays;
     return diff < 0 ? 0 : diff;
   }
 
@@ -106,12 +107,12 @@ class Business {
 
   bool get isSubscriptionActive {
     if (subscriptionExpiresAt == null) return false;
-    return DateTime.now().isBefore(subscriptionExpiresAt!);
+    return TrustedClock.now().isBefore(subscriptionExpiresAt!);
   }
 
   int get subscriptionDaysLeft {
     if (subscriptionExpiresAt == null) return 0;
-    final diff = subscriptionExpiresAt!.difference(DateTime.now()).inDays;
+    final diff = subscriptionExpiresAt!.difference(TrustedClock.now()).inDays;
     return diff < 0 ? 0 : diff;
   }
 

@@ -16,6 +16,7 @@ import '../../features/settings/settings_provider.dart';
 import 'receipt_service.dart';
 import 'thermal_print_service.dart';
 import '../services/sync_queue_service.dart';
+import '../config/access_enforcement_flag.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -25,7 +26,20 @@ class CheckoutService {
   final Ref _ref;
   CheckoutService(this._ref);
 
-  bool get _isOnline => _ref.read(isOnlineProvider);
+     bool get _isOnline => _ref.read(isOnlineProvider);
+
+     /// Fail-closed entitlement check at the transaction boundary. Does not
+     /// touch the cart, so nothing the cashier built is lost.
+     CheckoutResult? _subscriptionBlock() {
+       final fm = _ref.read(featureManagerProvider);
+       if (kEnforceCoreAccess && !fm.hasCoreAccess) {
+         return CheckoutResult.error(
+           'Your subscription has expired. Your cart is saved. '
+           'Renew your plan to complete this sale.',
+         );
+       }
+       return null;
+     }
 
   Future<String?> resolveTableUuid({
     required String businessId,
@@ -72,9 +86,16 @@ class CheckoutService {
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
-    final profile = _ref.read(profileProvider).asData?.value;
+       final profile = _ref.read(profileProvider).asData?.value;
 
-    // Validate reference number for non-cash, non-credit payments.
+       // New sales only. Settling an order that was already created before
+       // expiry is deliberately still allowed so in-flight customers can pay.
+       if (existingOrderId == null) {
+         final blocked = _subscriptionBlock();
+         if (blocked != null) return blocked;
+       }
+
+       // Validate reference number
     // Split payments carry their own per-leg reference numbers (validated
     // by the caller before this is invoked), so this check is skipped
     // entirely when splitPayments is provided.
@@ -412,7 +433,9 @@ class CheckoutService {
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
-    if (items.isEmpty) return CheckoutResult.error('Cart is empty.');
+       if (items.isEmpty) return CheckoutResult.error('Cart is empty.');
+       final blocked = _subscriptionBlock();
+       if (blocked != null) return blocked;
     try {
       String? stockErr;
       if (_isOnline) {

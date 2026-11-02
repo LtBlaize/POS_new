@@ -1,5 +1,6 @@
 // lib/features/auth/auth_provider.dart
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import '../../core/services/lan_server_service.dart';
 import '../../core/models/staff.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/utils/trusted_clock.dart';
 
 // Simple static flag — set BEFORE signUp(), cleared after completeRegistration()
 // Used to prevent the auth listener from navigating during the 2-step registration flow.
@@ -88,15 +90,16 @@ Map<String, dynamic> _applyOfflineGrace(Map<String, dynamic> m) {
   final biz = m['businesses'];
   if (verified == null || biz is! Map) return m;
   final b = Map<String, dynamic>.from(biz);
-  final now = DateTime.now();
-  final graceEnd = verified.add(_offlineGrace);
+  final now = TrustedClock.now();
   DateTime? d(String k) => DateTime.tryParse(b[k] as String? ?? '');
   final sub = d('subscription_expires_at');
   final trial = d('trial_ends_at');
-  final active =
-      (sub != null && sub.isAfter(now)) ||
-      (trial != null && trial.isAfter(now));
-  if (!active && now.isBefore(graceEnd)) {
+  bool liveAt(DateTime t) =>
+      (sub != null && sub.isAfter(t)) || (trial != null && trial.isAfter(t));
+  final graceEnd = verified.add(_offlineGrace);
+  // Grace only continues access the server had confirmed at the last check.
+  // If that check already showed "expired", there is no grace.
+  if (!liveAt(now) && liveAt(verified) && now.isBefore(graceEnd)) {
     b['subscription_expires_at'] = graceEnd.toIso8601String();
   }
   return {...m, 'businesses': b};
@@ -144,17 +147,31 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
       ref.listen<bool>(isOnlineProvider, (prev, next) {
         if (next && prev == false) ref.invalidateSelf();
       });
-      return Profile.fromMap(
-        _applyOfflineGrace(Map<String, dynamic>.from(cached)),
-      );
+      final cachedMap = Map<String, dynamic>.from(cached);
+      final v = DateTime.tryParse(cachedMap['_verified_at'] as String? ?? '');
+      if (v != null) TrustedClock.setFloor(v);
+      return Profile.fromMap(_applyOfflineGrace(cachedMap));
     }
     rethrow; // no cache = first run on this device
   }
 
+  var verifiedAt = DateTime.now().toUtc();
+  try {
+    final s = await client
+        .rpc('server_now')
+        .timeout(const Duration(seconds: 3));
+    final t = DateTime.tryParse(s?.toString() ?? '');
+    if (t != null) {
+      verifiedAt = t.toUtc();
+      TrustedClock.sync(verifiedAt);
+    }
+  } catch (_) {
+    // server_now not deployed or unreachable: fall back to device time.
+  }
   if (map != null) {
     await local.setKv(cacheKey, {
       ...map,
-      '_verified_at': DateTime.now().toIso8601String(),
+      '_verified_at': verifiedAt.toIso8601String(),
     });
   }
   return map != null ? Profile.fromMap(map) : null;
@@ -206,6 +223,23 @@ final featureManagerProvider = Provider<FeatureManager>((ref) {
     'isOnActiveTrial=${business?.isOnActiveTrial}',
   );
   debugPrint('[FM] config=$config');
+  // Re-evaluate when a trial/subscription boundary passes while the app stays
+  // open (also offline, where the periodic refresh doesn't run).
+  if (business != null) {
+    final now = TrustedClock.now();
+    DateTime? next;
+    for (final d in [business.trialEndsAt, business.subscriptionExpiresAt]) {
+      if (d != null && d.isAfter(now) && (next == null || d.isBefore(next))) {
+        next = d;
+      }
+    }
+    if (next != null) {
+      var wait = next.difference(now) + const Duration(seconds: 1);
+      if (wait > const Duration(hours: 6)) wait = const Duration(hours: 6);
+      final timer = Timer(wait, () => ref.invalidateSelf());
+      ref.onDispose(timer.cancel);
+    }
+  }
   final fm = FeatureManager(
     business,
     configBarcodeEnabled: config?['enable_barcode_scanner'] as bool? ?? false,
@@ -283,6 +317,12 @@ class AuthService {
       email: email,
       password: password,
     );
+
+    // Supabase returns a fake user (empty identities) and sends no email
+    // when the address is already registered.
+    if (response.user?.identities?.isEmpty ?? false) {
+      throw Exception('This email is already registered.');
+    }
 
     final userId = response.user?.id;
     if (userId == null) throw Exception('Registration failed.');

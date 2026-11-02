@@ -330,6 +330,7 @@ class _OrderCard extends ConsumerWidget {
     final activeStaff = ref.watch(activeStaffProvider);
     final canVoid =
         _canVoid &&
+        featureManager.hasCoreAccess &&
         activeStaff != null &&
         (activeStaff.role == StaffRole.owner ||
             activeStaff.role == StaffRole.manager);
@@ -559,6 +560,7 @@ class _OrderCard extends ConsumerWidget {
                           ),
                         ],
                         if (_canVoidOrder &&
+                            featureManager.hasCoreAccess &&
                             activeStaff != null &&
                             (activeStaff.role == StaffRole.owner ||
                                 activeStaff.role == StaffRole.manager)) ...[

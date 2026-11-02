@@ -51,10 +51,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String _friendlyError(String raw) {
     if (raw.contains('already registered') || raw.contains('already in use')) {
-      return 'This email is already registered.';
+      return 'This email is already registered. Try logging in or resetting your password.';
     }
-    if (raw.contains('password'))
+    if (raw.contains('password')) {
       return 'Password must be at least 6 characters.';
+    }
     if (raw.contains('email')) return 'Enter a valid email address.';
     if (raw.contains('network')) return 'Network error. Check your connection.';
     return 'Something went wrong. Please try again.';
