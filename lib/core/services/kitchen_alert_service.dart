@@ -369,10 +369,11 @@ class KitchenAlertEngine {
       if (changed) unawaited(_persistSeen());
 
       if (fresh == 0) {
-        if (dupes > 0)
+        if (dupes > 0) {
           debugPrint(
             '[KitchenAlert] [$source] duplicate snapshot ignored ($dupes known rounds)',
           );
+        }
         return;
       }
       final enabled = allowed && (settings.enabledOverride ?? autoEnabled);

@@ -42,7 +42,7 @@ class AdminSystemScreen extends ConsumerWidget {
                   child: Center(child: CircularProgressIndicator()),
                 ),
             error:
-                (_, __) => const Padding(
+                (_, _) => const Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(
                     child: Text(

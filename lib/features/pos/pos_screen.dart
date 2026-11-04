@@ -204,7 +204,7 @@ class POSScreen extends ConsumerWidget {
           label: 'Reports',
           widget: ReportsScreen(featureManager: fm),
         ),
-      if (allowed('settings'))
+      if (allowed('settings') || role == StaffRole.kitchen)
         _ScreenEntry(
           icon: Icons.settings_outlined,
           label: 'Settings',

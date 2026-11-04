@@ -187,14 +187,18 @@ class AppRouter {
 
        // ── Feature guards ────────────────────────────────────────────────────
     final isOwner = _canAccessTab('settings');
-    if (!isOwner && name == '/kitchen' && !fm.hasFeature('kitchen'))
+    if (!isOwner && name == '/kitchen' && !fm.hasFeature('kitchen')) {
       return _pos(fm);
-    if (!isOwner && name == '/inventory' && !fm.hasFeature('inventory'))
+    }
+    if (!isOwner && name == '/inventory' && !fm.hasFeature('inventory')) {
       return _pos(fm);
-    if (!isOwner && name == '/tables' && !fm.hasFeature('tables'))
+    }
+    if (!isOwner && name == '/tables' && !fm.hasFeature('tables')) {
       return _pos(fm);
-    if (!isOwner && name == '/credits' && !fm.hasFeature('credits'))
+    }
+    if (!isOwner && name == '/credits' && !fm.hasFeature('credits')) {
       return _pos(fm);
+    }
     // ── Tab permission guards ─────────────────────────────────────────────────
     final requiredTab = _tabForRoute[name];
     if (requiredTab != null && !_canAccessTab(requiredTab)) {

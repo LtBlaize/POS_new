@@ -72,8 +72,9 @@ class ThermalTransport {
       throw Exception('No printer selected. Pick one in Settings > Printer.');
     }
     if (kind == 'system') {
-      if (!_isWindows)
+      if (!_isWindows) {
         throw Exception('System printers are only supported on Windows.');
+      }
       _sendWindowsRaw(id, bytes);
     } else {
       await _sendBluetooth(id, bytes);

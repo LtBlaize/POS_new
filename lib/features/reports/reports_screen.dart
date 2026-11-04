@@ -42,7 +42,7 @@ class ReportsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(
       currentShiftProvider,
-      (_, __) => ref.invalidate(shiftReportProvider),
+      (_, _) => ref.invalidate(shiftReportProvider),
     );
     final selectedDate = ref.watch(selectedDateProvider);
     final dateRange = ref.watch(dateRangeProvider);

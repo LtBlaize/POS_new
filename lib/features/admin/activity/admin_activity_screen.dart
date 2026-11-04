@@ -175,7 +175,7 @@ class _ActivityListBody extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error:
-          (_, __) => const Center(
+          (_, _) => const Center(
             child: Text(
               'Could not load activity log',
               style: TextStyle(color: AdminColors.textMuted),
@@ -194,7 +194,7 @@ class _ActivityListBody extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           itemCount: page.items.length,
           separatorBuilder:
-              (_, __) => const Divider(height: 1, color: AdminColors.divider),
+              (_, _) => const Divider(height: 1, color: AdminColors.divider),
           itemBuilder: (context, i) {
             final a = page.items[i];
             return Padding(

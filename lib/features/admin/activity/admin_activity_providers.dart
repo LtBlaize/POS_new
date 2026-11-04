@@ -71,10 +71,12 @@ final activityListProvider = FutureProvider.autoDispose<ActivityListPage>((
         );
 
     if (filter.action != null) query = query.eq('action', filter.action!);
-    if (filter.targetType != null)
+    if (filter.targetType != null) {
       query = query.eq('target_type', filter.targetType!);
-    if (filter.adminUserId != null)
+    }
+    if (filter.adminUserId != null) {
       query = query.eq('admin_user_id', filter.adminUserId!);
+    }
 
     final from = page * kActivityPageSize;
     final to = from + kActivityPageSize - 1;

@@ -775,8 +775,9 @@ List<InventoryEntry> _applyFilters(
           if (!match) return false;
         }
 
-        if (f.category != null && e.product.category != f.category)
+        if (f.category != null && e.product.category != f.category) {
           return false;
+        }
 
         switch (f.stockFilter) {
           case StockFilter.out:

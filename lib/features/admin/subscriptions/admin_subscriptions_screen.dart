@@ -105,7 +105,7 @@ class _SubFilterBarState extends ConsumerState<_SubFilterBar> {
           ),
           plansAsync.when(
             loading: () => const SizedBox(width: 140, height: 40),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
             data:
                 (plans) => _SubDropdown<String?>(
                   value: filter.plan,
@@ -234,7 +234,7 @@ class _SubscriptionListBody extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error:
-          (_, __) => const Center(
+          (_, _) => const Center(
             child: Text(
               'Could not load subscriptions',
               style: TextStyle(color: AdminColors.textMuted),
@@ -258,7 +258,7 @@ class _SubscriptionListBody extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 itemCount: page.items.length,
                 separatorBuilder:
-                    (_, __) =>
+                    (_, _) =>
                         const Divider(height: 1, color: AdminColors.divider),
                 itemBuilder:
                     (context, i) => _SubscriptionRow(item: page.items[i]),

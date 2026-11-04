@@ -184,11 +184,12 @@ class KitchenSoundSection extends ConsumerWidget {
                     TextButton(
                       onPressed: () async {
                         await notifier.restoreDefaults();
-                        if (context.mounted)
+                        if (context.mounted) {
                           _snack(
                             context,
                             'Sound settings restored to defaults',
                           );
+                        }
                       },
                       child: const Text('Restore defaults'),
                     ),

@@ -65,8 +65,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// Debounced write-through so a burst of taps (e.g. tapping +3 quickly)
   /// doesn't hit disk on every single tap.
   void _persist() {
-    if (_restoringDraft)
+    if (_restoringDraft) {
       return; // don't immediately re-save what we just loaded
+    }
     _persistDebounce?.cancel();
     _persistDebounce = Timer(const Duration(milliseconds: 400), () async {
       try {

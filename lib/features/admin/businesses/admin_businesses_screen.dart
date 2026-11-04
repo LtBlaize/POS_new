@@ -94,7 +94,7 @@ class _FilterBarState extends ConsumerState<_FilterBar> {
           ),
           plansAsync.when(
             loading: () => const SizedBox(width: 140, height: 40),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
             data:
                 (plans) => _Dropdown<String?>(
                   value: filter.plan,
@@ -223,7 +223,7 @@ class _BusinessListBody extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error:
-          (_, __) => const Center(
+          (_, _) => const Center(
             child: Text(
               'Could not load businesses',
               style: TextStyle(color: AdminColors.textMuted),
@@ -242,7 +242,7 @@ class _BusinessListBody extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           itemCount: page.items.length,
           separatorBuilder:
-              (_, __) => const Divider(height: 1, color: AdminColors.divider),
+              (_, _) => const Divider(height: 1, color: AdminColors.divider),
           itemBuilder: (context, i) {
             final b = page.items[i];
             final (pillBg, pillFg) = AdminColors.statusPillColors(

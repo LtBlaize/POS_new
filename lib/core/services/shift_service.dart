@@ -24,6 +24,16 @@ class _OfflineSkip implements Exception {
   const _OfflineSkip();
 }
 
+/// True if [createdAt] falls inside [from, to]. DateTime.parse reads a string
+/// ending in 'Z' as UTC and a naive string as local time, so both storage
+/// formats resolve to the correct instant. String comparison does not.
+bool _inWindow(Object? createdAt, DateTime from, DateTime to) {
+  if (createdAt == null) return false;
+  final t = DateTime.tryParse(createdAt as String);
+  if (t == null) return false;
+  return !t.isBefore(from) && !t.isAfter(to);
+}
+
 class ShiftService {
   final LocalDbService _db;
   final SupabaseClient _supabase;
@@ -249,7 +259,17 @@ class ShiftService {
     final shift = await _getShiftById(shiftId);
     if (shift == null) throw Exception('Shift not found');
 
+    // Push pending sales first so the server path is usable and totals match.
+    if (_isOnline()) {
+      try {
+        await _syncQueue?.flushQueue().timeout(const Duration(seconds: 20));
+      } catch (e) {
+        debugPrint('[ShiftClose] pre-close flush incomplete: $e');
+      }
+    }
+
     final summary = await _computeShiftSummary(
+      shiftId: shift.id,
       businessId: shift.businessId,
       staffId: shift.staffId,
       from: shift.openedAt,
@@ -319,6 +339,7 @@ class ShiftService {
 
   Future<CashierShift> withLiveTotals(CashierShift shift) async {
     final summary = await _computeShiftSummary(
+      shiftId: shift.id,
       businessId: shift.businessId,
       staffId: shift.staffId,
       from: shift.openedAt,
@@ -335,8 +356,19 @@ class ShiftService {
   }
 
   // ── Compute shift totals from orders ───────────────────────────────────────
-
+  Future<bool> _isOwnerStaff(String businessId, String staffId) async {
+    final d = await _db.db;
+    final r = await d.query(
+      'staff_members',
+      columns: ['role'],
+      where: 'id = ? AND business_id = ?',
+      whereArgs: [staffId, businessId],
+      limit: 1,
+    );
+    return r.isNotEmpty && r.first['role'] == 'owner';
+  }  
   Future<Map<String, double>> _computeShiftSummary({
+    String? shiftId,
     required String businessId,
     required String staffId,
     required DateTime from,
@@ -349,12 +381,16 @@ class ShiftService {
     double creditGiven = 0;
     double creditsPaid = 0;
 
+    final includeUnassigned = await _isOwnerStaff(businessId, staffId);
+    final seen = <String>{};
     final splitOrderIds = <String>[];
 
     void tally(Map<String, dynamic> o) {
       final paidAt = o['paid_at'];
       final isPaid = paidAt != null;
       if (!isPaid) return;
+      if (o['status'] == 'cancelled') return; // voided orders are not sales
+      if (!seen.add(o['id'] as String)) return; // never count an order twice
 
       final amount = (o['total_amount'] as num).toDouble();
       final isSplit =
@@ -436,11 +472,24 @@ class ShiftService {
     try {
       // Offline, or sales/payments still waiting to sync: the server doesn't
       // have them yet, so compute from this device's local data instead.
-      if (!_isOnline() || await _db.pendingQueueCount() > 0) {
+      if (!_isOnline() || await _db.pendingOrderQueueCount() > 0) {
         throw const _OfflineSkip();
       }
       // ── Tally paid orders ──────────────────────────────────────────────────
-      // Fetch orders assigned to this staff member
+      // Orders stamped with this shift's id: exact match, no time window.
+      if (shiftId != null) {
+        final stamped = await _supabase
+            .from('orders')
+            .select(
+              'id, total_amount, payment_method, status, paid_at, is_split_payment',
+            )
+            .eq('business_id', businessId)
+            .eq('shift_id', shiftId);
+        for (final o in stamped) {
+          tally(o);
+        }
+      }
+      // Legacy orders (no shift_id): match by cashier + time window.
       final assignedOrders = await _supabase
           .from('orders')
           .select(
@@ -448,6 +497,7 @@ class ShiftService {
           )
           .eq('business_id', businessId)
           .eq('cashier_id', staffId)
+          .isFilter('shift_id', null)
           .gte('created_at', from.toUtc().toIso8601String())
           .lte('created_at', to.toUtc().toIso8601String());
 
@@ -457,18 +507,21 @@ class ShiftService {
 
       // Also include orders with no cashier_id (owner-placed orders on older
       // accounts that were created before the staff row existed)
-      final nullCashierOrders = await _supabase
-          .from('orders')
-          .select(
-            'id, total_amount, payment_method, status, paid_at, is_split_payment',
-          )
-          .eq('business_id', businessId)
-          .isFilter('cashier_id', null)
-          .gte('created_at', from.toUtc().toIso8601String())
-          .lte('created_at', to.toUtc().toIso8601String());
+      if (includeUnassigned) {
+        final nullCashierOrders = await _supabase
+            .from('orders')
+            .select(
+              'id, total_amount, payment_method, status, paid_at, is_split_payment',
+            )
+            .eq('business_id', businessId)
+            .isFilter('cashier_id', null)
+            .isFilter('shift_id', null)
+            .gte('created_at', from.toUtc().toIso8601String())
+            .lte('created_at', to.toUtc().toIso8601String());
 
-      for (final o in nullCashierOrders) {
-        tally(o);
+        for (final o in nullCashierOrders) {
+          tally(o);
+        }
       }
 
       // ── Tally credits paid (payments collected on existing utang) ──────────
@@ -493,19 +546,21 @@ class ShiftService {
 
       final rows = await d.rawQuery(
         '''
-        SELECT id, total_amount, payment_method, status, paid_at, is_split_payment FROM orders
+        SELECT id, total_amount, payment_method, status, paid_at,
+               is_split_payment, created_at, shift_id
+        FROM orders
         WHERE business_id = ?
-          AND (cashier_id = ? OR cashier_id IS NULL)
-          AND created_at >= ? AND created_at <= ?
+          AND paid_at IS NOT NULL
+          AND status != 'cancelled'
+          AND (shift_id = ? OR (shift_id IS NULL AND (cashier_id = ? OR (cashier_id IS NULL AND ? = 1))))
       ''',
-        [
-          businessId,
-          staffId,
-          from.toUtc().toIso8601String(),
-          to.toUtc().toIso8601String(),
-        ],
+        [businessId, shiftId ?? '', staffId, includeUnassigned ? 1 : 0],
       );
       for (final o in rows) {
+        // Compare as instants, not strings (local rows are stored in local time).
+        if (o['shift_id'] == null && !_inWindow(o['created_at'], from, to)) {
+          continue;
+        }
         tally(o);
       }
       await tallySplitOrders();

@@ -27,7 +27,7 @@ class AdminPlansScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error:
-            (_, __) => const Center(
+            (_, _) => const Center(
               child: Text(
                 'Could not load plans',
                 style: TextStyle(color: AdminColors.textMuted),
@@ -137,7 +137,7 @@ class _PlanCard extends ConsumerWidget {
           ),
           Switch(
             value: plan.isActive,
-            activeColor: AdminColors.primary,
+            activeThumbColor: AdminColors.primary,
             onChanged: (v) async {
               try {
                 await ref.read(adminPlansServiceProvider).setActive(plan.id, v);
@@ -289,7 +289,7 @@ class _PlanFormDialogState extends ConsumerState<_PlanFormDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _interval,
+                initialValue: _interval,
                 decoration: const InputDecoration(
                   labelText: 'Billing interval',
                 ),
@@ -315,7 +315,7 @@ class _PlanFormDialogState extends ConsumerState<_PlanFormDialog> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Active', style: TextStyle(fontSize: 13)),
                 value: _isActive,
-                activeColor: AdminColors.primary,
+                activeThumbColor: AdminColors.primary,
                 onChanged: (v) => setState(() => _isActive = v),
               ),
               if (_error != null) ...[

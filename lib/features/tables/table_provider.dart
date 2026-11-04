@@ -183,8 +183,9 @@ class TableNotifier extends StateNotifier<TableState> {
       for (final o in orders) {
         if (o.tableId == null || o.paidAt != null) continue;
         if (o.status == OrderStatus.cancelled ||
-            o.status == OrderStatus.completed)
+            o.status == OrderStatus.completed) {
           continue;
+        }
         open.putIfAbsent(o.tableId!, () => o); // newest first
       }
       return [

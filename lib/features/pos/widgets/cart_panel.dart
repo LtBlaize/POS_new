@@ -870,8 +870,9 @@ extension _CartPanelDialogs on _CartPanelState {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
-                      if (double.tryParse(v.trim()) == null)
+                      if (double.tryParse(v.trim()) == null) {
                         return 'Invalid price';
+                      }
                       return null;
                     },
                   ),

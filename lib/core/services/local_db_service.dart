@@ -254,6 +254,12 @@ class LocalDbService {
     if (!cols.contains('customer_name')) {
       await db.execute('ALTER TABLE orders ADD COLUMN customer_name TEXT');
     }
+    if (!cols.contains('shift_id')) {
+      await db.execute('ALTER TABLE orders ADD COLUMN shift_id TEXT');
+    }
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_orders_shift ON orders(shift_id)',
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -1594,6 +1600,7 @@ class LocalDbService {
         'paid_at': order.paidAt?.toIso8601String(),
         'created_at': order.createdAt.toIso8601String(),
         'customer_name': order.customerName,
+        'shift_id': order.shiftId,
         'is_offline': 1,
         'synced_at': null,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -1635,6 +1642,7 @@ class LocalDbService {
           'paid_at': order.paidAt?.toIso8601String(),
           'created_at': order.createdAt.toIso8601String(),
           'customer_name': order.customerName,
+          'shift_id': order.shiftId,
           'is_offline': 0,
           'synced_at': now,
         }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -1965,6 +1973,7 @@ class LocalDbService {
     businessId: row['business_id'] as String,
     tableId: row['table_id'] as String?,
     cashierId: row['cashier_id'] as String?,
+    shiftId: row['shift_id'] as String?,
     orderNumber: row['order_number'] as int,
     orderType: OrderTypeX.fromString(row['order_type'] as String),
     status: OrderStatusX.fromString(row['status'] as String),
@@ -2407,6 +2416,20 @@ class LocalDbService {
   // ─────────────────────────────────────────────────────────────────────────────
   // UTILITIES
   // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Order-related queue entries still pending OR dead-lettered. If any exist,
+  /// the server doesn't have all sales yet, so shift totals use local data.
+  Future<int> pendingOrderQueueCount() async {
+    final d = await db;
+    final r = await d.rawQuery('''
+      SELECT COUNT(*) AS c FROM sync_queue
+      WHERE status IN ('pending','failed')
+        AND operation IN ('insert_order','insert_order_items','append_order_items',
+          'process_payment','process_split_payment','update_order_adjustments',
+          'update_order_status','void_order','void_order_item')
+    ''');
+    return (r.first['c'] as int?) ?? 0;
+  }
 
   Future<int> pendingQueueCount() async {
     final d = await db;

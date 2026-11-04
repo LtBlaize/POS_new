@@ -116,7 +116,7 @@ class PromoStrip extends ConsumerWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         itemCount: promos.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder:
             (_, i) => SizedBox(width: 190, child: _PromoCard(promo: promos[i])),
       ),

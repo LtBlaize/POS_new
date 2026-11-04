@@ -115,7 +115,7 @@ class _KpiRow extends ConsumerWidget {
 
     return kpisAsync.when(
       loading: () => const _KpiRowSkeleton(),
-      error: (_, __) => const _KpiRowSkeleton(),
+      error: (_, _) => const _KpiRowSkeleton(),
       data: (kpis) {
         // "Active Pro" — plan-name assumption flagged in providers file.
         // Falls back to the single largest non-free plan bucket if a plan
@@ -241,7 +241,7 @@ class _RevenueChartCard extends ConsumerWidget {
                   height: 160,
                   child: Center(child: CircularProgressIndicator()),
                 ),
-            error: (_, __) => const _EmptyState('Could not load revenue data'),
+            error: (_, _) => const _EmptyState('Could not load revenue data'),
             data: (points) {
               if (points.isEmpty) {
                 return const _EmptyState('No payment history yet');
@@ -337,7 +337,7 @@ class _SubscriptionBreakdownCard extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-            error: (_, __) => const _EmptyState('Could not load breakdown'),
+            error: (_, _) => const _EmptyState('Could not load breakdown'),
             data: (items) {
               if (items.isEmpty) return const _EmptyState('No businesses yet');
               return Column(
@@ -414,7 +414,7 @@ class _RecentBusinessesCard extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-            error: (_, __) => const _EmptyState('Could not load businesses'),
+            error: (_, _) => const _EmptyState('Could not load businesses'),
             data:
                 (items) =>
                     items.isEmpty
@@ -460,7 +460,7 @@ class _RecentPaymentsCard extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-            error: (_, __) => const _EmptyState('Could not load payments'),
+            error: (_, _) => const _EmptyState('Could not load payments'),
             data:
                 (items) =>
                     items.isEmpty
@@ -558,7 +558,7 @@ class _ActivityFeedCard extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-            error: (_, __) => const _EmptyState('Could not load activity'),
+            error: (_, _) => const _EmptyState('Could not load activity'),
             data:
                 (items) =>
                     items.isEmpty

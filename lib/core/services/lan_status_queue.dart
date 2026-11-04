@@ -189,8 +189,9 @@ class LanStatusQueue {
       var changed = false;
 
       for (final patch in List.of(_queue)) {
-        if (patch.nextAttemptAt.isAfter(now))
+        if (patch.nextAttemptAt.isAfter(now)) {
           continue; // backoff not elapsed yet
+        }
 
         patch.attempts++;
         final ok = await _client.patchStatus(

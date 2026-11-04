@@ -34,7 +34,7 @@ class AdminSettingsScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error:
-            (e, __) => Center(
+            (e, _) => Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(

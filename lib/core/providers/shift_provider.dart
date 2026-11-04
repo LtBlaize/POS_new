@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/shift.dart';
+import '../models/staff.dart';
 import '../services/shift_service.dart';
 import '../providers/staff_provider.dart'; // ← activeStaffProvider lives here
 import '../providers/app_context_provider.dart';
@@ -58,6 +59,12 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
   }) async {
     final currentShift = state.value;
     if (currentShift == null) return null;
+    final closer = ref.read(activeStaffProvider);
+    final isManager =
+        closer?.role == StaffRole.owner || closer?.role == StaffRole.manager;
+    if (closer == null || (closer.id != currentShift.staffId && !isManager)) {
+      throw Exception('Only the shift owner or a manager can close this shift.');
+    }
     debugPrint('[ShiftClose] Closing shift: ${currentShift.id}');
 
     final closed = await ref

@@ -34,6 +34,28 @@ class SettingsScreen extends ConsumerWidget {
     final deviceRole = ref.watch(deviceRoleProvider);
     final isKitchenDevice = deviceRole == DeviceRole.kitchen;
 
+    // Kitchen STAFF (on any device): only what the kitchen needs.
+    // No device-role change and no account logout here.
+    if (ref.watch(activeStaffProvider)?.role == StaffRole.kitchen) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4F5F7),
+        appBar: _appBar(),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (isKitchenDevice) ...[
+              _SectionCard(child: const LanSettingsSection()),
+              const SizedBox(height: 16),
+            ],
+            _SectionCard(child: const KitchenSoundSection()),
+            const SizedBox(height: 16),
+            _SectionCard(child: const PrinterSettingsSection()),
+            const SizedBox(height: 32),
+          ],
+        ),
+      );
+    }
+
     // Kitchen device only needs LAN + printer setup
     if (isKitchenDevice) {
       return Scaffold(

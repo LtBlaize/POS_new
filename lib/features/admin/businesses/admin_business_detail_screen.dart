@@ -25,7 +25,7 @@ class AdminBusinessDetailScreen extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error:
-          (_, __) => const Center(
+          (_, _) => const Center(
             child: Text(
               'Could not load this business',
               style: TextStyle(color: AdminColors.textMuted),
@@ -127,8 +127,9 @@ class _AccessStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!biz.isActive)
+    if (!biz.isActive) {
       return const SizedBox.shrink(); // "Inactive" pill already covers this
+    }
 
     final now = DateTime.now();
     final paidActive =
@@ -284,8 +285,9 @@ class _SubscriptionCardState extends ConsumerState<_SubscriptionCard> {
     );
     if (result == null) return;
     if (result.plan == widget.biz.subscriptionPlan &&
-        result.durationMonths == null)
+        result.durationMonths == null) {
       return;
+    }
 
     await _run(
       () => ref

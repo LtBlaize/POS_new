@@ -197,6 +197,7 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
     }
 
     final salt = StaffMember.generateSalt();
+    final newId = const Uuid().v4();
     final member = StaffMember(
       id: '',
       businessId: _businessId,
@@ -214,14 +215,14 @@ class StaffListNotifier extends StateNotifier<AsyncValue<List<StaffMember>>> {
       await _syncQueue.enqueue(
         operation: 'add_staff',
         tableName: 'staff_members',
-        recordId: 'new_${DateTime.now().millisecondsSinceEpoch}',
-        payload: member.toJson(),
+        recordId: newId,
+        payload: {...member.toJson(), 'id': newId},
       );
       final current = state.asData?.value ?? [];
       state = AsyncValue.data([
         ...current,
         StaffMember(
-          id: 'offline_${DateTime.now().millisecondsSinceEpoch}',
+          id: newId,
           businessId: _businessId,
           name: name,
           role: role,

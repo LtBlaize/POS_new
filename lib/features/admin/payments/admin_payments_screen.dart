@@ -187,7 +187,7 @@ class _PaymentListBody extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error:
-          (_, __) => const Center(
+          (_, _) => const Center(
             child: Text(
               'Could not load payments',
               style: TextStyle(color: AdminColors.textMuted),
@@ -206,7 +206,7 @@ class _PaymentListBody extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           itemCount: page.items.length,
           separatorBuilder:
-              (_, __) => const Divider(height: 1, color: AdminColors.divider),
+              (_, _) => const Divider(height: 1, color: AdminColors.divider),
           itemBuilder: (context, i) {
             final p = page.items[i];
             final (bg, fg) = AdminColors.statusPillColors(p.status);
@@ -459,8 +459,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               displayStringForOption: (b) => b.name,
               optionsBuilder: (value) {
                 final q = value.text.trim().toLowerCase();
-                if (q.isEmpty)
+                if (q.isEmpty) {
                   return allBusinesses; // shows the full list as soon as the field is tapped
+                }
                 final starts = <BusinessOption>[];
                 final contains = <BusinessOption>[];
                 for (final b in allBusinesses) {

@@ -49,8 +49,9 @@ _PinLayout _pinLayoutOf(BuildContext context) {
   final h = size.height;
   final portrait = h >= w;
 
-  if (w < 600)
+  if (w < 600) {
     return portrait ? _PinLayout.phonePortrait : _PinLayout.phoneLandscape;
+  }
   if (portrait) return _PinLayout.tabletPortrait;
   return _PinLayout.tabletLandscape;
 }
@@ -79,6 +80,10 @@ class _PinLockOverlayState extends ConsumerState<PinLockOverlay> {
 
   void _resetTimer() {
     if (ref.read(appLockedProvider)) return;
+    if (ref.read(activeStaffProvider)?.role == StaffRole.kitchen) {
+      _inactivityTimer?.cancel();
+      return;
+    }
     _inactivityTimer?.cancel();
     _inactivityTimer = Timer(const Duration(minutes: 10), () {
       if (mounted) ref.read(appLockedProvider.notifier).state = true;
@@ -295,6 +300,22 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
     }
   }
 
+  void _unlockWithoutPin(StaffMember staff) {
+    ref.read(activeStaffProvider.notifier).login(staff);
+    if (ref.read(isOnlineProvider)) {
+      ref.read(rolePermissionsProvider.notifier).refresh();
+    }
+    ref
+        .read(auditServiceProvider)
+        .log(
+          actionType: AuditAction.staffLogin,
+          description: '${staff.name} logged in (${staff.role.label})',
+          metadata: {'role': staff.role.value},
+        );
+    ref.invalidate(currentShiftProvider);
+    widget.onUnlocked();
+  }
+
   Future<void> _upgradePinHash(StaffMember staff, String pin) async {
     if (!ref.read(isOnlineProvider)) return; // retried at next online login
     try {
@@ -337,6 +358,7 @@ class _PinScreenState extends ConsumerState<_PinScreen> {
           _pin = '';
           _error = false;
         });
+        if (s.role == StaffRole.kitchen) _unlockWithoutPin(s);
       },
     );
 

@@ -59,6 +59,7 @@ class Order {
   final String businessId;
   final String? tableId;
   final String? cashierId;
+  final String? shiftId;
   final int orderNumber;
   final OrderType orderType;
   final OrderStatus status;
@@ -85,6 +86,7 @@ class Order {
     required this.businessId,
     this.tableId,
     this.cashierId,
+    this.shiftId,
     required this.orderNumber,
     this.orderType = OrderType.walkIn,
     this.status = OrderStatus.pending,
@@ -115,6 +117,7 @@ class Order {
     String? businessId,
     String? tableId,
     String? cashierId,
+    String? shiftId,
     int? orderNumber,
     OrderType? orderType,
     OrderStatus? status,
@@ -139,6 +142,7 @@ class Order {
       businessId: businessId ?? this.businessId,
       tableId: tableId ?? this.tableId,
       cashierId: cashierId ?? this.cashierId,
+      shiftId: shiftId ?? this.shiftId,
       orderNumber: orderNumber ?? this.orderNumber,
       orderType: orderType ?? this.orderType,
       status: status ?? this.status,
@@ -169,6 +173,7 @@ class Order {
       businessId: map['business_id'] as String,
       tableId: map['table_id'] as String?,
       cashierId: map['cashier_id'] as String?,
+      shiftId: map['shift_id'] as String?,
       orderNumber: map['order_number'] as int,
       orderType: OrderTypeX.fromString(
         map['order_type'] as String? ?? 'walk_in',

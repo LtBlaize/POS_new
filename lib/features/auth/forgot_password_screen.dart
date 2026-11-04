@@ -20,7 +20,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _emailCtrl = TextEditingController();
 
   bool _isLoading = false;
-  bool _sent = false;
+  final bool _sent = false;
   String? _error;
 
   @override
@@ -48,8 +48,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = 'Could not send reset email. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

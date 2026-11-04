@@ -40,6 +40,15 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
   static const _surface = Color(0xFF1A1F35);
   static const _accent = Color(0xFFE94560);
 
+  @override
+  void initState() {
+    super.initState();
+    // Recompute live totals now, not at PIN-unlock time.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(currentShiftProvider.notifier).refresh();
+    });
+  }
+
   double get _actualCash =>
       double.tryParse(_actualCashCtrl.text.replaceAll(',', '')) ?? 0;
 

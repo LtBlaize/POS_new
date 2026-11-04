@@ -110,8 +110,9 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
 
   // Watch invalidation signals — evict specific orders when voided/updated.
   ref.listen<Set<String>>(_invalidatedOrderIdsProvider, (_, invalidated) {
-    if (invalidated.isEmpty)
+    if (invalidated.isEmpty) {
       return; // clearing the signal re-fires this listener
+    }
     for (final id in invalidated) {
       itemCache.remove(id);
     }
@@ -354,6 +355,7 @@ class OrderService {
   // ── Place order ─────────────────────────────────────────────────────────────
 
   Future<Order> placeOrder({
+    String? shiftId,
     required String businessId,
     required List<CartItem> items,
     String? tableId,
@@ -375,6 +377,7 @@ class OrderService {
     if (_isOnline) {
       try {
         return await _placeOnline(
+          shiftId: shiftId,
           orderId: orderId,
           businessId: businessId,
           items: items,
@@ -396,6 +399,7 @@ class OrderService {
       }
     }
     return _placeOffline(
+      shiftId: shiftId,
       orderId: orderId,
       businessId: businessId,
       items: items,
@@ -411,6 +415,7 @@ class OrderService {
   }
 
   Future<Order> _placeOnline({
+    String? shiftId,
     required String orderId,
     required String businessId,
     required List<CartItem> items,
@@ -431,6 +436,7 @@ class OrderService {
         .from('orders')
         .insert({
           'id': orderId,
+          'shift_id': shiftId,
           'business_id': businessId,
           'table_id': tableId,
           'cashier_id': cashierId,
@@ -459,10 +465,21 @@ class OrderService {
             )
             .toList();
 
-    await _client
-        .from('order_items')
-        .insert(orderItems)
-        .timeout(const Duration(seconds: 15));
+    try {
+      await _client
+          .from('order_items')
+          .insert(orderItems)
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      // Don't leave an item-less order behind. On a network error we keep it:
+      // the offline fallback reuses this id and the replay adds the items.
+      if (!isNetworkError(e)) {
+        try {
+          await _client.from('orders').delete().eq('id', orderId);
+        } catch (_) {}
+      }
+      rethrow;
+    }
 
     final order = Order.fromMap(orderRow, items: items);
 
@@ -480,6 +497,7 @@ class OrderService {
   }
 
   Future<Order> _placeOffline({
+    String? shiftId,
     required String orderId,
     required String businessId,
     required List<CartItem> items,
@@ -501,6 +519,7 @@ class OrderService {
     final localOrderNumber = await _local.nextLocalOrderNumber(businessId);
 
     final order = Order(
+      shiftId: shiftId,
       id: offlineId,
       businessId: businessId,
       tableId: tableId,
@@ -534,6 +553,7 @@ class OrderService {
       recordId: offlineId,
       payload: {
         'id': offlineId,
+        'shift_id': shiftId,
         'business_id': businessId,
         'table_id': tableId,
         'cashier_id': cashierId,
@@ -1415,8 +1435,9 @@ class OrderService {
     try {
       final order = await fetchOrderWithItems(orderId);
       if (order.status == OrderStatus.completed ||
-          order.status == OrderStatus.cancelled)
+          order.status == OrderStatus.cancelled) {
         return;
+      }
       if (order.items.isNotEmpty &&
           order.items.every((i) => i.kitchenStatus == 'served')) {
         await updateStatus(orderId, OrderStatus.completed);

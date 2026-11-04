@@ -645,7 +645,9 @@ class SyncQueueService {
             .eq('id', recordId);
 
       case 'add_staff':
-        await _client.from('staff_members').insert(payload);
+        await _client
+            .from('staff_members')
+            .upsert(payload, onConflict: 'id', ignoreDuplicates: true);
 
       case 'update_staff':
         await _client.from('staff_members').update(payload).eq('id', recordId);

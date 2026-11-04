@@ -880,20 +880,17 @@ Future<(int, int)> _localOrderCounts(
   DateTime to,
 ) async {
   final db = await local.db;
-  final orders = await db.query(
+  final allOrders = await db.query(
     'orders',
-    columns: ['id'],
-    where:
-        'business_id = ? AND cashier_id = ? AND status = ? '
-        'AND created_at >= ? AND created_at <= ?',
-    whereArgs: [
-      businessId,
-      staffId,
-      'completed',
-      from.toIso8601String(),
-      to.toIso8601String(),
-    ],
+    columns: ['id', 'created_at'],
+    where: 'business_id = ? AND cashier_id = ? AND status = ?',
+    whereArgs: [businessId, staffId, 'completed'],
   );
+  final orders =
+      allOrders.where((o) {
+        final t = DateTime.tryParse(o['created_at'] as String? ?? '');
+        return t != null && !t.isBefore(from) && !t.isAfter(to);
+      }).toList();
   if (orders.isEmpty) return (0, 0);
 
   // Parameterized IN clause — no string interpolation
@@ -927,6 +924,7 @@ CashierShift shiftFromRow(Map<String, dynamic> r) => CashierShift(
   gcashSales: (r['gcash_sales'] as num? ?? 0).toDouble(),
   otherSales: (r['other_sales'] as num? ?? 0).toDouble(),
   creditGiven: (r['credit_given'] as num? ?? 0).toDouble(),
+  creditsPaid: (r['credits_paid'] as num? ?? 0).toDouble(),
   expenses: (r['expenses'] as num? ?? 0).toDouble(),
 );
 

@@ -349,8 +349,9 @@ class LanServerService {
 
   Middleware _corsMiddleware() =>
       (Handler handler) => (Request req) async {
-        if (req.method == 'OPTIONS')
+        if (req.method == 'OPTIONS') {
           return Response.ok('', headers: _corsHeaders);
+        }
         return (await handler(req)).change(headers: _corsHeaders);
       };
 

@@ -17,6 +17,7 @@ import 'receipt_service.dart';
 import 'thermal_print_service.dart';
 import '../services/sync_queue_service.dart';
 import '../config/access_enforcement_flag.dart';
+import '../providers/shift_provider.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -133,6 +134,12 @@ class CheckoutService {
     // Resolve cashier ID from active staff session
     final activeStaff = _ref.read(activeStaffProvider);
     final cashierId = activeStaff?.id;
+    String? shiftId;
+    try {
+      shiftId = (await _ref.read(currentShiftProvider.future))?.id;
+    } catch (e) {
+      debugPrint('[Checkout] shift lookup failed, order will be unstamped: $e');
+    }
     debugPrint(
       '[Checkout] activeStaff: ${activeStaff?.name}, cashierId: $cashierId',
     );
@@ -258,6 +265,7 @@ class CheckoutService {
         tableId: tableUuid,
         notes: null,
         cashierId: cashierId,
+        shiftId: shiftId,
         taxRate: taxRate,
         discountAmount: discountAmount,
         tipAmount: tipAmount,

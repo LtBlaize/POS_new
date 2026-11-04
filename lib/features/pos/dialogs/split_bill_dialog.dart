@@ -242,8 +242,9 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
   }
 
   Future<void> _paySplit(int index, List<List<CartItem>> splits) async {
-    if (_completedOrders.length > index && _completedOrders[index] != null)
+    if (_completedOrders.length > index && _completedOrders[index] != null) {
       return;
+    }
     final items = splits[index];
     if (items.isEmpty) return;
 
