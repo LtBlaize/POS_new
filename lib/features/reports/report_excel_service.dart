@@ -321,15 +321,17 @@ class ReportExcelService {
         final raw = await Supabase.instance.client
             .from('orders')
             .select(
-              'id, created_at, payment_method, cashier_id, cashier_name, '
-              'customer_name, status, '
-              'order_items(product_name, category, quantity, unit_price, discount_percent)',
+              'id, order_number, paid_at, payment_method, cashier_id, '
+              'customer_name, status, subtotal, tax_amount, staff_members(name), '
+              'order_items(product_name, quantity, unit_price, subtotal, '
+              'products(category_name))',
             )
             .eq('business_id', businessId)
-            .eq('status', 'completed')
-            .gte('created_at', dayStart)
-            .lte('created_at', dayEnd)
-            .order('created_at');
+            .neq('status', 'cancelled')
+            .not('paid_at', 'is', null)
+            .gte('paid_at', dayStart)
+            .lte('paid_at', dayEnd)
+            .order('paid_at');
         rows = List<Map<String, dynamic>>.from(raw as List);
       } catch (_) {
         rows = await _localOrderRows(local, businessId, dayStart, dayEnd);
@@ -342,33 +344,55 @@ class ReportExcelService {
     int seq = 1;
     for (final order in rows) {
       final createdAt =
-          DateTime.tryParse(order['created_at'] as String? ?? '')?.toLocal() ??
+          DateTime.tryParse(
+            (order['paid_at'] ?? order['created_at']) as String? ?? '',
+          )?.toLocal() ??
           start;
       final payMethod = _normalisePayment(
         order['payment_method'] as String? ?? 'cash',
       );
+      final staffRow = order['staff_members'];
       final cashierName =
-          order['cashier_name'] as String? ??
+          (staffRow is Map ? staffRow['name'] as String? : null) ??
           cashierNames[order['cashier_id'] as String? ?? ''] ??
           'Unknown';
       final customerName =
           (order['customer_name'] as String?)?.trim().isNotEmpty == true
               ? order['customer_name'] as String
               : 'Walk-in';
-      final invoiceNo = 'INV-${seq.toString().padLeft(5, '0')}';
+      final orderNo = order['order_number'];
+      final invoiceNo =
+          orderNo != null
+              ? 'INV-${orderNo.toString().padLeft(5, '0')}'
+              : 'INV-${seq.toString().padLeft(5, '0')}';
       seq++;
+      final orderSubtotal = (order['subtotal'] as num?)?.toDouble() ?? 0;
+      final orderTaxPct =
+          orderSubtotal > 0
+              ? ((order['tax_amount'] as num?)?.toDouble() ?? 0) /
+                  orderSubtotal *
+                  100
+              : 0.0;
       for (final item in (order['order_items'] as List? ?? [])) {
+        final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+        final unit = (item['unit_price'] as num?)?.toDouble() ?? 0;
+        final lineSub = (item['subtotal'] as num?)?.toDouble() ?? unit * qty;
+        final raw = unit * qty;
+        final discPct =
+            raw > 0 ? ((raw - lineSub) / raw * 100).clamp(0.0, 100.0) : 0.0;
+        final prod = item['products'];
         result.add(
           _SalesRow(
             date: createdAt,
             invoiceNumber: invoiceNo,
             productName: item['product_name'] as String? ?? 'Unknown',
-            category: item['category'] as String? ?? 'Uncategorised',
-            qtySold: (item['quantity'] as num?)?.toInt() ?? 1,
-            unitPrice: (item['unit_price'] as num?)?.toDouble() ?? 0,
-            discountPercent:
-                (item['discount_percent'] as num?)?.toDouble() ?? 0,
-            taxPercent: 12.0,
+            category:
+                (prod is Map ? prod['category_name'] as String? : null) ??
+                'Uncategorised',
+            qtySold: qty,
+            unitPrice: unit,
+            discountPercent: discPct.toDouble(),
+            taxPercent: orderTaxPct.toDouble(),
             paymentMethod: payMethod,
             cashier: cashierName,
             customerName: customerName,
@@ -386,13 +410,24 @@ class ReportExcelService {
     String to,
   ) async {
     final db = await local.db;
-    return (await db.query(
+    final orders = await db.query(
       'orders',
       where:
-          'business_id = ? AND status = ? AND created_at >= ? AND created_at <= ?',
-      whereArgs: [businessId, 'completed', from, to],
-      orderBy: 'created_at ASC',
-    )).cast<Map<String, dynamic>>();
+          'business_id = ? AND status != ? AND paid_at IS NOT NULL '
+          'AND paid_at >= ? AND paid_at <= ?',
+      whereArgs: [businessId, 'cancelled', from, to],
+      orderBy: 'paid_at ASC',
+    );
+    final out = <Map<String, dynamic>>[];
+    for (final o in orders) {
+      final items = await db.query(
+        'order_items',
+        where: 'order_id = ?',
+        whereArgs: [o['id']],
+      );
+      out.add(<String, dynamic>{...o, 'order_items': items});
+    }
+    return out;
   }
 
   Future<List<_InventoryRow>> _fetchInventoryRows(
@@ -406,7 +441,7 @@ class ReportExcelService {
         final raw = await Supabase.instance.client
             .from('products')
             .select(
-              'id, barcode, name, category, supplier, cost_price, price, stock, min_stock, expiry_date',
+              'id, barcode, name, category_name, cost_price, price, stock_quantity',
             )
             .eq('business_id', businessId)
             .eq('is_active', true)
@@ -1164,9 +1199,11 @@ class ReportExcelService {
       case 'paymaya':
       case 'maya':
         return 'PayMaya';
-      case 'creditcard':
       case 'credit':
-        return 'Credit Card';
+        return 'Utang (credit)';
+      case 'creditcard':
+      case 'card':
+        return 'Card';
       case 'debitcard':
       case 'debit':
         return 'Debit Card';

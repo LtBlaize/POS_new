@@ -114,7 +114,10 @@ class LocalDbService {
         await d.update(
           'orders',
           {'status': status.value},
-          where: 'id = ?',
+          where:
+              status == OrderStatus.cancelled
+                  ? 'id = ?'
+                  : "id = ? AND status != 'cancelled'",
           whereArgs: [orderId],
         );
       });
@@ -195,6 +198,7 @@ class LocalDbService {
         await _ensureOrderItemColumns(db);
         await _ensureOrderColumns(db);
         await _ensureProductColumns(db);
+        await _ensureCreditColumns(db);
         await db.execute(
           'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)',
         );
@@ -230,6 +234,29 @@ class LocalDbService {
     if (!cols.contains('discount_type')) {
       await db.execute(
         "ALTER TABLE order_items ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'fixed'",
+      );
+    }
+  }
+
+  Future<void> _ensureCreditColumns(Database db) async {
+    final cols =
+        (await db.rawQuery(
+          'PRAGMA table_info(credit_transactions)',
+        )).map((r) => r['name'] as String).toSet();
+    if (cols.isEmpty) return;
+    if (!cols.contains('amount_remaining')) {
+      await db.execute(
+        'ALTER TABLE credit_transactions ADD COLUMN amount_remaining REAL',
+      );
+    }
+    if (!cols.contains('is_settled')) {
+      await db.execute(
+        'ALTER TABLE credit_transactions ADD COLUMN is_settled INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (!cols.contains('settled_at')) {
+      await db.execute(
+        'ALTER TABLE credit_transactions ADD COLUMN settled_at TEXT',
       );
     }
   }
@@ -2077,7 +2104,8 @@ class LocalDbService {
         final taxRate = oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
         final newTax = newSubtotal * taxRate;
         final newDiscount = existingDiscount.clamp(0.0, newSubtotal);
-        final newTotal = newSubtotal + newTax - newDiscount;
+        final tip = (orderRows.first['tip_amount'] as num?)?.toDouble() ?? 0.0;
+        final newTotal = newSubtotal + newTax - newDiscount + tip;
 
         await txn.update(
           'orders',

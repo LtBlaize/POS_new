@@ -180,6 +180,11 @@ class DailyTab extends StatelessWidget {
           // ── P&L summary card ─────────────────────────────────────────────
           if (report.totalRevenue > 0)
             _PLSummaryCard(report: report, accent: accent, isPhone: isPhone),
+          if (!report.isFromCache &&
+              (report.tipsTotal > 0 || report.creditGiven > 0)) ...[
+            SizedBox(height: isPhone ? 12 : 16),
+            _ExcludedCard(report: report),
+          ],
 
           SizedBox(height: isPhone ? 12 : 16),
 
@@ -597,6 +602,8 @@ class PaymentBreakdown extends StatelessWidget {
     'card' => 'Card',
     'gcash' => 'GCash',
     'maya' => 'Maya',
+    'credit' => 'Utang',
+    'utang_collected' => 'Utang collected',
     _ => key,
   };
 }
@@ -1059,6 +1066,35 @@ class _PLSummaryCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ExcludedCard extends StatelessWidget {
+  final DailyReport report;
+  const _ExcludedCard({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    return ReportCard(
+      title: 'Not counted as sales',
+      icon: Icons.info_outline,
+      child: Column(
+        children: [
+          _PLRow(
+            label: 'Tips (go to staff)',
+            value: report.tipsTotal,
+            isTotal: false,
+            color: AppColors.textSecondary,
+          ),
+          _PLRow(
+            label: 'Utang given (counted when collected)',
+            value: report.creditGiven,
+            isTotal: false,
+            color: AppColors.textSecondary,
+          ),
         ],
       ),
     );

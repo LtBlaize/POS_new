@@ -40,7 +40,7 @@ class VoidRecord {
     'reason': reason,
     'voided_by_staff_id': voidedByStaffId,
     'voided_by_staff_name': voidedByStaffName,
-    'voided_at': voidedAt.toIso8601String(),
+    'voided_at': voidedAt.toUtc().toIso8601String(),
   };
 
   factory VoidRecord.fromMap(Map<String, dynamic> m) => VoidRecord(
@@ -54,7 +54,7 @@ class VoidRecord {
     reason: m['reason'] as String,
     voidedByStaffId: m['voided_by_staff_id'] as String,
     voidedByStaffName: m['voided_by_staff_name'] as String,
-    voidedAt: DateTime.parse(m['voided_at'] as String),
+    voidedAt: DateTime.parse(m['voided_at'] as String).toLocal(),
   );
 }
 

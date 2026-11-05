@@ -1,6 +1,8 @@
 // features/reports/reports_providers.dart
 // All models + Riverpod providers for the Reports feature.
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -75,6 +77,9 @@ class DailyReport {
   final double totalTaxCollected;
   final double totalDiscount;
   final Map<String, double> discountByStaff;
+  final double creditGiven; // utang sold in range (NOT revenue)
+  final double creditCollected; // utang payments collected (revenue)
+  final double tipsTotal; // tips (NOT revenue)
   final bool isFromCache;
   final DateTime? cachedAt;
 
@@ -95,6 +100,9 @@ class DailyReport {
     this.totalTaxCollected = 0,
     this.totalDiscount = 0,
     this.discountByStaff = const {},
+    this.creditGiven = 0,
+    this.creditCollected = 0,
+    this.tipsTotal = 0,
     this.isFromCache = false,
     this.cachedAt,
   });
@@ -242,38 +250,24 @@ final heatmapProvider = FutureProvider.family<WeeklyHeatmap, DateRange>((
 
   try {
     final client = ref.watch(supabaseClientProvider);
-    final start =
-        DateTime(
-          range.start.year,
-          range.start.month,
-          range.start.day,
-        ).toUtc().toIso8601String();
-    final end =
-        DateTime(
-          range.end.year,
-          range.end.month,
-          range.end.day,
-          23,
-          59,
-          59,
-        ).toUtc().toIso8601String();
-
-    final rows = await client
-        .from('orders')
-        .select('created_at, total_amount')
-        .eq('business_id', businessId)
-        .not('paid_at', 'is', null)
-        .gte('created_at', start)
-        .lte('created_at', end);
+    final rows = await _fetchPaidOrdersPaged(
+      client,
+      businessId,
+      _startUtc(range.start),
+      _endExclusiveUtc(range.end),
+      'paid_at, total_amount, tip_amount, tax_amount, status, payment_method',
+      includeCancelled: false,
+    );
 
     // 7 × 24 accumulator: key = weekday * 100 + hour
     final Map<int, double> amountMap = {};
     final Map<int, int> countMap = {};
 
-    for (final o in (rows as List)) {
-      final dt = DateTime.tryParse(o['created_at'] as String? ?? '')?.toLocal();
+    for (final o in rows) {
+      if (o['payment_method'] == 'credit') continue; // utang: counted when collected
+      final dt = DateTime.tryParse(o['paid_at'] as String? ?? '')?.toLocal();
       if (dt == null) continue;
-      final amount = (o['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final amount = _netSale(o);
       final key = dt.weekday * 100 + dt.hour;
       amountMap[key] = (amountMap[key] ?? 0) + amount;
       countMap[key] = (countMap[key] ?? 0) + 1;
@@ -319,21 +313,8 @@ final slowMoversProvider = FutureProvider.family<
 
   try {
     final client = ref.watch(supabaseClientProvider);
-    final start =
-        DateTime(
-          args.range.start.year,
-          args.range.start.month,
-          args.range.start.day,
-        ).toUtc().toIso8601String();
-    final end =
-        DateTime(
-          args.range.end.year,
-          args.range.end.month,
-          args.range.end.day,
-          23,
-          59,
-          59,
-        ).toUtc().toIso8601String();
+    final startUtc = _startUtc(args.range.start);
+    final endUtc = _endExclusiveUtc(args.range.end);
 
     // Fetch all active products
     final products = await client
@@ -345,16 +326,14 @@ final slowMoversProvider = FutureProvider.family<
         .timeout(const Duration(seconds: 10));
 
     // Fetch sales in range
-    final orders = await client
-        .from('orders')
-        .select(
-          'order_items(product_id, product_name, quantity, subtotal, cost_at_sale)',
-        )
-        .eq('business_id', businessId)
-        .not('paid_at', 'is', null)
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .timeout(const Duration(seconds: 10));
+    final orders = await _fetchPaidOrdersPaged(
+      client,
+      businessId,
+      startUtc,
+      endUtc,
+      'status, order_items(product_id, product_name, quantity, subtotal, cost_at_sale)',
+      includeCancelled: false,
+    );
 
     // Aggregate sold qty by product id
     final Map<String, _ProductAccum> soldMap = {};
@@ -416,7 +395,7 @@ final periodReportProvider = FutureProvider.family<DailyReport, DateRange>((
 ) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return DailyReport.empty;
-  final isOnline = ref.read(isOnlineProvider);
+  final isOnline = ref.watch(isOnlineProvider);
   if (!isOnline) {
     // For multi-day ranges, sum up cached daily rows
     final local = ref.read(localDbServiceProvider);
@@ -468,33 +447,24 @@ final periodReportProvider = FutureProvider.family<DailyReport, DateRange>((
   }
   try {
     final client = ref.watch(supabaseClientProvider);
-    final start =
-        DateTime(
-          range.start.year,
-          range.start.month,
-          range.start.day,
-        ).toUtc().toIso8601String();
-    final end =
-        DateTime(
-          range.end.year,
-          range.end.month,
-          range.end.day,
-          23,
-          59,
-          59,
-        ).toUtc().toIso8601String();
+    final startUtc = _startUtc(range.start);
+    final endUtc = _endExclusiveUtc(range.end);
 
-    final rows = await client
-        .from('orders')
-        .select(
-          '*, order_items(product_name, quantity, subtotal, cost_at_sale, products(category_name)), staff_members(name)',
-        )
-        .eq('business_id', businessId)
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at');
+    final rows = await _fetchPaidOrdersPaged(
+      client,
+      businessId,
+      startUtc,
+      endUtc,
+      _kReportOrderColumns,
+    );
+    final collected = await _fetchCreditCollected(
+      client,
+      businessId,
+      startUtc,
+      endUtc,
+    );
 
-    return _buildReport(rows as List, fromCache: false);
+    return _buildReport(rows, fromCache: false, creditCollected: collected);
   } catch (e) {
     return DailyReport.empty;
   }
@@ -506,38 +476,46 @@ final dailyReportProvider = FutureProvider.family<DailyReport, DateTime>((
 ) async {
   final businessId = ref.watch(activeBusinessIdProvider);
   if (businessId == null) return DailyReport.empty;
-  final isOnline = ref.read(isOnlineProvider);
+  final isOnline = ref.watch(isOnlineProvider);
   final local = ref.read(localDbServiceProvider);
   final dateKey =
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  // The "Live" banner promises a refresh every minute: make it true for today.
+  final nowTs = DateTime.now();
+  if (date.year == nowTs.year &&
+      date.month == nowTs.month &&
+      date.day == nowTs.day) {
+    final timer = Timer(const Duration(minutes: 1), () => ref.invalidateSelf());
+    ref.onDispose(timer.cancel);
+  }
 
   if (!isOnline) return _loadFromCache(local, businessId, dateKey);
 
   try {
     final client = ref.watch(supabaseClientProvider);
-    final dayStart =
-        DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
-    final dayEnd =
-        DateTime(
-          date.year,
-          date.month,
-          date.day,
-          23,
-          59,
-          59,
-        ).toUtc().toIso8601String();
+    final startUtc = _startUtc(date);
+    final endUtc = _endExclusiveUtc(date);
 
-    final rows = await client
-        .from('orders')
-        .select(
-          '*, order_items(product_name, quantity, subtotal, cost_at_sale), staff_members(name)',
-        )
-        .eq('business_id', businessId)
-        .gte('created_at', dayStart)
-        .lte('created_at', dayEnd)
-        .order('created_at');
+    final rows = await _fetchPaidOrdersPaged(
+      client,
+      businessId,
+      startUtc,
+      endUtc,
+      _kReportOrderColumns,
+    );
+    final collected = await _fetchCreditCollected(
+      client,
+      businessId,
+      startUtc,
+      endUtc,
+    );
 
-    final report = _buildReport(rows as List, fromCache: false);
+    final report = _buildReport(
+      rows,
+      fromCache: false,
+      creditCollected: collected,
+    );
 
     await local.upsertReportDay(
       date: dateKey,
@@ -623,6 +601,7 @@ final shiftReportProvider = FutureProvider.autoDispose.family<
             .eq('business_id', businessId)
             .eq('cashier_id', shift.staffId)
             .not('paid_at', 'is', null)
+            .neq('status', 'cancelled')
             .gte('created_at', shift.openedAt.toUtc().toIso8601String())
             .lte('created_at', shiftEnd.toIso8601String());
 
@@ -734,64 +713,162 @@ Future<DailyReport> _loadFromCache(
   );
 }
 
-DailyReport _buildReport(List orders, {required bool fromCache}) {
-  double totalRevenue = 0;
+// ---- Report helpers ---------------------------------------------------------
+
+const _kReportOrderColumns =
+    '*, order_items(product_name, quantity, subtotal, cost_at_sale, '
+    'products(category_name)), staff_members(name), '
+    'order_payments(method, amount)';
+
+DateTime _startUtc(DateTime d) => DateTime(d.year, d.month, d.day).toUtc();
+
+DateTime _endExclusiveUtc(DateTime d) =>
+    DateTime(d.year, d.month, d.day + 1).toUtc();
+
+double _num(dynamic v) => (v as num?)?.toDouble() ?? 0.0;
+
+/// Owner rule: sales exclude VAT and tips.
+double _netSale(Map<String, dynamic> o) {
+  final n =
+      _num(o['total_amount']) - _num(o['tip_amount']) - _num(o['tax_amount']);
+  return n < 0 ? 0.0 : n;
+}
+
+/// Paid orders by paid_at, paged so the API row cap cannot truncate results.
+Future<List<Map<String, dynamic>>> _fetchPaidOrdersPaged(
+  SupabaseClient client,
+  String businessId,
+  DateTime startUtc,
+  DateTime endUtcExclusive,
+  String columns, {
+  bool includeCancelled = true,
+}) async {
+  const pageSize = 500;
+  final out = <Map<String, dynamic>>[];
+  var from = 0;
+  while (true) {
+    var q = client
+        .from('orders')
+        .select(columns)
+        .eq('business_id', businessId)
+        .gte('paid_at', startUtc.toIso8601String())
+        .lt('paid_at', endUtcExclusive.toIso8601String());
+    if (!includeCancelled) q = q.neq('status', 'cancelled');
+    final batch = await q
+        .order('paid_at', ascending: true)
+        .order('id', ascending: true)
+        .range(from, from + pageSize - 1);
+    final list = List<Map<String, dynamic>>.from(batch as List);
+    out.addAll(list);
+    if (list.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
+/// Utang payments collected in range (revenue is recognised on collection).
+Future<double> _fetchCreditCollected(
+  SupabaseClient client,
+  String businessId,
+  DateTime startUtc,
+  DateTime endUtcExclusive,
+) async {
+  final rows = await client
+      .from('credit_transactions')
+      .select('amount')
+      .eq('business_id', businessId)
+      .eq('type', 'payment')
+      .gte('created_at', startUtc.toIso8601String())
+      .lt('created_at', endUtcExclusive.toIso8601String());
+  return (rows as List).fold<double>(0, (s, r) => s + _num(r['amount']));
+}
+
+DailyReport _buildReport(
+  List<Map<String, dynamic>> orders, {
+  required bool fromCache,
+  double creditCollected = 0,
+}) {
+  double saleRevenue = 0;
   double totalCogs = 0;
   double totalTax = 0;
+  double totalTips = 0;
   double totalDiscount = 0;
+  double creditGiven = 0;
   final Map<String, double> discountByStaff = {};
   int completed = 0;
+  int creditOnly = 0;
   int cancelled = 0;
   final Map<String, double> byPayment = {};
   final Map<String, _ProductAccum> productAccum = {};
   final Map<int, double> hourMap = {};
 
-  for (final o in orders) {
-    final row = o as Map<String, dynamic>;
+  for (final row in orders) {
     final status = row['status'] as String? ?? '';
-
     if (status == 'cancelled') {
       cancelled++;
       continue;
     }
 
-    final amount = (row['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final method = row['payment_method'] as String? ?? 'cash';
-    final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
-    final isPaid = row['paid_at'] != null;
+    final paidAt = DateTime.tryParse(row['paid_at'] as String? ?? '');
+    if (paidAt == null) continue; // unpaid is not a sale
 
-    if (isPaid) {
-      completed++;
-      totalRevenue += amount;
-      byPayment[method] = (byPayment[method] ?? 0) + amount;
-      totalTax += (row['tax_amount'] as num?)?.toDouble() ?? 0.0;
-      final disc = (row['discount_amount'] as num?)?.toDouble() ?? 0.0;
-      totalDiscount += disc;
-      if (disc > 0) {
-        final staffRow = row['staff_members'] as Map<String, dynamic>?;
-        final cashier =
-            staffRow?['name'] as String? ??
-            row['cashier_id'] as String? ??
-            'Unknown';
-        discountByStaff[cashier] = (discountByStaff[cashier] ?? 0) + disc;
+    final net = _netSale(row);
+    completed++;
+    totalTips += _num(row['tip_amount']);
+    totalTax += _num(row['tax_amount']);
+
+    // Spread the net sale across tenders; credit legs are not revenue yet.
+    final legs =
+        (row['order_payments'] as List? ?? const [])
+            .cast<Map<String, dynamic>>();
+    final legsTotal = legs.fold<double>(0, (s, l) => s + _num(l['amount']));
+    double creditPart = 0;
+    if (legs.isNotEmpty && legsTotal > 0) {
+      final scale = net / legsTotal;
+      for (final leg in legs) {
+        final m = leg['method'] as String? ?? 'cash';
+        final amt = _num(leg['amount']) * scale;
+        if (m == 'credit') {
+          creditPart += amt;
+        } else {
+          byPayment[m] = (byPayment[m] ?? 0) + amt;
+        }
+      }
+    } else {
+      final m = row['payment_method'] as String? ?? 'cash';
+      if (m == 'credit') {
+        creditPart = net;
+      } else {
+        byPayment[m] = (byPayment[m] ?? 0) + net;
       }
     }
+    final counted = net - creditPart;
+    saleRevenue += counted;
+    creditGiven += creditPart;
+    if (counted <= 0 && creditPart > 0) creditOnly++;
 
-    if (createdAt != null) {
-      final h = createdAt.toLocal().hour;
-      if (isPaid) hourMap[h] = (hourMap[h] ?? 0) + amount;
+    final h = paidAt.toLocal().hour;
+    hourMap[h] = (hourMap[h] ?? 0) + counted;
+
+    final disc = _num(row['discount_amount']);
+    totalDiscount += disc;
+    if (disc > 0) {
+      final staffRow = row['staff_members'] as Map<String, dynamic>?;
+      final cashier =
+          staffRow?['name'] as String? ??
+          row['cashier_id'] as String? ??
+          'Unknown';
+      discountByStaff[cashier] = (discountByStaff[cashier] ?? 0) + disc;
     }
 
-    final items = isPaid ? (row['order_items'] as List? ?? []) : const [];
-    for (final item in items) {
+    for (final item in (row['order_items'] as List? ?? const [])) {
       final name = item['product_name'] as String? ?? 'Unknown';
-      final qty = item['quantity'] as int? ?? 0;
-      final sub = (item['subtotal'] as num?)?.toDouble() ?? 0.0;
-      final itemCost =
-          ((item['cost_at_sale'] as num?)?.toDouble() ?? 0.0) * qty;
+      final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+      final sub = _num(item['subtotal']);
+      final itemCost = _num(item['cost_at_sale']) * qty;
       final categoryRow = item['products'] as Map<String, dynamic>?;
       final category = categoryRow?['category_name'] as String? ?? '';
-      if (isPaid) totalCogs += itemCost;
+      totalCogs += itemCost;
       final acc = productAccum[name];
       productAccum[name] =
           acc != null
@@ -806,7 +883,10 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
     }
   }
 
+  final totalRevenue = saleRevenue + creditCollected;
+  if (creditCollected > 0) byPayment['utang_collected'] = creditCollected;
   final grossProfit = totalRevenue - totalCogs;
+  final saleOrders = completed - creditOnly;
 
   final topProducts =
       productAccum.values.map((a) {
@@ -826,7 +906,7 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
   return DailyReport(
     totalRevenue: totalRevenue,
     totalOrders: completed,
-    avgOrderValue: completed > 0 ? totalRevenue / completed : 0,
+    avgOrderValue: saleOrders > 0 ? saleRevenue / saleOrders : 0,
     revenueByPayment: byPayment,
     topProducts: topProducts,
     hourlySales: List.generate(24, (h) => HourlySale(h, hourMap[h] ?? 0)),
@@ -837,6 +917,9 @@ DailyReport _buildReport(List orders, {required bool fromCache}) {
     totalTaxCollected: totalTax,
     totalDiscount: totalDiscount,
     discountByStaff: discountByStaff,
+    creditGiven: creditGiven,
+    creditCollected: creditCollected,
+    tipsTotal: totalTips,
     isFromCache: fromCache,
   );
 }
@@ -883,8 +966,8 @@ Future<(int, int)> _localOrderCounts(
   final allOrders = await db.query(
     'orders',
     columns: ['id', 'created_at'],
-    where: 'business_id = ? AND cashier_id = ? AND status = ?',
-    whereArgs: [businessId, staffId, 'completed'],
+    where: 'business_id = ? AND cashier_id = ? AND status != ? AND paid_at IS NOT NULL',
+    whereArgs: [businessId, staffId, 'cancelled'],
   );
   final orders =
       allOrders.where((o) {
@@ -947,6 +1030,9 @@ extension DailyReportCopyWith on DailyReport {
     double? totalTaxCollected,
     double? totalDiscount,
     Map<String, double>? discountByStaff,
+    double? creditGiven,
+    double? creditCollected,
+    double? tipsTotal,
     bool? isFromCache,
     DateTime? cachedAt,
   }) => DailyReport(
@@ -963,6 +1049,9 @@ extension DailyReportCopyWith on DailyReport {
     totalTaxCollected: totalTaxCollected ?? this.totalTaxCollected,
     totalDiscount: totalDiscount ?? this.totalDiscount,
     discountByStaff: discountByStaff ?? this.discountByStaff,
+    creditGiven: creditGiven ?? this.creditGiven,
+    creditCollected: creditCollected ?? this.creditCollected,
+    tipsTotal: tipsTotal ?? this.tipsTotal,
     isFromCache: isFromCache ?? this.isFromCache,
     cachedAt: cachedAt ?? this.cachedAt,
   );

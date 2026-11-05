@@ -384,6 +384,7 @@ class ShiftService {
     final includeUnassigned = await _isOwnerStaff(businessId, staffId);
     final seen = <String>{};
     final splitOrderIds = <String>[];
+    final splitTips = <String, double>{};
 
     void tally(Map<String, dynamic> o) {
       final paidAt = o['paid_at'];
@@ -392,7 +393,9 @@ class ShiftService {
       if (o['status'] == 'cancelled') return; // voided orders are not sales
       if (!seen.add(o['id'] as String)) return; // never count an order twice
 
-      final amount = (o['total_amount'] as num).toDouble();
+      // Tips go straight to staff: not sales, not drawer cash.
+      final tip = (o['tip_amount'] as num?)?.toDouble() ?? 0.0;
+      final amount = (o['total_amount'] as num).toDouble() - tip;
       final isSplit =
           o['is_split_payment'] == true || o['is_split_payment'] == 1;
 
@@ -400,6 +403,7 @@ class ShiftService {
         // Defer — real per-method breakdown comes from order_payments,
         // fetched in one batch below to avoid N+1 queries.
         splitOrderIds.add(o['id'] as String);
+        splitTips[o['id'] as String] = tip;
         totalSales += amount;
         return;
       }
@@ -424,44 +428,65 @@ class ShiftService {
 
     Future<void> tallySplitOrders() async {
       if (splitOrderIds.isEmpty) return;
+
+      List<Map<String, dynamic>> legs;
       try {
         if (!_isOnline()) throw const _OfflineSkip();
-        final legs = await _supabase
+        final res = await _supabase
             .from('order_payments')
             .select('order_id, method, amount')
             .inFilter('order_id', splitOrderIds);
-        for (final leg in legs as List) {
-          final amount = (leg['amount'] as num).toDouble();
-          switch (leg['method'] as String) {
-            case 'cash':
-              cashSales += amount;
-            case 'gcash':
-            case 'maya':
-              gcashSales += amount;
-            case 'credit':
-              creditGiven += amount; // shouldn't normally occur in a split leg
-            default:
-              otherSales += amount;
-          }
-        }
+        legs = List<Map<String, dynamic>>.from(res as List);
       } catch (_) {
-        // Offline fallback — same table exists locally.
         final d = await _db.db;
         final placeholders = List.filled(splitOrderIds.length, '?').join(',');
-        final legs = await d.rawQuery(
-          'SELECT method, amount FROM order_payments WHERE order_id IN ($placeholders)',
+        final rows = await d.rawQuery(
+          'SELECT order_id, method, amount FROM order_payments '
+          'WHERE order_id IN ($placeholders)',
           splitOrderIds,
         );
-        for (final leg in legs) {
-          final amount = (leg['amount'] as num).toDouble();
-          switch (leg['method'] as String) {
+        legs = rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
+
+      // Group legs per order. The tip comes out of the cash leg first
+      // (customers tip in cash), then out of other non-credit legs.
+      final byOrder = <String, List<Map<String, dynamic>>>{};
+      for (final leg in legs) {
+        byOrder.putIfAbsent(leg['order_id'] as String, () => []).add(leg);
+      }
+
+      int rank(Map<String, dynamic> l) {
+        final m = l['method'];
+        if (m == 'cash') return 0;
+        if (m == 'credit') return 2;
+        return 1;
+      }
+
+      for (final entry in byOrder.entries) {
+        var tipLeft = splitTips[entry.key] ?? 0.0;
+        final ordered = [...entry.value]
+          ..sort((a, b) => rank(a).compareTo(rank(b)));
+
+        for (final leg in ordered) {
+          var amount = (leg['amount'] as num).toDouble();
+          final method = leg['method'] as String;
+
+          if (method != 'credit' && tipLeft > 0) {
+            final take = tipLeft < amount ? tipLeft : amount;
+            amount -= take;
+            tipLeft -= take;
+          }
+
+          switch (method) {
             case 'cash':
               cashSales += amount;
             case 'gcash':
             case 'maya':
+            case 'e_wallet':
               gcashSales += amount;
             case 'credit':
               creditGiven += amount;
+              totalSales -= amount; // utang is counted when collected
             default:
               otherSales += amount;
           }
@@ -481,7 +506,7 @@ class ShiftService {
         final stamped = await _supabase
             .from('orders')
             .select(
-              'id, total_amount, payment_method, status, paid_at, is_split_payment',
+              'id, total_amount, tip_amount, payment_method, status, paid_at, is_split_payment',
             )
             .eq('business_id', businessId)
             .eq('shift_id', shiftId);
@@ -493,7 +518,7 @@ class ShiftService {
       final assignedOrders = await _supabase
           .from('orders')
           .select(
-            'id, total_amount, payment_method, status, paid_at, is_split_payment',
+            'id, total_amount, tip_amount, payment_method, status, paid_at, is_split_payment',
           )
           .eq('business_id', businessId)
           .eq('cashier_id', staffId)
@@ -511,7 +536,7 @@ class ShiftService {
         final nullCashierOrders = await _supabase
             .from('orders')
             .select(
-              'id, total_amount, payment_method, status, paid_at, is_split_payment',
+              'id, total_amount, tip_amount, payment_method, status, paid_at, is_split_payment',
             )
             .eq('business_id', businessId)
             .isFilter('cashier_id', null)
@@ -546,7 +571,7 @@ class ShiftService {
 
       final rows = await d.rawQuery(
         '''
-        SELECT id, total_amount, payment_method, status, paid_at,
+        SELECT id, total_amount, tip_amount, payment_method, status, paid_at,
                is_split_payment, created_at, shift_id
         FROM orders
         WHERE business_id = ?

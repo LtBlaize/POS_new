@@ -311,6 +311,7 @@ class _OrderCard extends ConsumerWidget {
 
   /// Void item is only shown for active (unpaid, non-cancelled) orders.
   bool get _canVoid =>
+      order.paidAt == null &&
       order.status != OrderStatus.cancelled &&
       order.status != OrderStatus.completed;
 

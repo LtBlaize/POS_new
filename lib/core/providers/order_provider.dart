@@ -773,13 +773,18 @@ class OrderService {
 
     if (_isOnline && !insertPending && !hasQueued) {
       try {
-        await _client
+        var upd = _client
             .from('orders')
             .update({
               'status': status.value,
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('id', orderId);
+        // A cancelled (voided) order must never be revived by a late update.
+        if (status != OrderStatus.cancelled) {
+          upd = upd.neq('status', 'cancelled');
+        }
+        await upd;
         EventBus.instance.emit(AppEvents.orderStatusChanged, {
           'order_id': orderId,
           'status': status.value,
@@ -1170,7 +1175,7 @@ class OrderService {
           final orderRow =
               await _client
                   .from('orders')
-                  .select('tax_amount, discount_amount, subtotal')
+                  .select('tax_amount, discount_amount, subtotal, tip_amount')
                   .eq('id', orderId)
                   .single();
 
@@ -1182,7 +1187,8 @@ class OrderService {
           final taxRate = oldSubtotal > 0 ? existingTax / oldSubtotal : 0.0;
           final newTax = newSubtotal * taxRate;
           final newDiscount = existingDiscount.clamp(0.0, newSubtotal);
-          final newTotal = newSubtotal + newTax - newDiscount;
+          final tip = (orderRow['tip_amount'] as num?)?.toDouble() ?? 0.0;
+          final newTotal = newSubtotal + newTax - newDiscount + tip;
 
           await _client
               .from('orders')
@@ -1262,7 +1268,7 @@ class OrderService {
           'reason': reason,
           'voided_by_staff_id': voidedByStaffId,
           'voided_by_staff_name': voidedByStaffName,
-          'voided_at': now.toIso8601String(),
+          'voided_at': now.toUtc().toIso8601String(),
           'synced': 0,
         });
       }
@@ -1353,7 +1359,7 @@ class OrderService {
             .from('receipts')
             .update({
               'is_voided': true,
-              'voided_at': now.toIso8601String(),
+              'voided_at': now.toUtc().toIso8601String(),
               'voided_by': voidedByStaffId,
               'void_reason': reason,
               'updated_at': now.toIso8601String(),
@@ -1380,7 +1386,7 @@ class OrderService {
         'reason': reason,
         'voided_by_staff_id': voidedByStaffId,
         'voided_by_staff_name': voidedByStaffName,
-        'voided_at': now.toIso8601String(),
+        'voided_at': now.toUtc().toIso8601String(),
         'items': localVoidRows,
       },
     );
@@ -1449,12 +1455,7 @@ class OrderService {
 
   // ── Cost resolution ─────────────────────────────────────────────────────────
 
-  double _effectiveCost(CartItem item) {
-    if (item.selectedVariant != null && item.selectedVariant!.costPrice > 0) {
-      return item.selectedVariant!.costPrice;
-    }
-    return item.product.costPrice;
-  }
+  double _effectiveCost(CartItem item) => item.costAtSale;
 
   // ── Promo → order_items expansion ─────────────────────────────────────────
   //

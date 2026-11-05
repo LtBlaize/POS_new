@@ -213,7 +213,7 @@ class DaySummaryCard extends StatelessWidget {
             ),
           ),
           const Text(
-            'Total Revenue',
+            'Total Sales (no tips, no utang)',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),

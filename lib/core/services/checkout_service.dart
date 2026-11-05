@@ -88,6 +88,9 @@ class CheckoutService {
       return CheckoutResult.error('No business profile found.');
     }
        final profile = _ref.read(profileProvider).asData?.value;
+    if (profile == null) {
+      return CheckoutResult.error('No business profile found.');
+    }
 
        // New sales only. Settling an order that was already created before
        // expiry is deliberately still allowed so in-flight customers can pay.
@@ -365,7 +368,7 @@ class CheckoutService {
     // ── Receipt ─────────────────────────────────────────────────────────────
     // Use the already-loaded business from profileProvider — avoids a
     // redundant Supabase round-trip on every payment (#14).
-    final business = profile!.business;
+    final business = profile.business;
     String businessName = business?.name ?? 'My Business';
     String? businessAddress = business?.address;
     String? businessPhone = business?.phone;
@@ -380,7 +383,8 @@ class CheckoutService {
       isSplitPayment: isSplit,
     );
 
-    await _ref
+    try {
+      await _ref
         .read(receiptServiceProvider)
         .createReceipt(
           order: paidOrder,
@@ -395,6 +399,11 @@ class CheckoutService {
                   ? 'Thank you for dining with us!'
                   : 'Thank you for shopping with us!',
         );
+    } catch (e) {
+      // Payment is already recorded. A receipt failure must not surface as a
+      // failed checkout, or a re-tap of Pay duplicates the sale.
+      debugPrint('[Checkout] Receipt creation failed (non-fatal): $e');
+    }
 
     // ✅ NEW: Auto open cash drawer — also opens when a split payment
     // includes a cash leg, not just when cash is the sole method.

@@ -264,7 +264,10 @@ class _SplitBillDialogState extends ConsumerState<SplitBillDialog> {
         .read(cartProvider.notifier)
         .loadItems(
           items,
-          orderDiscountAmount: savedDiscount * ratio,
+          orderDiscountAmount:
+              savedDiscountType == DiscountType.percentage
+                  ? savedDiscount
+                  : savedDiscount * ratio,
           orderDiscountType: savedDiscountType,
           tipAmount: savedTip * ratio,
         );
