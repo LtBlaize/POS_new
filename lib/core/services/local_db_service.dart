@@ -199,6 +199,7 @@ class LocalDbService {
         await _ensureOrderColumns(db);
         await _ensureProductColumns(db);
         await _ensureCreditColumns(db);
+        await _ensurePromoItemColumns(db);
         await db.execute(
           'CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, json TEXT NOT NULL, saved_at TEXT NOT NULL)',
         );
@@ -258,6 +259,20 @@ class LocalDbService {
       await db.execute(
         'ALTER TABLE credit_transactions ADD COLUMN settled_at TEXT',
       );
+    }
+  }
+
+  Future<void> _ensurePromoItemColumns(Database db) async {
+    final cols =
+        (await db.rawQuery(
+          'PRAGMA table_info(promo_items)',
+        )).map((r) => r['name'] as String).toSet();
+    if (cols.isEmpty) return;
+    if (!cols.contains('choice_group')) {
+      await db.execute('ALTER TABLE promo_items ADD COLUMN choice_group TEXT');
+    }
+    if (!cols.contains('pick_count')) {
+      await db.execute('ALTER TABLE promo_items ADD COLUMN pick_count INTEGER');
     }
   }
 
@@ -964,6 +979,7 @@ class LocalDbService {
     if (oldVersion < 23) {
       // product_id must be nullable so a promo header row can be stored.
       try {
+        await _ensureOrderItemColumns(db); // old DBs may not have these yet
         await db.execute('DROP TABLE IF EXISTS order_items_v23tmp');
         await db.execute('''
           CREATE TABLE order_items_v23tmp (
@@ -980,6 +996,10 @@ class LocalDbService {
             promo_id TEXT,
             promo_group_id TEXT,
             send_to_kitchen INTEGER NOT NULL DEFAULT 1,
+            round INTEGER NOT NULL DEFAULT 1,
+            discount_amount REAL NOT NULL DEFAULT 0,
+            kitchen_status TEXT NOT NULL DEFAULT 'pending',
+            discount_type TEXT NOT NULL DEFAULT 'fixed',
             FOREIGN KEY (order_id) REFERENCES orders(id)
           )
         ''');
@@ -987,11 +1007,13 @@ class LocalDbService {
           INSERT INTO order_items_v23tmp
             (id, order_id, product_id, product_name, unit_price, cost_at_sale,
              quantity, subtotal, notes, variant_id, promo_id, promo_group_id,
-             send_to_kitchen)
+             send_to_kitchen, round, discount_amount, kitchen_status,
+             discount_type)
           SELECT
             id, order_id, product_id, product_name, unit_price, cost_at_sale,
             quantity, subtotal, notes, variant_id, promo_id, promo_group_id,
-            send_to_kitchen
+            send_to_kitchen, round, discount_amount, kitchen_status,
+            discount_type
           FROM order_items
         ''');
         await db.execute('DROP TABLE order_items');
@@ -1165,8 +1187,9 @@ class LocalDbService {
       whereArgs: [businessId],
     );
     final keep = keepIds.toSet();
-    final stale =
-        rows.map((r) => r['id'] as String).where((id) => !keep.contains(id));
+    final stale = rows
+        .map((r) => r['id'] as String)
+        .where((id) => !keep.contains(id));
     if (stale.isEmpty) return;
     final batch = d.batch();
     for (final id in stale) {
@@ -1236,6 +1259,7 @@ class LocalDbService {
     isActive: (row['is_active'] as int) == 1,
     category: row['category_name'] as String? ?? '',
     sendToKitchen: ((row['send_to_kitchen'] as int?) ?? 1) == 1,
+
     // variants attached by caller
   );
 
@@ -1391,6 +1415,8 @@ class LocalDbService {
             'product_price': i.productPrice,
             'product_track_inventory': i.productTrackInventory == true ? 1 : 0,
             'product_send_to_kitchen': i.productSendToKitchen == true ? 1 : 0,
+            'choice_group': i.choiceGroup,
+            'pick_count': i.pickCount,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
@@ -1426,6 +1452,8 @@ class LocalDbService {
         productPrice: (r['product_price'] as num?)?.toDouble(),
         productTrackInventory: (r['product_track_inventory'] as int?) == 1,
         productSendToKitchen: (r['product_send_to_kitchen'] as int?) == 1,
+        choiceGroup: r['choice_group'] as String?,
+        pickCount: r['pick_count'] as int?,
       );
       itemsByPromo.putIfAbsent(item.promoId, () => []).add(item);
     }
@@ -1920,10 +1948,12 @@ class LocalDbService {
   Future<List<CartItem>> _getOrderItems(Database d, String orderId) async {
     final rows = await d.rawQuery(
       '''
-      SELECT oi.*, pv.name AS variant_name
+      SELECT oi.*, pv.name AS variant_name, p.track_inventory AS p_track
       FROM order_items oi
       LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+      LEFT JOIN products p ON p.id = oi.product_id
       WHERE oi.order_id = ?
+      ORDER BY oi.rowid
     ''',
       [orderId],
     );
@@ -1957,6 +1987,7 @@ class LocalDbService {
           name: r['product_name'] as String,
           price: (r['unit_price'] as num).toDouble(),
           sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
+          trackInventory: (r['p_track'] as int?) == 1,
         );
         final variantId = r['variant_id'] as String?;
         final selectedVariant =
@@ -1988,8 +2019,8 @@ class LocalDbService {
             variantId: r['variant_id'] as String?,
             productName: r['product_name'] as String,
             quantity: r['quantity'] as int,
-            trackInventory:
-                false, // historical row — not needed for local display
+            variantName: r['variant_name'] as String?,
+            trackInventory: (r['p_track'] as int?) == 1,
             sendToKitchen: ((r['send_to_kitchen'] as int?) ?? 1) == 1,
           ),
     );
@@ -2065,8 +2096,8 @@ class LocalDbService {
         '''
             DELETE FROM order_items WHERE id = (
               SELECT id FROM order_items
-              WHERE order_id = ? AND product_id = ?
-                ${variantId != null ? 'AND variant_id = ?' : ''}
+              WHERE order_id = ? AND product_id = ? AND promo_group_id IS NULL
+                AND ${variantId != null ? 'variant_id = ?' : 'variant_id IS NULL'}
               LIMIT 1)
           ''',
         [orderId, productId, if (variantId != null) variantId],

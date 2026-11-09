@@ -41,6 +41,19 @@ final _kitchenOrdersFromDbProvider =
 typedef RoundAdvance =
     Future<void> Function(String orderId, int round, String next);
 
+/// Stable signature of a promo line's chosen components.
+String _pickSig(List<PromoComponent> cs) {
+  final parts =
+      cs
+          .map((c) => '${c.productId}:${c.variantId ?? ''}:${c.quantity}')
+          .toList()
+        ..sort();
+  return parts.join('|');
+}
+
+/// Lines the kitchen has crossed out (done). Key = orderId|round|line index.
+final _crossedLinesProvider = StateProvider<Set<String>>((ref) => {});
+
 class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
   @override
   Future<List<Order>> build() async {
@@ -187,6 +200,10 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
         return PromoComponent(
           promoId: map['promo_id'] as String? ?? '',
           productId: map['product_id'] as String,
+          variantId: map['variant_id'] as String?,
+          variantName:
+              (map['product_variants'] as Map<String, dynamic>?)?['name']
+                  as String?,
           productName:
               product['name'] as String? ??
               map['product_name'] as String? ??
@@ -211,6 +228,7 @@ class _KitchenDbNotifier extends AsyncNotifier<List<Order>> {
       tableId: m['table_id'] as String?,
       orderType: OrderTypeX.fromString(m['order_type'] as String? ?? 'walk_in'),
       customerName: m['customer_name'] as String?,
+      notes: m['notes'] as String?,
       status: OrderStatusX.fromString(m['status'] as String),
       createdAt: DateTime.parse(m['created_at'] as String),
       subtotal: (m['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -967,6 +985,24 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
               color: AppColors.textSecondary,
             ),
           ),
+          if (order.notes?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'NOTE: ${order.notes}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           if (keys.isEmpty)
             const Text(
@@ -1037,7 +1073,7 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
                 ],
               ),
             ),
-          ..._linesFor(lines, served),
+          ..._linesFor(round, lines, served),
           if (!served) ...[
             const SizedBox(height: 6),
             SizedBox(
@@ -1077,25 +1113,45 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     );
   }
 
-  List<Widget> _linesFor(List<CartItem> items, bool served) =>
-      items.expand<Widget>((item) {
-        if (item.isPromo) {
-          return item.promoComponents!
-              .where((c) => c.sendToKitchen)
-              .map(
-                (c) => _kitchenLine(
-                  quantity: c.quantity * item.quantity,
-                  name:
-                      c.variantName != null
-                          ? '${c.productName} (${c.variantName})'
-                          : c.productName,
-                  subtitle: item.product.name,
-                  served: served,
-                ),
-              );
+  void _toggleLine(String key) {
+    final cur = ref.read(_crossedLinesProvider);
+    ref.read(_crossedLinesProvider.notifier).state =
+        cur.contains(key) ? ({...cur}..remove(key)) : {...cur, key};
+  }
+
+  List<Widget> _linesFor(int round, List<CartItem> items, bool served) {
+    final out = <Widget>[];
+    for (var n = 0; n < items.length; n++) {
+      final item = items[n];
+      if (item.isPromo) {
+        final comps = item.promoComponents!;
+        final sig = _pickSig(comps);
+        var noteShown = false;
+        for (var j = 0; j < comps.length; j++) {
+          final c = comps[j];
+          if (!c.sendToKitchen) continue;
+          final showNote = !noteShown && (item.notes?.isNotEmpty ?? false);
+          noteShown = noteShown || showNote;
+          out.add(
+            _kitchenLine(
+              lineKey:
+                  '${widget.order.id}|$round|${item.promoId ?? item.product.name}|$sig|${c.productId}|${c.variantId ?? ''}',
+              quantity: c.quantity * item.quantity,
+              name:
+                  c.variantName != null
+                      ? '${c.productName} (${c.variantName})'
+                      : c.productName,
+              subtitle: item.product.name,
+              notes: showNote ? item.notes : null,
+              served: served,
+            ),
+          );
         }
-        return [
+      } else {
+        out.add(
           _kitchenLine(
+            lineKey:
+                '${widget.order.id}|$round|${item.product.id}|${item.selectedVariant?.id ?? ''}|${item.notes ?? ''}',
             quantity: item.quantity,
             name: item.product.name,
             subtitle: item.selectedVariant?.name,
@@ -1103,10 +1159,14 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
             notes: item.notes,
             served: served,
           ),
-        ];
-      }).toList();
+        );
+      }
+    }
+    return out;
+  }
 
   Widget _kitchenLine({
+    required String lineKey,
     required int quantity,
     required String name,
     String? subtitle,
@@ -1114,67 +1174,86 @@ class _KitchenOrderCardState extends ConsumerState<_KitchenOrderCard> {
     String? notes,
     bool served = false,
   }) {
+    final crossed = ref.watch(_crossedLinesProvider).contains(lineKey);
+    final done = served || crossed;
     final grey = AppColors.textSecondary.withValues(alpha: 0.6);
-    final strike = served ? TextDecoration.lineThrough : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: Row(
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: served ? 0.04 : 0.1),
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: Center(
-              child: Text(
-                '$quantity',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: served ? grey : AppColors.primary,
-                ),
+    final strike = done ? TextDecoration.lineThrough : null;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: served ? null : () => _toggleLine(lineKey),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color:
+                    crossed
+                        ? AppColors.success.withValues(alpha: 0.15)
+                        : AppColors.primary.withValues(
+                          alpha: served ? 0.04 : 0.1,
+                        ),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Center(
+                child:
+                    crossed
+                        ? const Icon(
+                          Icons.check,
+                          size: 14,
+                          color: AppColors.success,
+                        )
+                        : Text(
+                          '$quantity',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: served ? grey : AppColors.primary,
+                          ),
+                        ),
               ),
             ),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 12,
-                    decoration: strike,
-                    color: served ? grey : AppColors.textPrimary,
-                  ),
-                ),
-                if (subtitle != null)
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle,
+                    crossed ? '$quantity× $name' : name,
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
                       decoration: strike,
-                      color: served ? grey : subtitleColor,
+                      color: done ? grey : AppColors.textPrimary,
                     ),
                   ),
-                if (notes != null && notes.isNotEmpty)
-                  Text(
-                    notes,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontStyle: FontStyle.italic,
-                      decoration: strike,
-                      color: served ? grey : AppColors.warning,
+                  if (subtitle != null)
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        decoration: strike,
+                        color: done ? grey : subtitleColor,
+                      ),
                     ),
-                  ),
-              ],
+                  if (notes != null && notes.isNotEmpty)
+                    Text(
+                      notes,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontStyle: FontStyle.italic,
+                        decoration: strike,
+                        color: done ? grey : AppColors.warning,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

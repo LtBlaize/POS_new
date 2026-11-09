@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/staff.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/product_provider.dart';
+import '../../core/providers/recipe_provider.dart';
 import '../../core/providers/role_permissions_provider.dart';
 import '../../core/providers/staff_provider.dart';
 import '../../core/services/feature_manager.dart';
@@ -470,6 +471,8 @@ class _POSMainState extends ConsumerState<_POSMain> {
       );
       return;
     }
+
+    if (handleRecipeTap(context, ref, match)) return;
 
     if (match.hasVariants) {
       ScaffoldMessenger.of(context).showSnackBar(

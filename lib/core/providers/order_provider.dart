@@ -47,7 +47,7 @@ List<CartItem> _rowsToCartItems(List<Map<String, dynamic>> rows) {
             price: (row['unit_price'] as num).toDouble(),
           ),
           quantity: row['quantity'] as int,
-          costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+          costAtSale: (row['cost_at_sale'] as num?)?.toDouble() ?? 0,
           notes: row['notes'] as String?,
           promoId: row['promo_id'] as String?,
           round: row['round'] as int? ?? 1,
@@ -69,7 +69,7 @@ List<CartItem> _rowsToCartItems(List<Map<String, dynamic>> rows) {
         product: product,
         selectedVariant: vMap != null ? ProductVariant.fromMap(vMap) : null,
         quantity: row['quantity'] as int,
-        costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
+        costAtSale: (row['cost_at_sale'] as num?)?.toDouble() ?? 0,
         notes: row['notes'] as String?,
         round: row['round'] as int? ?? 1,
         kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
@@ -183,69 +183,7 @@ final ordersStreamProvider = StreamProvider<List<Order>>((ref) async* {
           }
 
           for (final entry in rowsByOrder.entries) {
-            itemCache[entry
-                .key] = CartItem.groupOrderItemRows<Map<String, dynamic>>(
-              entry.value,
-              promoGroupId: (row) => row['promo_group_id'] as String?,
-              isHeaderRow: (row) => row['product_id'] == null,
-              buildItem: (row) {
-                if (row['product_id'] == null) {
-                  return CartItem(
-                    product: Product.promo(
-                      id: 'promo_${row['promo_id']}',
-                      name: row['product_name'] as String,
-                      price: (row['unit_price'] as num).toDouble(),
-                    ),
-                    quantity: row['quantity'] as int,
-                    costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
-                    notes: row['notes'] as String?,
-                    promoId: row['promo_id'] as String?,
-                    round: row['round'] as int? ?? 1,
-                    kitchenStatus:
-                        row['kitchen_status'] as String? ?? 'pending',
-                    discountAmount:
-                        (row['discount_amount'] as num?)?.toDouble() ?? 0,
-                    discountType: CartItem.discountTypeFromString(
-                      row['discount_type'] as String?,
-                    ),
-                  );
-                }
-                final pMap = row['products'] as Map<String, dynamic>? ?? {};
-                final product = Product.fromMap({
-                  ...pMap,
-                  'category': '',
-                  'business_id': pMap['business_id'] ?? '',
-                });
-                final vMap = row['product_variants'] as Map<String, dynamic>?;
-                return CartItem(
-                  product: product,
-                  selectedVariant:
-                      vMap != null ? ProductVariant.fromMap(vMap) : null,
-                  quantity: row['quantity'] as int,
-                  costAtSale: (row['cost_price'] as num?)?.toDouble() ?? 0,
-                  notes: row['notes'] as String?,
-                  round: row['round'] as int? ?? 1,
-                  kitchenStatus: row['kitchen_status'] as String? ?? 'pending',
-                  discountAmount:
-                      (row['discount_amount'] as num?)?.toDouble() ?? 0,
-                  discountType: CartItem.discountTypeFromString(
-                    row['discount_type'] as String?,
-                  ),
-                );
-              },
-              buildComponent: (row) {
-                final pMap = row['products'] as Map<String, dynamic>? ?? {};
-                return PromoComponent(
-                  promoId: row['promo_id'] as String? ?? '',
-                  productId: row['product_id'] as String,
-                  productName: row['product_name'] as String,
-                  quantity: row['quantity'] as int,
-                  variantId: row['variant_id'] as String?,
-                  trackInventory: pMap['track_inventory'] as bool? ?? false,
-                  sendToKitchen: pMap['send_to_kitchen'] as bool? ?? true,
-                );
-              },
-            );
+            itemCache[entry.key] = _rowsToCartItems(entry.value);
           }
         }
 
@@ -688,9 +626,7 @@ class OrderService {
     return AppendResult(round: round, queued: queued);
   }
 
-  /// Saves the discount/tip chosen at checkout onto an existing order so the
-  /// order, receipt and reports all show what was actually charged.
-  /// Kitchen: advance one round (pending→preparing→ready→served).
+  /// Kitchen: advance one round (pending → preparing → ready → served).
   Future<void> setRoundStatus({
     required String orderId,
     required int round,
@@ -1141,7 +1077,11 @@ class OrderService {
             .select('id')
             .eq('order_id', orderId)
             .eq('product_id', productId);
-        if (variantId != null) find = find.eq('variant_id', variantId);
+        find = find.isFilter('promo_group_id', null);
+        find =
+            variantId != null
+                ? find.eq('variant_id', variantId)
+                : find.isFilter('variant_id', null);
         final target = await find.limit(1).maybeSingle();
         if (target != null) {
           await _client

@@ -108,10 +108,8 @@ class _ProductsTab extends ConsumerWidget {
     final inventoryState = ref.watch(inventoryProvider);
     final filter = ref.watch(_filterProvider);
     final layout = inventoryLayoutOf(context);
-    final isOwnerUser =
-        ref.watch(activeStaffProvider)?.role == StaffRole.owner;
-    final showRemoved =
-        isOwnerUser && ref.watch(_showRemovedProvider);
+    final isOwnerUser = ref.watch(activeStaffProvider)?.role == StaffRole.owner;
+    final showRemoved = isOwnerUser && ref.watch(_showRemovedProvider);
 
     if (inventoryState.loading) {
       return const Scaffold(

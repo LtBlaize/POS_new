@@ -142,6 +142,9 @@ class EscPosReceipts {
       }
     }
 
+    if (order.notes?.trim().isNotEmpty ?? false) {
+      b.addAll(g.text(_clean('Note: ${order.notes}')));
+    }
     b.addAll(g.hr());
     if (!isBill) b.addAll(_line(g, 'Subtotal', _money(order.subtotal)));
     if (order.taxAmount > 0) b.addAll(_line(g, 'VAT', _money(order.taxAmount)));
@@ -176,7 +179,7 @@ class EscPosReceipts {
     return Uint8List.fromList(b);
   }
 
-    /// 58mm shift report (32 cols). Mirrors the PDF via ShiftReportData.
+  /// 58mm shift report (32 cols). Mirrors the PDF via ShiftReportData.
   static Future<Uint8List> shiftReport(ShiftReportData d) async {
     final g = await _gen();
     final b = <int>[];

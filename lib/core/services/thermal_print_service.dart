@@ -98,7 +98,7 @@ class ThermalPrintService {
 
   static Future<void> printShiftReport(ShiftReportData data) async {
     await _send(await EscPosReceipts.shiftReport(data), 'shift report');
-  }  
+  }
 
   static Future<PrinterStatus> checkSelectedPrinterStatus() async {
     final p = await SharedPreferences.getInstance();

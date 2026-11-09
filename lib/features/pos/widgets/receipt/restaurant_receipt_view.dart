@@ -413,6 +413,20 @@ class RestaurantReceiptView extends StatelessWidget {
                     ],
 
                     // ── Totals ────────────────────────────────────────
+                    if (order.notes?.trim().isNotEmpty ?? false) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Note: ${order.notes}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

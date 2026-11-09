@@ -432,6 +432,17 @@ class _OrderCard extends ConsumerWidget {
                     const SizedBox(height: 10),
 
                     // Items — with void button when allowed
+                    if (order.notes?.trim().isNotEmpty ?? false) ...[
+                      Text(
+                        'Note: ${order.notes}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     if (order.items.isNotEmpty) ...[
                       ...order.items.map(
                         (item) => Padding(

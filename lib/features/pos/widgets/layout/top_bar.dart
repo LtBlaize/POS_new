@@ -60,7 +60,6 @@ class TopBar extends ConsumerWidget {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < _kBreakpointSm;
 
-
     final businessName = ref.watch(businessProvider)?.name ?? '';
     final initials = _initials(businessName);
     final now = DateTime.now();
@@ -118,12 +117,10 @@ class TopBar extends ConsumerWidget {
 
           SizedBox(width: isCompact ? 8 : 16),
 
-// Open cash drawer (manager PIN required)
+          // Open cash drawer (manager PIN required)
           _DrawerButton(compact: isCompact),
 
           SizedBox(width: isCompact ? 4 : 8),
-
-
 
           // Notifications — hide on very compact to save space
           if (!isCompact)

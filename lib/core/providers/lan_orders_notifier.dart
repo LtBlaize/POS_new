@@ -14,6 +14,7 @@ import '../../core/services/kitchen_alert_service.dart';
 import '../../core/models/order.dart';
 import '../../core/models/cart_item.dart'; // adjust path as needed
 import '../../core/models/product.dart'; // adjust path as needed
+import '../../core/models/promo.dart';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -157,17 +158,48 @@ class KitchenNotifier extends Notifier<KitchenState> {
     final items =
         (m['items'] as List).map((i) {
           final map = i as Map<String, dynamic>;
+          final name = map['product_name'] as String;
+          final promoId = map['promo_id'] as String?;
+          final comps =
+              (map['components'] as List?)?.cast<Map<String, dynamic>>();
+          final unitPrice = (map['unit_price'] as num?)?.toDouble() ?? 0.0;
           return CartItem(
-            product: Product(
-              id: '',
-              businessId: '',
-              name: map['product_name'] as String,
-              sendToKitchen: map['send_to_kitchen'] as bool? ?? true,
-              price: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
-            ),
+            product:
+                comps != null
+                    ? Product.promo(
+                      id: 'promo_$promoId',
+                      name: name,
+                      price: unitPrice,
+                    )
+                    : Product(
+                      id: '',
+                      businessId: '',
+                      name: name,
+                      sendToKitchen: map['send_to_kitchen'] as bool? ?? true,
+                      price: unitPrice,
+                    ),
             quantity: map['quantity'] as int,
             round: (map['round'] as int?) ?? 1,
             kitchenStatus: (map['kitchen_status'] as String?) ?? 'pending',
+            notes: map['notes'] as String?,
+            promoId: promoId,
+            promoComponents:
+                comps == null
+                    ? null
+                    : [
+                      for (final c in comps)
+                        PromoComponent(
+                          promoId: promoId ?? '',
+                          productId: c['product_id'] as String,
+                          variantId: c['variant_id'] as String?,
+                          productName: c['product_name'] as String,
+                          variantName: c['variant_name'] as String?,
+                          quantity: c['quantity'] as int,
+                          trackInventory:
+                              c['track_inventory'] as bool? ?? false,
+                          sendToKitchen: c['send_to_kitchen'] as bool? ?? true,
+                        ),
+                    ],
           );
         }).toList();
 

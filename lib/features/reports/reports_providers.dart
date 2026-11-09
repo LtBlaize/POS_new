@@ -264,7 +264,8 @@ final heatmapProvider = FutureProvider.family<WeeklyHeatmap, DateRange>((
     final Map<int, int> countMap = {};
 
     for (final o in rows) {
-      if (o['payment_method'] == 'credit') continue; // utang: counted when collected
+      if (o['payment_method'] == 'credit')
+        continue; // utang: counted when collected
       final dt = DateTime.tryParse(o['paid_at'] as String? ?? '')?.toLocal();
       if (dt == null) continue;
       final amount = _netSale(o);
@@ -966,7 +967,8 @@ Future<(int, int)> _localOrderCounts(
   final allOrders = await db.query(
     'orders',
     columns: ['id', 'created_at'],
-    where: 'business_id = ? AND cashier_id = ? AND status != ? AND paid_at IS NOT NULL',
+    where:
+        'business_id = ? AND cashier_id = ? AND status != ? AND paid_at IS NOT NULL',
     whereArgs: [businessId, staffId, 'cancelled'],
   );
   final orders =

@@ -37,8 +37,6 @@ class ProfileRefreshService {
   /// Call once from main() after ProviderScope is ready — mirrors the
   /// init() pattern used by ConnectivityService/SyncQueueService.
   void init() {
-
-
     _authSub = _ref.listen<AsyncValue<dynamic>>(authStateProvider, (
       prev,
       next,

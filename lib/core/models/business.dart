@@ -1,5 +1,5 @@
-   // lib/core/models/business.dart
-   import '../utils/trusted_clock.dart';
+// lib/core/models/business.dart
+import '../utils/trusted_clock.dart';
 
 enum BusinessType {
   restaurant('restaurant'),

@@ -63,7 +63,9 @@ class CurrentShiftNotifier extends AsyncNotifier<CashierShift?> {
     final isManager =
         closer?.role == StaffRole.owner || closer?.role == StaffRole.manager;
     if (closer == null || (closer.id != currentShift.staffId && !isManager)) {
-      throw Exception('Only the shift owner or a manager can close this shift.');
+      throw Exception(
+        'Only the shift owner or a manager can close this shift.',
+      );
     }
     debugPrint('[ShiftClose] Closing shift: ${currentShift.id}');
 

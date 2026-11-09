@@ -366,7 +366,8 @@ class ShiftService {
       limit: 1,
     );
     return r.isNotEmpty && r.first['role'] == 'owner';
-  }  
+  }
+
   Future<Map<String, double>> _computeShiftSummary({
     String? shiftId,
     required String businessId,

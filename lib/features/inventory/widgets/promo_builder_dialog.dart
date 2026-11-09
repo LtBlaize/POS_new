@@ -44,6 +44,14 @@ class _PromoItemDraft {
   });
 }
 
+class _ChoiceGroupDraft {
+  final TextEditingController name;
+  int pick;
+  final List<_PromoItemDraft> items = [];
+  _ChoiceGroupDraft(String n, this.pick)
+    : name = TextEditingController(text: n);
+}
+
 class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
@@ -61,6 +69,7 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
   final List<_PromoItemDraft> _bundleItems = [];
   final List<_PromoItemDraft> _buyItems = [];
   final List<_PromoItemDraft> _getItems = [];
+  final List<_ChoiceGroupDraft> _groups = [];
 
   bool get _isEdit => widget.existing != null;
 
@@ -100,6 +109,14 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
             _buyItems.add(draft);
           case PromoItemRole.get:
             _getItems.add(draft);
+          case PromoItemRole.choice:
+            final gName = i.choiceGroup ?? 'Choice';
+            var g = _groups.where((x) => x.name.text == gName).firstOrNull;
+            if (g == null) {
+              g = _ChoiceGroupDraft(gName, i.pickCount ?? 1);
+              _groups.add(g);
+            }
+            g.items.add(draft);
         }
       }
     }
@@ -113,11 +130,25 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
     _buyQtyController.dispose();
     _getQtyController.dispose();
     _getDiscountController.dispose();
+    for (final g in _groups) {
+      g.name.dispose();
+    }
     super.dispose();
   }
 
-  double get _bundleOriginalTotal =>
-      _bundleItems.fold(0, (s, i) => s + i.unitPrice * i.quantity);
+  double get _bundleOriginalTotal {
+    var t = _bundleItems.fold<double>(
+      0,
+      (s, i) => s + i.unitPrice * i.quantity,
+    );
+    for (final g in _groups) {
+      if (g.items.isEmpty) continue;
+      final avg =
+          g.items.fold<double>(0, (s, i) => s + i.unitPrice) / g.items.length;
+      t += avg * g.pick;
+    }
+    return t;
+  }
 
   Future<void> _pickProduct(List<_PromoItemDraft> target) async {
     final result = await showModalBottomSheet<_PromoItemDraft>(
@@ -146,8 +177,24 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
     }
 
     if (_type == PromoType.bundle) {
-      if (_bundleItems.isEmpty) {
-        _showError('Add at least one product to the package.');
+      if (_bundleItems.isEmpty && _groups.isEmpty) {
+        _showError('Add at least one product or choice group to the package.');
+        return;
+      }
+      for (final g in _groups) {
+        if (g.name.text.trim().isEmpty) {
+          _showError('Give every choice group a name.');
+          return;
+        }
+        if (g.items.isEmpty) {
+          _showError('Add options to the "${g.name.text.trim()}" group.');
+          return;
+        }
+      }
+      final groupNames =
+          _groups.map((g) => g.name.text.trim().toLowerCase()).toList();
+      if (groupNames.toSet().length != groupNames.length) {
+        _showError('Choice group names must be different from each other.');
         return;
       }
       final price = double.tryParse(_bundlePriceController.text);
@@ -186,7 +233,12 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
       }
 
       final items = <PromoItem>[];
-      void addAll(List<_PromoItemDraft> drafts, PromoItemRole role) {
+      void addAll(
+        List<_PromoItemDraft> drafts,
+        PromoItemRole role, {
+        String? group,
+        int? pick,
+      }) {
         for (final d in drafts) {
           items.add(
             PromoItem(
@@ -203,6 +255,8 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
               productPrice: d.unitPrice,
               productTrackInventory: d.trackInventory,
               productSendToKitchen: d.sendToKitchen,
+              choiceGroup: group,
+              pickCount: pick,
             ),
           );
         }
@@ -210,6 +264,14 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
 
       if (_type == PromoType.bundle) {
         addAll(_bundleItems, PromoItemRole.bundle);
+        for (final g in _groups) {
+          addAll(
+            g.items,
+            PromoItemRole.choice,
+            group: g.name.text.trim(),
+            pick: g.pick,
+          );
+        }
       } else {
         addAll(_buyItems, PromoItemRole.buy);
         addAll(_getItems, PromoItemRole.get);
@@ -463,6 +525,22 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
           ),
         ),
         const SizedBox(height: 16),
+        _label('Customer\'s choices (optional)'),
+        ..._groups.map(_buildGroupCard),
+        OutlinedButton.icon(
+          onPressed:
+              () => setState(() => _groups.add(_ChoiceGroupDraft('', 1))),
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('Add Choice Group'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         _label('Package Price (\u20b1) *'),
         _textField(
           _bundlePriceController,
@@ -477,6 +555,81 @@ class _PromoBuilderDialogState extends ConsumerState<PromoBuilderDialog> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildGroupCard(_ChoiceGroupDraft g) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _textField(g.name, hint: 'Group name, e.g. Food'),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Pick',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline, size: 18),
+                onPressed: g.pick > 1 ? () => setState(() => g.pick--) : null,
+              ),
+              Text(
+                '${g.pick}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                onPressed: () => setState(() => g.pick++),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 18,
+                  color: Colors.red,
+                ),
+                onPressed: () => setState(() => _groups.remove(g)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _ItemList(
+            items: g.items,
+            showQuantity: false,
+            onRemove: (d) => setState(() => g.items.remove(d)),
+            onQuantityChanged: (d, q) {},
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _pickProduct(g.items),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Option'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -754,11 +907,13 @@ class _ItemList extends StatelessWidget {
   final List<_PromoItemDraft> items;
   final void Function(_PromoItemDraft) onRemove;
   final void Function(_PromoItemDraft, int) onQuantityChanged;
+  final bool showQuantity;
 
   const _ItemList({
     required this.items,
     required this.onRemove,
     required this.onQuantityChanged,
+    this.showQuantity = true,
   });
 
   @override
@@ -818,24 +973,29 @@ class _ItemList extends StatelessWidget {
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, size: 18),
-                        onPressed:
-                            d.quantity > 1
-                                ? () => onQuantityChanged(d, d.quantity - 1)
-                                : null,
-                      ),
-                      Text(
-                        '${d.quantity}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                      if (showQuantity) ...[
+                        IconButton(
+                          icon: const Icon(
+                            Icons.remove_circle_outline,
+                            size: 18,
+                          ),
+                          onPressed:
+                              d.quantity > 1
+                                  ? () => onQuantityChanged(d, d.quantity - 1)
+                                  : null,
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline, size: 18),
-                        onPressed: () => onQuantityChanged(d, d.quantity + 1),
-                      ),
+                        Text(
+                          '${d.quantity}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          onPressed: () => onQuantityChanged(d, d.quantity + 1),
+                        ),
+                      ],
                       IconButton(
                         icon: const Icon(
                           Icons.delete_outline,

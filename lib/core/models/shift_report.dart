@@ -57,7 +57,8 @@ class ShiftReportData {
   List<ReportRow> get header => [
     ReportRow('Cashier', shift.staffName),
     ReportRow('Opened', _dt.format(shift.openedAt)),
-    if (shift.closedAt != null) ReportRow('Closed', _dt.format(shift.closedAt!)),
+    if (shift.closedAt != null)
+      ReportRow('Closed', _dt.format(shift.closedAt!)),
     ReportRow('Duration', duration),
   ];
 

@@ -175,6 +175,20 @@ class RetailReceiptView extends StatelessWidget {
                         child: DashedDivider(),
                       ),
                     ],
+                    if (order.notes?.trim().isNotEmpty ?? false) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Note: ${order.notes}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     ReceiptRow(
                       label: 'Subtotal',
                       value: '₱${order.subtotal.toStringAsFixed(2)}',

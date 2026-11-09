@@ -200,7 +200,10 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                   final liveExpenses = ref.watch(_liveExpensesProvider);
                   return _OverShortPreview(
                     expectedCash:
-                        shift.openingCash + shift.cashSales + shift.creditsPaid - liveExpenses,
+                        shift.openingCash +
+                        shift.cashSales +
+                        shift.creditsPaid -
+                        liveExpenses,
                     actualCash: _actualCash,
                   );
                 },
@@ -621,7 +624,11 @@ class _CashReconciliationCard extends StatelessWidget {
           ],
           _SummaryRow(
             label: 'Expected in Drawer',
-            value: shift.openingCash + shift.cashSales + shift.creditsPaid - liveExpenses,
+            value:
+                shift.openingCash +
+                shift.cashSales +
+                shift.creditsPaid -
+                liveExpenses,
             color: Colors.white,
             isBold: true,
           ),

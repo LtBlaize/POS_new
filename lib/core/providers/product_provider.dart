@@ -365,6 +365,7 @@ class InventoryService {
     );
   }
 }
+
 /// Fetches active variants for [productIds] in URL-safe chunks.
 /// One inFilter with hundreds of UUIDs exceeds the gateway URL limit (400).
 Future<List<ProductVariant>> fetchVariantsChunked(

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../../shared/widgets/app_colors.dart';
 import '../inventory_service.dart';
+import 'recipe_editor_dialog.dart';
 import '../../../core/providers/product_provider.dart';
 import '../../../core/providers/app_context_provider.dart';
 import '../../../core/models/product.dart';
@@ -631,6 +632,36 @@ class _AddProductDialogState extends ConsumerState<AddProductDialog> {
                       const SizedBox(height: 20),
 
                       // ── Variants section ───────────────────────────────
+                      if (isEdit) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                () =>
+                                    showRecipeEditor(context, widget.product!),
+                            icon: const Icon(
+                              Icons.account_tree_outlined,
+                              size: 14,
+                            ),
+                            label: const Text(
+                              'Recipe (made from other products)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _priceController,
                         builder:

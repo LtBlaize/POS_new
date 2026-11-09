@@ -1,4 +1,6 @@
 // lib/core/services/checkout_service.dart
+// ignore_for_file: unused_element
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
@@ -18,6 +20,7 @@ import 'thermal_print_service.dart';
 import '../services/sync_queue_service.dart';
 import '../config/access_enforcement_flag.dart';
 import '../providers/shift_provider.dart';
+import '../models/product.dart';
 
 final checkoutServiceProvider = Provider<CheckoutService>((ref) {
   return CheckoutService(ref);
@@ -27,20 +30,20 @@ class CheckoutService {
   final Ref _ref;
   CheckoutService(this._ref);
 
-     bool get _isOnline => _ref.read(isOnlineProvider);
+  bool get _isOnline => _ref.read(isOnlineProvider);
 
-     /// Fail-closed entitlement check at the transaction boundary. Does not
-     /// touch the cart, so nothing the cashier built is lost.
-     CheckoutResult? _subscriptionBlock() {
-       final fm = _ref.read(featureManagerProvider);
-       if (kEnforceCoreAccess && !fm.hasCoreAccess) {
-         return CheckoutResult.error(
-           'Your subscription has expired. Your cart is saved. '
-           'Renew your plan to complete this sale.',
-         );
-       }
-       return null;
-     }
+  /// Fail-closed entitlement check at the transaction boundary. Does not
+  /// touch the cart, so nothing the cashier built is lost.
+  CheckoutResult? _subscriptionBlock() {
+    final fm = _ref.read(featureManagerProvider);
+    if (kEnforceCoreAccess && !fm.hasCoreAccess) {
+      return CheckoutResult.error(
+        'Your subscription has expired. Your cart is saved. '
+        'Renew your plan to complete this sale.',
+      );
+    }
+    return null;
+  }
 
   Future<String?> resolveTableUuid({
     required String businessId,
@@ -80,6 +83,7 @@ class CheckoutService {
     String? roomName,
     double splitChangeAmount = 0,
     String? customerName,
+    String? notes,
   }) async {
     final effectiveSplitPayments = splitPayments ?? const <PaymentSplitInput>[];
     final isSplit = effectiveSplitPayments.isNotEmpty;
@@ -87,19 +91,19 @@ class CheckoutService {
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
-       final profile = _ref.read(profileProvider).asData?.value;
+    final profile = _ref.read(profileProvider).asData?.value;
     if (profile == null) {
       return CheckoutResult.error('No business profile found.');
     }
 
-       // New sales only. Settling an order that was already created before
-       // expiry is deliberately still allowed so in-flight customers can pay.
-       if (existingOrderId == null) {
-         final blocked = _subscriptionBlock();
-         if (blocked != null) return blocked;
-       }
+    // New sales only. Settling an order that was already created before
+    // expiry is deliberately still allowed so in-flight customers can pay.
+    if (existingOrderId == null) {
+      final blocked = _subscriptionBlock();
+      if (blocked != null) return blocked;
+    }
 
-       // Validate reference number
+    // Validate reference number
     // Split payments carry their own per-leg reference numbers (validated
     // by the caller before this is invoked), so this check is skipped
     // entirely when splitPayments is provided.
@@ -127,7 +131,7 @@ class CheckoutService {
     }
 
     final service = _ref.read(orderServiceProvider);
-    final local = _ref.read(localDbServiceProvider);
+    _ref.read(localDbServiceProvider);
     final selectedTableName = _ref.read(tableProvider).selectedTableName;
 
     // Read tax rate from business config
@@ -173,79 +177,8 @@ class CheckoutService {
         );
       }
     } else {
-      // ── Stock validation ────────────────────────────────────────────────
-      if (_isOnline) {
-        final client = _ref.read(supabaseClientProvider);
-        for (final item in items) {
-          if (item.isPromo) {
-            final err = await _checkPromoStockOnline(
-              client,
-              local,
-              businessId,
-              item,
-            );
-            if (err != null) return CheckoutResult.error(err);
-            continue;
-          }
-          if (item.product.isCustom) continue;
-          if (!item.product.trackInventory) continue;
-          if (item.selectedVariant != null) {
-            final err = await _checkVariantStock(item);
-            if (err != null) return CheckoutResult.error(err);
-            continue;
-          }
-          try {
-            final row =
-                await client
-                    .from('products')
-                    .select('stock_quantity, name')
-                    .eq('id', item.product.id)
-                    .single();
-            final available = row['stock_quantity'] as int? ?? 0;
-            if (item.quantity > available) {
-              return CheckoutResult.error(
-                '${row['name']} only has $available in stock '
-                '(you have ${item.quantity} in cart).',
-              );
-            }
-          } catch (e) {
-            debugPrint('[Checkout] Stock check failed, using local cache: $e');
-            final cached = await local.getProducts(businessId);
-            final p = cached.where((p) => p.id == item.product.id).firstOrNull;
-            if (p != null &&
-                p.trackInventory &&
-                item.quantity > p.stockQuantity) {
-              return CheckoutResult.error(
-                '${p.name} only has ${p.stockQuantity} in stock '
-                '(you have ${item.quantity} in cart).',
-              );
-            }
-          }
-        }
-      } else {
-        final cached = await local.getProducts(businessId);
-        for (final item in items) {
-          if (item.isPromo) {
-            final err = await _checkPromoStockLocal(cached, item);
-            if (err != null) return CheckoutResult.error(err);
-            continue;
-          }
-          if (item.product.isCustom) continue;
-          if (!item.product.trackInventory) continue;
-          if (item.selectedVariant != null) {
-            final err = await _checkVariantStock(item);
-            if (err != null) return CheckoutResult.error(err);
-            continue;
-          }
-          final p = cached.where((p) => p.id == item.product.id).firstOrNull;
-          if (p != null && item.quantity > p.stockQuantity) {
-            return CheckoutResult.error(
-              '${p.name} only has ${p.stockQuantity} in stock '
-              '(you have ${item.quantity} in cart).',
-            );
-          }
-        }
-      }
+      final stockErr = await _validateCartStock(businessId, items);
+      if (stockErr != null) return CheckoutResult.error(stockErr);
 
       // ── Table resolution ────────────────────────────────────────────────
       String? tableUuid;
@@ -266,7 +199,7 @@ class CheckoutService {
         businessId: businessId,
         items: items,
         tableId: tableUuid,
-        notes: null,
+        notes: notes,
         cashierId: cashierId,
         shiftId: shiftId,
         taxRate: taxRate,
@@ -275,7 +208,7 @@ class CheckoutService {
         orderType: orderType,
         customerName: customerName,
       );
-      final kitchenItems = items.where((i) => i.product.sendToKitchen).toList();
+      final kitchenItems = items.where((i) => i.hasKitchenWork).toList();
 
       if (hasKitchen && kitchenItems.isNotEmpty) {
         if (_isOnline) {
@@ -385,20 +318,20 @@ class CheckoutService {
 
     try {
       await _ref
-        .read(receiptServiceProvider)
-        .createReceipt(
-          order: paidOrder,
-          businessName: businessName,
-          businessAddress: businessAddress,
-          businessPhone: businessPhone,
-          businessEmail: businessEmail,
-          taxRate: taxRate,
-          issuedBy: profile.id,
-          footerText:
-              isRestaurant
-                  ? 'Thank you for dining with us!'
-                  : 'Thank you for shopping with us!',
-        );
+          .read(receiptServiceProvider)
+          .createReceipt(
+            order: paidOrder,
+            businessName: businessName,
+            businessAddress: businessAddress,
+            businessPhone: businessPhone,
+            businessEmail: businessEmail,
+            taxRate: taxRate,
+            issuedBy: profile.id,
+            footerText:
+                isRestaurant
+                    ? 'Thank you for dining with us!'
+                    : 'Thank you for shopping with us!',
+          );
     } catch (e) {
       // Payment is already recorded. A receipt failure must not surface as a
       // failed checkout, or a re-tap of Pay duplicates the sale.
@@ -450,21 +383,11 @@ class CheckoutService {
     if (businessId == null) {
       return CheckoutResult.error('No business profile found.');
     }
-       if (items.isEmpty) return CheckoutResult.error('Cart is empty.');
-       final blocked = _subscriptionBlock();
-       if (blocked != null) return blocked;
+    if (items.isEmpty) return CheckoutResult.error('Cart is empty.');
+    final blocked = _subscriptionBlock();
+    if (blocked != null) return blocked;
     try {
-      String? stockErr;
-      if (_isOnline) {
-        try {
-          stockErr = await _validateStockOnline(businessId, items);
-        } catch (e) {
-          if (!isNetworkError(e)) rethrow;
-          stockErr = await _validateStockLocal(businessId, items);
-        }
-      } else {
-        stockErr = await _validateStockLocal(businessId, items);
-      }
+      final stockErr = await _validateCartStock(businessId, items);
       if (stockErr != null) return CheckoutResult.error(stockErr);
 
       final taxRate = _ref.read(businessConfigProvider)?.taxRate ?? 0.0;
@@ -526,62 +449,83 @@ class CheckoutService {
         );
   }
 
-  Future<String?> _validateStockLocal(
+  /// Sums what the whole cart needs per product/variant (plain lines AND
+  /// promo/recipe components), then compares once against stock.
+  Future<String?> _validateCartStock(
     String businessId,
     List<CartItem> items,
   ) async {
-    final cached = await _ref
-        .read(localDbServiceProvider)
-        .getProducts(businessId);
-    for (final item in items) {
-      if (item.isPromo) {
-        final e = await _checkPromoStockLocal(cached, item);
-        if (e != null) return e;
-        continue;
-      }
-      if (item.product.isCustom || !item.product.trackInventory) continue;
-      if (item.selectedVariant != null) {
-        final e = await _checkVariantStock(item);
-        if (e != null) return e;
-        continue;
-      }
-      final p = cached.where((p) => p.id == item.product.id).firstOrNull;
-      if (p != null && item.quantity > p.stockQuantity) {
-        return '${p.name} only has ${p.stockQuantity} in stock '
-            '(you have ${item.quantity} in cart).';
+    final need = <String, _StockNeed>{};
+    void add(String pid, String? vid, int qty, String name, bool tracked) {
+      if (!tracked || qty <= 0) return;
+      final k = '$pid|${vid ?? ''}';
+      final e = need[k];
+      if (e == null) {
+        need[k] = _StockNeed(pid, vid, qty, name);
+      } else {
+        e.qty += qty;
       }
     }
-    return null;
-  }
 
-  Future<String?> _validateStockOnline(
-    String businessId,
-    List<CartItem> items,
-  ) async {
-    final client = _ref.read(supabaseClientProvider);
-    final local = _ref.read(localDbServiceProvider);
     for (final item in items) {
       if (item.isPromo) {
-        final e = await _checkPromoStockOnline(client, local, businessId, item);
-        if (e != null) return e;
-        continue;
+        for (final c in item.promoComponents!) {
+          add(
+            c.productId,
+            c.variantId,
+            c.quantity * item.quantity,
+            '${c.productName}${c.variantName != null ? ' (${c.variantName})' : ''}',
+            c.trackInventory,
+          );
+        }
+      } else {
+        if (item.product.isCustom) continue;
+        add(
+          item.product.id,
+          item.selectedVariant?.id,
+          item.quantity,
+          item.selectedVariant != null
+              ? '${item.product.name} (${item.selectedVariant!.name})'
+              : item.product.name,
+          item.product.trackInventory,
+        );
       }
-      if (item.product.isCustom || !item.product.trackInventory) continue;
-      if (item.selectedVariant != null) {
-        final e = await _checkVariantStock(item);
-        if (e != null) return e;
-        continue;
+    }
+    if (need.isEmpty) return null;
+
+    final local = _ref.read(localDbServiceProvider);
+    List<Product>? cached;
+    for (final n in need.values) {
+      int? left;
+      if (n.variantId != null) {
+        left = await _variantStockLeft(n.productId, n.variantId!);
+      } else {
+        if (_isOnline) {
+          try {
+            final row =
+                await _ref
+                    .read(supabaseClientProvider)
+                    .from('products')
+                    .select('stock_quantity')
+                    .eq('id', n.productId)
+                    .single();
+            left = row['stock_quantity'] as int? ?? 0;
+          } catch (e) {
+            debugPrint('[Checkout] Stock check failed, using local cache: $e');
+          }
+        }
+        if (left == null) {
+          cached ??= await local.getProducts(businessId);
+          left =
+              cached
+                  .where((p) => p.id == n.productId)
+                  .firstOrNull
+                  ?.stockQuantity;
+        }
       }
-      final row =
-          await client
-              .from('products')
-              .select('stock_quantity, name')
-              .eq('id', item.product.id)
-              .single();
-      final available = row['stock_quantity'] as int? ?? 0;
-      if (item.quantity > available) {
-        return '${row['name']} only has $available in stock '
-            '(you have ${item.quantity} in cart).';
+      if (left != null && n.qty > left) {
+        return '${n.name} only has $left in stock '
+            '(this order needs ${n.qty} in total).';
       }
     }
     return null;
@@ -762,4 +706,12 @@ class CheckoutResult {
 
   factory CheckoutResult.error(String message) =>
       CheckoutResult._(status: CheckoutStatus.error, errorMessage: message);
+}
+
+class _StockNeed {
+  final String productId;
+  final String? variantId;
+  final String name;
+  int qty;
+  _StockNeed(this.productId, this.variantId, this.qty, this.name);
 }

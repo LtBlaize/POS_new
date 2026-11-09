@@ -74,9 +74,7 @@ class DowngradeBlocker {
 class DowngradeBlockedException extends AdminActionException {
   final List<DowngradeBlocker> blockers;
   DowngradeBlockedException(this.blockers)
-    : super(
-        'Downgrade blocked:\n${blockers.map((b) => '• $b').join('\n')}',
-      );
+    : super('Downgrade blocked:\n${blockers.map((b) => '• $b').join('\n')}');
 }
 
 class AdminSubscriptionService {

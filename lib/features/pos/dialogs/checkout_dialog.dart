@@ -159,6 +159,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
   final _tenderedController = TextEditingController();
   final _refController = TextEditingController();
   final _nameController = TextEditingController();
+  final _notesController = TextEditingController();
   bool _placing = false;
   bool _sendingToKitchen = false;
   Order? _completedOrder;
@@ -193,6 +194,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
     _tenderedController.dispose();
     _refController.dispose();
     _nameController.dispose();
+    _notesController.dispose();
     for (final leg in _splitLegs) {
       leg.dispose();
     }
@@ -345,6 +347,10 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
                 _nameController.text.trim().isEmpty
                     ? null
                     : _nameController.text.trim(),
+            notes:
+                _notesController.text.trim().isEmpty
+                    ? null
+                    : _notesController.text.trim(),
           );
 
       if (!mounted) return;
@@ -481,6 +487,7 @@ class _CheckoutDialogState extends ConsumerState<CheckoutDialog> {
       tenderedController: _tenderedController,
       refController: _refController,
       nameController: _nameController,
+      notesController: _notesController,
       subtotal: subtotal,
       tendered: tendered,
       change: change,
@@ -510,6 +517,7 @@ class _CheckoutForm extends ConsumerStatefulWidget {
   final TextEditingController tenderedController;
   final TextEditingController refController;
   final TextEditingController nameController;
+  final TextEditingController notesController;
   final double subtotal;
   final double tendered;
   final double change;
@@ -534,6 +542,7 @@ class _CheckoutForm extends ConsumerStatefulWidget {
     required this.tenderedController,
     required this.refController,
     required this.nameController,
+    required this.notesController,
     required this.subtotal,
     required this.tendered,
     required this.change,
@@ -692,6 +701,13 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                         ),
                         const SizedBox(height: 16),
                       ],
+                      if (widget.existingOrderId == null) ...[
+                        _OrderNoteField(
+                          controller: widget.notesController,
+                          isBusy: isBusy,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       if (ref.watch(discountsAllowedProvider))
                         _DiscountButton(isBusy: isBusy),
@@ -787,6 +803,7 @@ class _CheckoutFormState extends ConsumerState<_CheckoutForm>
                               featureManager: widget.featureManager,
                               isRestaurant: widget.isRestaurant,
                               onDone: widget.onCancel,
+                              notesController: widget.notesController,
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -1383,6 +1400,42 @@ class _CustomerNameField extends StatelessWidget {
   }
 }
 
+class _OrderNoteField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isBusy;
+  const _OrderNoteField({required this.controller, required this.isBusy});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      enabled: !isBusy,
+      maxLength: 200,
+      maxLines: 2,
+      minLines: 1,
+      textCapitalization: TextCapitalization.sentences,
+      style: const TextStyle(fontSize: 13, color: CheckoutTheme.textHigh),
+      decoration: InputDecoration(
+        hintText: 'Order note (optional), e.g. extra bag, no onions',
+        hintStyle: const TextStyle(fontSize: 12, color: CheckoutTheme.textLow),
+        prefixIcon: const Icon(
+          Icons.sticky_note_2_outlined,
+          size: 16,
+          color: CheckoutTheme.textMid,
+        ),
+        counterText: '',
+        isDense: true,
+        filled: true,
+        fillColor: CheckoutTheme.elevated,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+}
+
 class _NoTableBanner extends StatelessWidget {
   const _NoTableBanner();
 
@@ -1415,8 +1468,10 @@ class _UtangButton extends ConsumerWidget {
   final FeatureManager featureManager;
   final bool isRestaurant;
   final VoidCallback onDone;
+  final TextEditingController notesController;
 
   const _UtangButton({
+    required this.notesController,
     required this.isBusy,
     required this.subtotal,
     required this.existingOrderId,
@@ -1456,6 +1511,10 @@ class _UtangButton extends ConsumerWidget {
                           ref.read(cartProvider.notifier).orderDiscountValue,
                       tipAmount: ref.read(cartProvider.notifier).tipAmount,
                       items: ref.read(cartProvider),
+                      notes:
+                          notesController.text.trim().isEmpty
+                              ? null
+                              : notesController.text.trim(),
                     );
 
                 if (!context.mounted) return;

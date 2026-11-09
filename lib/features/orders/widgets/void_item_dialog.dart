@@ -42,6 +42,15 @@ Future<VoidItemResult?> showVoidItemDialog({
     return Future.value(null);
   }
 
+  if (item.isPromo) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      _errorSnack(
+        'Promo and recipe lines can’t be voided one by one. Void the whole order instead.',
+      ),
+    );
+    return Future.value(null);
+  }
+
   final role = active.role;
   if (role != StaffRole.owner && role != StaffRole.manager) {
     ScaffoldMessenger.of(

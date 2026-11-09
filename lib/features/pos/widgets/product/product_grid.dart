@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/product_provider.dart';
+import '../../../../core/providers/recipe_provider.dart';
 import 'product_card.dart';
 
 class ProductGrid extends ConsumerWidget {
@@ -10,6 +11,7 @@ class ProductGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(productListProvider);
+    ref.watch(recipesProvider); // keep recipes loaded for tap handling
 
     return productsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),

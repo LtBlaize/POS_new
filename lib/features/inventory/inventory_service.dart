@@ -447,13 +447,14 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 
     // Re-read from the local cache (not _load) so a queued restore isn't
     // hidden again by deactivateMissingProducts before it syncs.
-    final threshold =
-        _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
+    final threshold = _ref.read(businessConfigProvider)?.lowStockThreshold ?? 5;
     final cached = await _local.getProducts(_businessId);
     state = state.copyWith(
       entries:
           cached
-              .map((p) => InventoryEntry(product: p, lowStockThreshold: threshold))
+              .map(
+                (p) => InventoryEntry(product: p, lowStockThreshold: threshold),
+              )
               .toList(),
     );
     _ref.invalidate(removedProductsProvider);
@@ -469,8 +470,7 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
     final usedIn =
         promos
             .where(
-              (p) =>
-                  p.isActive && p.items.any((i) => i.productId == productId),
+              (p) => p.isActive && p.items.any((i) => i.productId == productId),
             )
             .map((p) => p.name)
             .toList();

@@ -2,12 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/models/product.dart';
 import '../../../../core/models/promo.dart';
 import '../../../../core/providers/cart_provider.dart';
 import '../../../../core/providers/product_provider.dart';
 import '../../../../core/providers/promo_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
+import '../../dialogs/promo_choice_dialog.dart';
+import '../../../../core/providers/recipe_provider.dart';
 
 const _kPromoColor = Color(0xFFE67700);
 
@@ -17,6 +18,7 @@ class PromoGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final allPromos = ref.watch(purchasablePromosProvider);
+    ref.watch(recipesProvider); // keep recipes loaded for tap handling
     final query = ref.watch(posSearchQueryProvider).trim().toLowerCase();
 
     final promos =
@@ -159,37 +161,6 @@ class _PromoCard extends ConsumerWidget {
     return components;
   }
 
-  /// Live stock check against the cached product list — same source and
-  /// same "cache, not a live round-trip" tradeoff as the barcode-scan
-  /// add-to-cart path in pos_screen.dart. Final authority is still
-  /// CheckoutService at checkout time.
-  String? _checkLiveStock(
-    List<Product> liveProducts,
-    List<PromoComponent> components,
-  ) {
-    for (final c in components) {
-      if (!c.trackInventory) continue;
-      final product =
-          liveProducts.where((p) => p.id == c.productId).firstOrNull;
-      if (product == null) continue;
-      final available =
-          c.variantId != null
-              ? product.variants
-                  .where((v) => v.id == c.variantId)
-                  .firstOrNull
-                  ?.stockQuantity
-              : product.stockQuantity;
-      if (available != null && c.quantity > available) {
-        final label =
-            c.variantName != null
-                ? '${c.productName} (${c.variantName})'
-                : c.productName;
-        return '$label only has $available in stock (this needs ${c.quantity}).';
-      }
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isBundle = promo.promoType == PromoType.bundle;
@@ -278,7 +249,9 @@ class _PromoCard extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         isBundle
-                            ? '$itemCount item${itemCount == 1 ? '' : 's'}'
+                            ? (promo.choiceItems.isNotEmpty
+                                ? 'Customer picks'
+                                : '$itemCount item${itemCount == 1 ? '' : 's'}')
                             : 'Buy ${promo.buyQuantity ?? 1} Get ${promo.getQuantity ?? 1}',
                         style: const TextStyle(
                           fontSize: 11,
@@ -321,10 +294,27 @@ class _PromoCard extends ConsumerWidget {
     );
   }
 
-  void _handleTap(BuildContext context, WidgetRef ref) {
+  Future<void> _handleTap(BuildContext context, WidgetRef ref) async {
     final components = _buildComponents();
     final liveProducts = ref.read(productListProvider).asData?.value ?? [];
-    final error = _checkLiveStock(liveProducts, components);
+
+    if (promo.choiceItems.isNotEmpty) {
+      final chosen = await showPromoChoiceDialog(
+        context: context,
+        promo: promo,
+        liveProducts: liveProducts,
+      );
+      if (chosen == null || !context.mounted) return;
+      components.addAll(chosen);
+    }
+
+    final recipes = ref.read(recipesProvider).asData?.value ?? const {};
+    final resolved = expandComponents(components, recipes);
+    final error = cartAwareStockError(
+      liveProducts,
+      ref.read(cartProvider),
+      resolved,
+    );
 
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -337,7 +327,13 @@ class _PromoCard extends ConsumerWidget {
       return;
     }
 
-    ref.read(cartProvider.notifier).addPromo(promo, components);
+    ref
+        .read(cartProvider.notifier)
+        .addPromo(
+          promo,
+          resolved,
+          cost: componentsCost(liveProducts, resolved),
+        );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${promo.name} added to cart'),

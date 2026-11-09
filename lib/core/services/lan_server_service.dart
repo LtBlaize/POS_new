@@ -231,6 +231,23 @@ class LanServerService {
                               'quantity': i.quantity,
                               'round': i.round,
                               'kitchen_status': i.kitchenStatus,
+                              'notes': i.notes,
+                              if (i.isPromo) ...{
+                                'promo_id': i.promoId,
+                                'unit_price': i.effectivePrice,
+                                'components': [
+                                  for (final c in i.promoComponents!)
+                                    {
+                                      'product_id': c.productId,
+                                      'variant_id': c.variantId,
+                                      'product_name': c.productName,
+                                      'variant_name': c.variantName,
+                                      'quantity': c.quantity, // per unit
+                                      'send_to_kitchen': c.sendToKitchen,
+                                      'track_inventory': c.trackInventory,
+                                    },
+                                ],
+                              },
                             },
                           )
                           .toList(),

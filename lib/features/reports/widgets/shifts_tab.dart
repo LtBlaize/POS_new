@@ -642,7 +642,7 @@ class ShiftDetail extends StatelessWidget {
             const SizedBox(height: 10),
             CashReconcile(shift: shift),
             const SizedBox(height: 12),
-                        Consumer(
+            Consumer(
               builder: (context, ref, _) {
                 final business = ref.watch(businessProvider);
                 return ShiftReportActions(
@@ -737,7 +737,7 @@ class CashReconcile extends StatelessWidget {
             value: '₱${fmtCurrency(shift.cashSales)}',
             color: const Color(0xFF10B981),
           ),
-                    if (shift.creditsPaid > 0)
+          if (shift.creditsPaid > 0)
             ReconRow(
               label: '+ Utang Collected',
               value: '₱${fmtCurrency(shift.creditsPaid)}',

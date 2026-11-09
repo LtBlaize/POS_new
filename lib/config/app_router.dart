@@ -177,15 +177,15 @@ class AppRouter {
       return _route(const LoginScreen());
     }
 
-       final fm = featureManager!;
+    final fm = featureManager!;
 
-       // ── Subscription lockout (business-wide) ────────────────────────────────
-       // hasBusiness avoids flashing this screen while the business is loading.
-       if (fm.hasBusiness && !fm.hasCoreAccess) {
-         return _route(const SubscriptionExpiredScreen());
-       }
+    // ── Subscription lockout (business-wide) ────────────────────────────────
+    // hasBusiness avoids flashing this screen while the business is loading.
+    if (fm.hasBusiness && !fm.hasCoreAccess) {
+      return _route(const SubscriptionExpiredScreen());
+    }
 
-       // ── Feature guards ────────────────────────────────────────────────────
+    // ── Feature guards ────────────────────────────────────────────────────
     final isOwner = _canAccessTab('settings');
     if (!isOwner && name == '/kitchen' && !fm.hasFeature('kitchen')) {
       return _pos(fm);

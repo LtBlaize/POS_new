@@ -481,10 +481,12 @@ class SyncQueueService {
               .from('order_items')
               .select('id')
               .eq('order_id', payload['order_id'] as String)
-              .eq('product_id', payload['product_id'] as String);
-          if (payload['variant_id'] != null) {
-            find = find.eq('variant_id', payload['variant_id'] as String);
-          }
+              .eq('product_id', payload['product_id'] as String)
+              .isFilter('promo_group_id', null);
+          find =
+              payload['variant_id'] != null
+                  ? find.eq('variant_id', payload['variant_id'] as String)
+                  : find.isFilter('variant_id', null);
           final target = await find.limit(1).maybeSingle();
           if (target != null) {
             await _client

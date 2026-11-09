@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/product.dart';
 import '../../../../core/providers/cart_provider.dart';
 import '../../../../core/providers/product_provider.dart';
+import '../../../../core/providers/recipe_provider.dart';
 import '../../../../shared/widgets/app_colors.dart';
 import '../../dialogs/variant_picker_dialog.dart';
+import '../../../../core/models/promo.dart';
 
 const _tilePalette = <Color>[
   Color(0xFF0C8599), // teal
@@ -28,17 +30,18 @@ Color _tileColorFor(String key) {
   return _tilePalette[h % _tilePalette.length];
 }
 
-IconData _tileIconFor(String category) =>
-    switch (category.trim().toLowerCase()) {
-      'food' || 'meal' || 'burger' => Icons.lunch_dining_rounded,
-      'drinks' || 'drink' || 'beverage' => Icons.local_drink_rounded,
-      'dessert' || 'desserts' || 'candy' => Icons.icecream_rounded,
-      'snack' || 'snacks' => Icons.cookie_rounded,
-      'apparel' => Icons.checkroom_rounded,
-      'stationery' => Icons.edit_rounded,
-      'electronics' => Icons.devices_rounded,
-      _ => Icons.sell_rounded,
-    };
+IconData _tileIconFor(String category) => switch (category
+    .trim()
+    .toLowerCase()) {
+  'food' || 'meal' || 'burger' => Icons.lunch_dining_rounded,
+  'drinks' || 'drink' || 'beverage' => Icons.local_drink_rounded,
+  'dessert' || 'desserts' || 'candy' => Icons.icecream_rounded,
+  'snack' || 'snacks' => Icons.cookie_rounded,
+  'apparel' => Icons.checkroom_rounded,
+  'stationery' => Icons.edit_rounded,
+  'electronics' => Icons.devices_rounded,
+  _ => Icons.sell_rounded,
+};
 
 class ProductCard extends ConsumerStatefulWidget {
   final Product product;
@@ -89,6 +92,10 @@ class _ProductCardState extends ConsumerState<ProductCard>
 
     final liveProduct = _liveProduct(ref);
 
+    // Recipe products (e.g. Beer Tower) expand into their components.
+    if (!mounted) return;
+    if (handleRecipeTap(context, ref, liveProduct)) return;
+
     // Products with variants must open the picker instead of adding the
     // base product directly — stock/price are resolved per-variant there.
     if (liveProduct.hasVariants) {
@@ -116,6 +123,27 @@ class _ProductCardState extends ConsumerState<ProductCard>
       return;
     }
 
+    final err = cartAwareStockError(
+      ref.read(productListProvider).asData?.value ?? [],
+      ref.read(cartProvider),
+      [
+        PromoComponent(
+          promoId: '',
+          productId: liveProduct.id,
+          productName: liveProduct.name,
+          quantity: 1,
+          trackInventory: liveProduct.trackInventory,
+          sendToKitchen: liveProduct.sendToKitchen,
+        ),
+      ],
+    );
+    if (err != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err), backgroundColor: Colors.red));
+      return;
+    }
+
     ref.read(cartProvider.notifier).addProduct(liveProduct);
 
     setState(() => _added = true);
@@ -128,7 +156,11 @@ class _ProductCardState extends ConsumerState<ProductCard>
     final liveProduct = _liveProduct(ref);
     final cartItems = ref.watch(cartProvider);
     final inCart = cartItems
-        .where((i) => i.product.id == widget.product.id)
+        .where(
+          (i) =>
+              i.product.id == widget.product.id ||
+              i.product.id == 'promo_recipe_${widget.product.id}',
+        )
         .fold(0, (sum, i) => sum + i.quantity);
     final accent = _tileColorFor(
       liveProduct.category.isEmpty ? liveProduct.name : liveProduct.category,

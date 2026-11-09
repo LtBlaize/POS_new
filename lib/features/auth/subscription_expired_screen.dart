@@ -88,7 +88,7 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                                Text(
+                Text(
                   title,
                   style: const TextStyle(
                     fontSize: 20,
@@ -123,7 +123,10 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                 if (!suspended) ...[
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.workspace_premium_outlined, size: 16),
+                    icon: const Icon(
+                      Icons.workspace_premium_outlined,
+                      size: 16,
+                    ),
                     label: const Text('View Subscription Plans'),
                     onPressed: () => _showPlans(context),
                   ),
@@ -145,16 +148,16 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
-                    if (!_supportMessenger.contains('YOUR_PAGE_NAME'))                    
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.call_rounded, size: 16),
-                      label: const Text('Call'),
-                      onPressed:
-                          () => _open(
-                            context,
-                            Uri(scheme: 'tel', path: _supportPhone),
-                          ),
-                    ),
+                    if (!_supportMessenger.contains('YOUR_PAGE_NAME'))
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.call_rounded, size: 16),
+                        label: const Text('Call'),
+                        onPressed:
+                            () => _open(
+                              context,
+                              Uri(scheme: 'tel', path: _supportPhone),
+                            ),
+                      ),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.sms_outlined, size: 16),
                       label: const Text('Text'),
@@ -231,6 +234,7 @@ class SubscriptionExpiredScreen extends ConsumerWidget {
     );
   }
 }
+
 class _RefreshStatusButton extends ConsumerStatefulWidget {
   const _RefreshStatusButton();
   @override
@@ -296,6 +300,7 @@ class _RefreshStatusButtonState extends ConsumerState<_RefreshStatusButton> {
     );
   }
 }
+
 void _showPlans(BuildContext context) {
   const plans = [
     (

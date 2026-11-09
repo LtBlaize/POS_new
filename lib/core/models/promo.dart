@@ -13,17 +13,19 @@ extension PromoTypeX on PromoType {
   };
 }
 
-enum PromoItemRole { bundle, buy, get }
+enum PromoItemRole { bundle, buy, get, choice }
 
 extension PromoItemRoleX on PromoItemRole {
   String get value => switch (this) {
     PromoItemRole.bundle => 'bundle',
     PromoItemRole.buy => 'buy',
     PromoItemRole.get => 'get',
+    PromoItemRole.choice => 'choice',
   };
   static PromoItemRole fromString(String v) => switch (v) {
     'buy' => PromoItemRole.buy,
     'get' => PromoItemRole.get,
+    'choice' => PromoItemRole.choice,
     _ => PromoItemRole.bundle,
   };
 }
@@ -45,6 +47,10 @@ class PromoItem {
   final bool? productTrackInventory;
   final bool? productSendToKitchen;
 
+  // Only used when role == choice: which group, and how many the customer picks.
+  final String? choiceGroup;
+  final int? pickCount;
+
   const PromoItem({
     required this.id,
     required this.promoId,
@@ -57,6 +63,8 @@ class PromoItem {
     this.productPrice,
     this.productTrackInventory,
     this.productSendToKitchen,
+    this.choiceGroup,
+    this.pickCount,
   });
 
   factory PromoItem.fromMap(Map<String, dynamic> map) => PromoItem(
@@ -71,6 +79,8 @@ class PromoItem {
     productPrice: (map['product_price'] as num?)?.toDouble(),
     productTrackInventory: map['product_track_inventory'] as bool?,
     productSendToKitchen: map['product_send_to_kitchen'] as bool?,
+    choiceGroup: map['choice_group'] as String?,
+    pickCount: map['pick_count'] as int?,
   );
 
   Map<String, dynamic> toMap() => {
@@ -79,6 +89,8 @@ class PromoItem {
     'variant_id': variantId,
     'quantity': quantity,
     'role': role.value,
+    'choice_group': choiceGroup,
+    'pick_count': pickCount,
   };
 }
 
@@ -128,6 +140,25 @@ class Promo {
 
   List<PromoItem> get bundleItems =>
       items.where((i) => i.role == PromoItemRole.bundle).toList();
+  List<PromoItem> get choiceItems =>
+      items.where((i) => i.role == PromoItemRole.choice).toList();
+
+  /// Rough "regular price" of the choice groups: average option price
+  /// times the number picked, per group. Only used for the savings label.
+  double get _choiceOriginal {
+    final groups = <String, List<PromoItem>>{};
+    for (final i in choiceItems) {
+      groups.putIfAbsent(i.choiceGroup ?? '', () => []).add(i);
+    }
+    var total = 0.0;
+    for (final g in groups.values) {
+      final avg =
+          g.fold<double>(0, (s, i) => s + (i.productPrice ?? 0)) / g.length;
+      total += avg * (g.first.pickCount ?? 1);
+    }
+    return total;
+  }
+
   List<PromoItem> get buyItems =>
       items.where((i) => i.role == PromoItemRole.buy).toList();
   List<PromoItem> get getItems =>
@@ -140,9 +171,10 @@ class Promo {
     switch (promoType) {
       case PromoType.bundle:
         return bundleItems.fold<double>(
-          0,
-          (sum, i) => sum + (i.productPrice ?? 0) * i.quantity,
-        );
+              0,
+              (sum, i) => sum + (i.productPrice ?? 0) * i.quantity,
+            ) +
+            _choiceOriginal;
       case PromoType.buyXGetY:
         final buyTotal = buyItems.fold<double>(
           0,

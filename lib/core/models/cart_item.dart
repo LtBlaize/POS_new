@@ -116,6 +116,22 @@ class CartItem {
       );
       final componentRows = rowsInGroup.where((r) => !isHeaderRow(r)).toList();
       final header = buildItem(headerRow);
+      final per = header.quantity > 0 ? header.quantity : 1;
+      PromoComponent perUnit(T r) {
+        final c = buildComponent(r);
+        final q = c.quantity ~/ per;
+        return PromoComponent(
+          promoId: c.promoId,
+          productId: c.productId,
+          variantId: c.variantId,
+          productName: c.productName,
+          variantName: c.variantName,
+          quantity: q < 1 ? 1 : q,
+          trackInventory: c.trackInventory,
+          sendToKitchen: c.sendToKitchen,
+        );
+      }
+
       result.add(
         CartItem(
           product: header.product,
@@ -126,7 +142,7 @@ class CartItem {
           notes: header.notes,
           promoId: header.promoId,
           round: header.round,
-          promoComponents: componentRows.map(buildComponent).toList(),
+          promoComponents: componentRows.map(perUnit).toList(),
           kitchenStatus: header.kitchenStatus,
         ),
       );

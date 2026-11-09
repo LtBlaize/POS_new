@@ -6,7 +6,7 @@ class TrustedClock {
   static DateTime? _floor;
   static final Stopwatch _floorSw = Stopwatch();
 
-    static void reset() {
+  static void reset() {
     _serverAtSync = null;
     _floor = null;
     _sw.reset();
