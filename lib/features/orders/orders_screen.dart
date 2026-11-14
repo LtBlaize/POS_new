@@ -1451,6 +1451,8 @@ class _PayNowButtonState extends ConsumerState<_PayNowButton> {
             .fetchOrderWithItems(order.id);
       }
 
+      if (!mounted) return;
+
       if (ref.read(cartProvider).isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Send or hold the current cart first.')),

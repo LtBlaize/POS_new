@@ -1,6 +1,5 @@
 // lib/core/providers/recipe_provider.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/product.dart';
@@ -242,8 +241,9 @@ bool handleRecipeTap(BuildContext context, WidgetRef ref, Product p) {
   }
 
   var cost = componentsCost(live, components);
-  if (cost <= 0)
+  if (cost <= 0) {
     cost = lines.fold<double>(0, (s, l) => s + l.costPrice * l.quantity);
+  }
   ref.read(cartProvider.notifier).addRecipeProduct(p, components, cost);
   return true;
 }

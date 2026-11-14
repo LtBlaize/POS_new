@@ -264,8 +264,9 @@ final heatmapProvider = FutureProvider.family<WeeklyHeatmap, DateRange>((
     final Map<int, int> countMap = {};
 
     for (final o in rows) {
-      if (o['payment_method'] == 'credit')
+      if (o['payment_method'] == 'credit') {
         continue; // utang: counted when collected
+      }
       final dt = DateTime.tryParse(o['paid_at'] as String? ?? '')?.toLocal();
       if (dt == null) continue;
       final amount = _netSale(o);

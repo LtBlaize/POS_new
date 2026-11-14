@@ -10,7 +10,6 @@
 //   ffi: ^2.1.0
 import 'dart:ffi';
 import 'dart:io' show Platform;
-import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';

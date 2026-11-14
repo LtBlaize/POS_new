@@ -16,8 +16,7 @@ final isPlatformAdminProvider = FutureProvider<bool>((ref) async {
   if (user == null) {
     try {
       user = await ref
-          .watch(authStateProvider.stream)
-          .first
+          .watch(authStateProvider.future)
           .timeout(const Duration(seconds: 2));
     } catch (_) {
       user = Supabase.instance.client.auth.currentUser;

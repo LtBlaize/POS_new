@@ -522,13 +522,15 @@ class _PlanDurationDialogState extends State<_PlanDurationDialog> {
             'Plan',
             style: TextStyle(fontSize: 12, color: AdminColors.textMuted),
           ),
-          ..._plans.map(
-            (p) => RadioListTile<String>(
-              dense: true,
-              title: Text(p),
-              value: p,
-              groupValue: _plan,
-              onChanged: (v) => setState(() => _plan = v!),
+          RadioGroup<String>(
+            groupValue: _plan,
+            onChanged: (v) => setState(() => _plan = v!),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final p in _plans)
+                  RadioListTile<String>(dense: true, title: Text(p), value: p),
+              ],
             ),
           ),
           const Divider(height: 24),
@@ -537,13 +539,19 @@ class _PlanDurationDialogState extends State<_PlanDurationDialog> {
             style: TextStyle(fontSize: 12, color: AdminColors.textMuted),
           ),
           const SizedBox(height: 4),
-          ..._durationOptions.map(
-            (d) => RadioListTile<int?>(
-              dense: true,
-              title: Text(_durationLabel(d)),
-              value: d,
-              groupValue: _duration,
-              onChanged: (v) => setState(() => _duration = v),
+          RadioGroup<int?>(
+            groupValue: _duration,
+            onChanged: (v) => setState(() => _duration = v),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final d in _durationOptions)
+                  RadioListTile<int?>(
+                    dense: true,
+                    title: Text(_durationLabel(d)),
+                    value: d,
+                  ),
+              ],
             ),
           ),
         ],
@@ -695,21 +703,27 @@ class _EligibilityDialogState extends State<_EligibilityDialog> {
                   color: AdminColors.textMuted,
                 ),
               ),
-              ..._options.map(
-                (p) => RadioListTile<String>(
-                  dense: true,
-                  title: Text(p),
-                  value: p,
-                  groupValue: _plan,
-                  onChanged:
-                      _loading
-                          ? null
-                          : (v) => setState(() {
-                            _plan = v!;
-                            _blockers = null;
-                            _error = null;
-                            _copied = false;
-                          }),
+              RadioGroup<String>(
+                groupValue: _plan,
+                onChanged: (v) {
+                  if (_loading || v == null) return;
+                  setState(() {
+                    _plan = v;
+                    _blockers = null;
+                    _error = null;
+                    _copied = false;
+                  });
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final p in _options)
+                      RadioListTile<String>(
+                        dense: true,
+                        title: Text(p),
+                        value: p,
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),

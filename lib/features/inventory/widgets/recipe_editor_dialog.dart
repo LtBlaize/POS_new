@@ -72,6 +72,7 @@ class _RecipeEditorState extends ConsumerState<_RecipeEditor> {
       builder: (_) => _PickerDialog(excludeId: widget.product.id),
     );
     if (picked == null) return;
+    if (!mounted) return;
     if (_wouldLoop(picked.productId)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
