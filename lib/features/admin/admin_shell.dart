@@ -27,7 +27,7 @@ class AdminShell extends StatelessWidget {
     required this.child,
   });
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -39,14 +39,20 @@ class AdminShell extends StatelessWidget {
         if (isMobile) {
           return Scaffold(
             backgroundColor: AdminColors.background,
-            appBar: AdminTopBar(
-              currentRoute: currentRoute,
-              showMenuButton: true,
-            ),
             drawer: Drawer(
               child: AdminSidebar(currentRoute: currentRoute, collapsed: false),
             ),
-            body: child,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  AdminTopBar(
+                    currentRoute: currentRoute,
+                    showMenuButton: true,
+                  ),
+                  Expanded(child: child),
+                ],
+              ),
+            ),
           );
         }
 
@@ -54,13 +60,18 @@ class AdminShell extends StatelessWidget {
           backgroundColor: AdminColors.background,
           body: Row(
             children: [
+              // Sidebar has its own SafeArea, so its dark background still
+              // extends behind the status/nav bars.
               AdminSidebar(currentRoute: currentRoute, collapsed: isTablet),
               Expanded(
-                child: Column(
-                  children: [
-                    AdminTopBar(currentRoute: currentRoute),
-                    Expanded(child: child),
-                  ],
+                child: SafeArea(
+                  left: false,
+                  child: Column(
+                    children: [
+                      AdminTopBar(currentRoute: currentRoute),
+                      Expanded(child: child),
+                    ],
+                  ),
                 ),
               ),
             ],

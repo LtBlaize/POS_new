@@ -137,6 +137,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
       appBar: AppBar(
         backgroundColor: _card,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white70),
           onPressed: widget.onCancel,
@@ -158,7 +159,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20) + MediaQuery.paddingOf(context),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: Column(
@@ -813,6 +814,7 @@ class _ShiftReceiptView extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: _card,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         automaticallyImplyLeading: false,
         title: const Text(
           'Shift Report',
@@ -834,7 +836,7 @@ class _ShiftReceiptView extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20) + MediaQuery.paddingOf(context),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Column(

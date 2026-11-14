@@ -1155,9 +1155,11 @@ class _ProductPickerSheetState extends ConsumerState<_ProductPickerSheet> {
                     }
                     return ListView.builder(
                       controller: scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                      padding: EdgeInsets.fromLTRB(
+                        8,
+                        4,
+                        8,
+                        4 + MediaQuery.paddingOf(context).bottom,
                       ),
                       itemCount: filtered.length,
                       itemBuilder: (_, i) {

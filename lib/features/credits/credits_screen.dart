@@ -171,13 +171,15 @@ class _DetailPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0E1A),
-      body: _CustomerDetail(
-        key: ValueKey(live.id),
-        customer: live,
-        showBackButton: true,
-        onUpdated: (_) {
-          ref.invalidate(creditCustomersProvider);
-        },
+      body: SafeArea(
+        child: _CustomerDetail(
+          key: ValueKey(live.id),
+          customer: live,
+          showBackButton: true,
+          onUpdated: (_) {
+            ref.invalidate(creditCustomersProvider);
+          },
+        ),
       ),
     );
   }

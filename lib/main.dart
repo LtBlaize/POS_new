@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -69,6 +70,18 @@ final repairPromptReasonProvider = Provider<RepairPromptReason?>((ref) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+      overlays: SystemUiOverlay.values);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
+
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
@@ -114,11 +127,25 @@ Future<void> main() async {
   if (isPos) {
     final businessId = prefs.getString('business_id') ?? '';
     if (businessId.isNotEmpty) {
-      await container.read(localDbServiceProvider).clearStaleData(businessId);
+      try {
+        await container
+            .read(localDbServiceProvider)
+            .clearStaleData(businessId)
+            .timeout(const Duration(seconds: 5));
+      } catch (e) {
+        debugPrint('[Boot] clearStaleData failed (non-fatal): $e');
+      }
     }
   }
 
-  await container.read(connectivityServiceProvider).init();
+  try {
+    await container
+        .read(connectivityServiceProvider)
+        .init()
+        .timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('[Boot] connectivity init failed (non-fatal): $e');
+  }
   container.read(
     syncQueueServiceProvider,
   ); // provider factory already calls init()
@@ -132,12 +159,27 @@ Future<void> main() async {
       final newKey = LanServerService.getPosKey(); // generates one
       await prefs.setString('pos_lan_key', newKey);
     }
-    await container.read(lanServerServiceProvider).start();
-    if (!kIsWeb && Platform.isAndroid) await WakelockPlus.enable();
-    final ip = await _getLocalIp();
-    if (ip != null) {
-      await prefs.setString('pos_local_ip', ip);
-      debugPrint('[Boot] POS server started — local IP: $ip');
+    try {
+      await container
+          .read(lanServerServiceProvider)
+          .start()
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('[Boot] LAN server failed to start (non-fatal): $e');
+    }
+    try {
+      if (!kIsWeb && Platform.isAndroid) await WakelockPlus.enable();
+    } catch (e) {
+      debugPrint('[Boot] Wakelock failed (non-fatal): $e');
+    }
+    try {
+      final ip = await _getLocalIp().timeout(const Duration(seconds: 3));
+      if (ip != null) {
+        await prefs.setString('pos_local_ip', ip);
+        debugPrint('[Boot] POS local IP: $ip');
+      }
+    } catch (e) {
+      debugPrint('[Boot] local IP lookup failed (non-fatal): $e');
     }
   }
 
@@ -151,9 +193,15 @@ Future<void> main() async {
     final cachedIp = prefs.getString('cashier_ip');
     if (cachedIp != null && cachedIp.isNotEmpty) {
       container.read(cashierIpProvider.notifier).state = cachedIp;
-      final reachable = await container
-          .read(connectivityServiceProvider)
-          .probeLan(cachedIp);
+      bool reachable = false;
+      try {
+        reachable = await container
+            .read(connectivityServiceProvider)
+            .probeLan(cachedIp)
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('[Boot] probeLan failed (non-fatal): $e');
+      }
       if (reachable) {
         final businessId = prefs.getString('business_id') ?? '';
         container.read(kitchenStateProvider.notifier).connect(businessId);
@@ -191,104 +239,72 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp> {
-  bool _initialEventSkipped = false;
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+  String? _handledUserId;
   bool _isNavigating = false;
   bool _repairDialogShowing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The user the boot route already accounts for.
+    _handledUserId = Supabase.instance.client.auth.currentUser?.id;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Force a fresh frame so a stale surface doesn't stay black.
+      WidgetsBinding.instance.scheduleForcedFrame();
+      WidgetsBinding.instance.handleBeginFrame(null);
+      WidgetsBinding.instance.handleDrawFrame();
+      if (mounted) setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
 
-    ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) async {
-      if (!_initialEventSkipped) {
-        _initialEventSkipped = true;
-        debugPrint(
-          '[Auth] initial event: ${next.runtimeType} user: ${next.asData?.value?.id} route: ${widget.initialRoute}',
-        );
-        if (next.asData?.value != null && widget.initialRoute == '/pending') {
-          debugPrint(
-            '[Auth] cached session boot — falling through to signed-in handler',
-          );
-          // Fall through to normal signed-in handling below.
-        } else if (next.asData?.value == null &&
-            widget.initialRoute == '/pending') {
-          debugPrint('[Auth] cached session gone — going to /login');
-          router.navigatorKey.currentState?.pushNamedAndRemoveUntil(
-            '/login',
-            (_) => false,
-          );
-          return;
-        } else {
-          debugPrint('[Auth] initial event skipped');
-          return;
-        }
-      }
+    ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) {
+      if (next.isLoading || next.hasError) return;
+      final user = next.valueOrNull;
 
-      final previousUser = previous?.asData?.value;
-      final currentUser = next.asData?.value;
+      // Already handled (boot route covers it, or a duplicate event).
+      if (user?.id == _handledUserId) return;
 
-      // No real change in user identity — skip
-      if (previousUser?.id == currentUser?.id) return;
-
-      // Guard: only one navigation in flight at a time
       if (_isNavigating) return;
-      _isNavigating = true; // FIX: was 'isNavigating' (missing underscore)
-
       final nav = router.navigatorKey.currentState;
-      if (nav == null) {
-        _isNavigating = false;
+      if (nav == null) return;
+
+      if (user == null) {
+        _handledUserId = null;
+        debugPrint('[Auth] Signed out → /login');
+        nav.pushNamedAndRemoveUntil('/login', (_) => false);
         return;
       }
 
-      try {
-        if (currentUser == null) {
-          // ── Signed out ─────────────────────────────────────────────────
-          final isAlreadyOnLogin =
-              nav.canPop() == false &&
-              ModalRoute.of(nav.context)?.settings.name == '/login';
-
-          if (!isAlreadyOnLogin) {
-            debugPrint('[Auth] Signed out → /login');
-            nav.pushNamedAndRemoveUntil('/login', (_) => false);
-          } else {
-            debugPrint('[Auth] Signed out → already on /login, skipping push');
-          }
-        } else {
-          // ── Signed in ──────────────────────────────────────────────────
-          debugPrint(
-            '[Auth] Signed in: ${currentUser.id} → checking registration state',
-          );
-
-          if (RecoveryGuard.isRecovering) {
-            debugPrint('[Auth] Mid-password-reset — skipping navigation');
-            return;
-          }
-
-          final isPendingRegistration = ref.read(pendingUserIdProvider) != null;
-          if (isPendingRegistration) {
-            debugPrint(
-              '[Auth] Mid-registration — skipping navigation, waiting for completeRegistration()',
-            );
-            return;
-          }
-
-          try {
-            // Authentication succeeded.
-            // Let the dedicated pending screen resolve admin/profile/role.
-            // Do not perform network-dependent initialization here.
-            debugPrint('[Auth] Signed in: ${currentUser.id} → /pending');
-
-            nav.pushNamedAndRemoveUntil('/pending', (_) => false);
-            return;
-          } catch (e) {
-            debugPrint('[Auth] Profile load error: $e — falling back to /pos');
-            nav.pushNamedAndRemoveUntil('/pos', (_) => false);
-          }
-        }
-      } finally {
-        _isNavigating = false; // FIX: was 'isNavigating' (missing underscore)
+      if (RecoveryGuard.isRecovering) {
+        debugPrint('[Auth] Mid-password-reset — skipping navigation');
+        return;
       }
+      if (ref.read(pendingUserIdProvider) != null) {
+        debugPrint('[Auth] Mid-registration — skipping navigation');
+        return;
+      }
+
+      _isNavigating = true;
+      _handledUserId = user.id;
+      debugPrint('[Auth] Signed in: ${user.id} → /pending');
+      nav.pushNamedAndRemoveUntil('/pending', (_) => false);
+      _isNavigating = false;
     });
 
     // ── Persist "has this device ever paired successfully" ─────────────────

@@ -88,7 +88,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
       backgroundColor: _bg,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24) + MediaQuery.paddingOf(context),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(

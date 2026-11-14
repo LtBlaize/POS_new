@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'auth_theme.dart';
 
 /// Page shell: dark background, centered scrollable card, optional back button.
@@ -20,7 +21,9 @@ class AuthScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
       backgroundColor: AuthColors.background,
       body: SafeArea(
         child: LayoutBuilder(
@@ -78,6 +81,7 @@ class AuthScaffold extends StatelessWidget {
             );
           },
         ),
+      ),
       ),
     );
   }

@@ -72,8 +72,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .login(email: _emailCtrl.text.trim(), password: _passCtrl.text);
 
       // Login succeeded. Navigation is handled by MyApp's auth listener.
-      // If navigation takes a moment, keep the button disabled.
+      // Safety net: if navigation never happens, don't spin forever.
       if (!mounted) return;
+      Future.delayed(const Duration(seconds: 8), () {
+        if (mounted) setState(() => _isLoading = false);
+      });
     } catch (e) {
       // login() throws if credentials are wrong or network fails.
       // Show the error and reset the loading state so user can retry.

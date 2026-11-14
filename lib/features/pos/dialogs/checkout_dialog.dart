@@ -1832,7 +1832,12 @@ class _DiscountSheetState extends ConsumerState<_DiscountSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           border: Border(top: BorderSide(color: CheckoutTheme.border)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          28 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2282,7 +2287,12 @@ class _TipSheetState extends State<_TipSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           border: Border(top: BorderSide(color: CheckoutTheme.border)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          28 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

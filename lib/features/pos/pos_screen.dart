@@ -241,9 +241,12 @@ class _PortraitShell extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: IndexedStack(
-        index: activeIndex,
-        children: screens.map((s) => s.widget).toList(),
+      body: SafeArea(
+        bottom: false,
+        child: IndexedStack(
+          index: activeIndex,
+          children: screens.map((s) => s.widget).toList(),
+        ),
       ),
       floatingActionButton:
           isPOS && itemCount > 0
@@ -335,9 +338,14 @@ class _PortraitShell extends ConsumerWidget {
                         ),
                       ),
                       Expanded(
-                        child: CartPanel(
-                          featureManager: featureManager,
-                          onTabAdded: () => Navigator.of(ctx).pop(),
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.paddingOf(ctx).bottom,
+                          ),
+                          child: CartPanel(
+                            featureManager: featureManager,
+                            onTabAdded: () => Navigator.of(ctx).pop(),
+                          ),
                         ),
                       ),
                     ],
@@ -376,9 +384,12 @@ class _LandscapeShell extends StatelessWidget {
           onSelect: onSelect,
         ),
         Expanded(
-          child: IndexedStack(
-            index: activeIndex,
-            children: screens.map((s) => s.widget).toList(),
+          child: SafeArea(
+            left: false,
+            child: IndexedStack(
+              index: activeIndex,
+              children: screens.map((s) => s.widget).toList(),
+            ),
           ),
         ),
       ],
@@ -1132,7 +1143,9 @@ class _AdaptiveSidebar extends ConsumerWidget {
       curve: Curves.easeInOut,
       width: compact ? 60.0 : 80.0,
       color: const Color(0xFF16213E),
-      child: Column(
+      child: SafeArea(
+        right: false,
+        child: Column(
         children: [
           SizedBox(height: compact ? 12 : 20),
 
@@ -1309,6 +1322,7 @@ class _AdaptiveSidebar extends ConsumerWidget {
               onTap: () => _logout(context, ref),
             ),
         ],
+        ),
       ),
     );
   }
